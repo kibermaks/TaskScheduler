@@ -65,6 +65,7 @@ struct Preset: Identifiable, Codable, Equatable {
     // Calendar mapping
     var calendarMapping: CalendarMapping
     
+    
     // Default start hour for future days
     var defaultStartHour: Int
     
@@ -115,6 +116,41 @@ struct Preset: Identifiable, Codable, Equatable {
         self.extraSessionConfig = extraSessionConfig
         self.calendarMapping = calendarMapping
         self.defaultStartHour = defaultStartHour
+    }
+    
+    enum CodingKeys: String, CodingKey {
+        case id, name, icon
+        case workSessionCount, sideSessionCount
+        case workSessionName, sideSessionName
+        case workSessionDuration, sideSessionDuration
+        case planningDuration, restDuration, sideRestDuration, extraRestDuration
+        case schedulePlanning, pattern, workSessionsPerCycle, sideSessionsPerCycle, sideFirst
+        case extraSessionConfig, calendarMapping, defaultStartHour
+    }
+    
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(UUID.self, forKey: .id)
+        name = try container.decode(String.self, forKey: .name)
+        icon = try container.decode(String.self, forKey: .icon)
+        workSessionCount = try container.decode(Int.self, forKey: .workSessionCount)
+        sideSessionCount = try container.decode(Int.self, forKey: .sideSessionCount)
+        workSessionName = try container.decode(String.self, forKey: .workSessionName)
+        sideSessionName = try container.decode(String.self, forKey: .sideSessionName)
+        workSessionDuration = try container.decode(Int.self, forKey: .workSessionDuration)
+        sideSessionDuration = try container.decode(Int.self, forKey: .sideSessionDuration)
+        planningDuration = try container.decode(Int.self, forKey: .planningDuration)
+        restDuration = try container.decode(Int.self, forKey: .restDuration)
+        sideRestDuration = try container.decode(Int.self, forKey: .sideRestDuration)
+        extraRestDuration = try container.decode(Int.self, forKey: .extraRestDuration)
+        schedulePlanning = try container.decode(Bool.self, forKey: .schedulePlanning)
+        pattern = try container.decode(SchedulePattern.self, forKey: .pattern)
+        workSessionsPerCycle = try container.decode(Int.self, forKey: .workSessionsPerCycle)
+        sideSessionsPerCycle = try container.decodeIfPresent(Int.self, forKey: .sideSessionsPerCycle) ?? 1
+        sideFirst = try container.decodeIfPresent(Bool.self, forKey: .sideFirst) ?? false
+        extraSessionConfig = try container.decode(ExtraSessionConfig.self, forKey: .extraSessionConfig)
+        calendarMapping = try container.decode(CalendarMapping.self, forKey: .calendarMapping)
+        defaultStartHour = try container.decodeIfPresent(Int.self, forKey: .defaultStartHour) ?? 8
     }
     
     // MARK: - Default Presets

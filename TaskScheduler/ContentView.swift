@@ -323,6 +323,12 @@ struct SettingsChangeModifier: ViewModifier {
             .onChange(of: engine.extraSessionConfig.name) { _, _ in trigger() }
             .onChange(of: engine.extraSessionConfig.duration) { _, _ in trigger() }
             .onChange(of: engine.extraSessionConfig.calendarName) { _, _ in trigger() }
+            .onChange(of: engine.workTasks) { _, _ in trigger() }
+            .onChange(of: engine.sideTasks) { _, _ in trigger() }
+            .onChange(of: engine.extraTasks) { _, _ in trigger() }
+            .onChange(of: engine.useWorkTasks) { _, _ in trigger() }
+            .onChange(of: engine.useSideTasks) { _, _ in trigger() }
+            .onChange(of: engine.useExtraTasks) { _, _ in trigger() }
     }
     
     private func trigger() {
@@ -450,14 +456,50 @@ struct LeftPanel: View {
     let updatePreview: () -> Void
     let applyPreset: (Preset) -> Void
     
+    @State private var selectedTab: TabArea = .settings
+    
+    enum TabArea: String, CaseIterable {
+        case settings = "Time Settings"
+        case tasks = "Tasks"
+    }
+    
     var body: some View {
         VStack(spacing: 0) {
-            presetDropdown
-            Divider().background(Color.white.opacity(0.1))
-            SettingsPanel()
+            tabPicker
+            
+            if selectedTab == .settings {
+                VStack(spacing: 0) {
+                    presetDropdown
+                    Divider().background(Color.white.opacity(0.1))
+                    SettingsPanel()
+                }
+            } else {
+                TasksPanel()
+            }
         }
         .frame(width: 320)
         .padding()
+    }
+    
+    private var tabPicker: some View {
+        HStack(spacing: 0) {
+            ForEach(TabArea.allCases, id: \.self) { tab in
+                Button { selectedTab = tab } label: {
+                    VStack(spacing: 8) {
+                        Text(tab.rawValue)
+                            .font(.system(size: 13, weight: selectedTab == tab ? .bold : .medium))
+                            .foregroundColor(selectedTab == tab ? .white : .white.opacity(0.5))
+                        
+                        Rectangle()
+                            .fill(selectedTab == tab ? Color(hex: "8B5CF6") : Color.clear)
+                            .frame(height: 2)
+                    }
+                }
+                .buttonStyle(.plain)
+                .frame(maxWidth: .infinity)
+            }
+        }
+        .padding(.bottom, 16)
     }
     
     private var presetDropdown: some View {

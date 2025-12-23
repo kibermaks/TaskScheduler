@@ -21,6 +21,26 @@ class SchedulingEngine: ObservableObject {
     @Published var workCalendarName: String = "Work"
     @Published var sideCalendarName: String = "Side Tasks"
     
+    // Task lists and enablement
+    @Published var workTasks: String = UserDefaults.standard.string(forKey: "TaskScheduler.WorkTasks") ?? "" {
+        didSet { UserDefaults.standard.set(workTasks, forKey: "TaskScheduler.WorkTasks") }
+    }
+    @Published var sideTasks: String = UserDefaults.standard.string(forKey: "TaskScheduler.SideTasks") ?? "" {
+        didSet { UserDefaults.standard.set(sideTasks, forKey: "TaskScheduler.SideTasks") }
+    }
+    @Published var extraTasks: String = UserDefaults.standard.string(forKey: "TaskScheduler.ExtraTasks") ?? "" {
+        didSet { UserDefaults.standard.set(extraTasks, forKey: "TaskScheduler.ExtraTasks") }
+    }
+    @Published var useWorkTasks: Bool = UserDefaults.standard.bool(forKey: "TaskScheduler.UseWorkTasks") {
+        didSet { UserDefaults.standard.set(useWorkTasks, forKey: "TaskScheduler.UseWorkTasks") }
+    }
+    @Published var useSideTasks: Bool = UserDefaults.standard.bool(forKey: "TaskScheduler.UseSideTasks") {
+        didSet { UserDefaults.standard.set(useSideTasks, forKey: "TaskScheduler.UseSideTasks") }
+    }
+    @Published var useExtraTasks: Bool = UserDefaults.standard.bool(forKey: "TaskScheduler.UseExtraTasks") {
+        didSet { UserDefaults.standard.set(useExtraTasks, forKey: "TaskScheduler.UseExtraTasks") }
+    }
+    
     // New Rest Durations
     @Published var sideRestDuration: Int = 15 // Default 75% of 20
     @Published var extraRestDuration: Int = 20
@@ -92,7 +112,6 @@ class SchedulingEngine: ObservableObject {
         )
     }
     
-    // ... (rest of file)
 
     // MARK: - Core Scheduling Algorithm
     
@@ -129,7 +148,11 @@ class SchedulingEngine: ObservableObject {
         
         var attempts = 0
         let maxAttempts = 500
-        var isFirstSession = true
+        
+        // Prepare task titles
+        let workTitles = workTasks.components(separatedBy: .newlines).filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
+        let sideTitles = sideTasks.components(separatedBy: .newlines).filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
+        let extraTitles = extraTasks.components(separatedBy: .newlines).filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
         
         while (workCount < workSessions || sideCount < sideSessions || planningNeeded || (extraSessionConfig.enabled && extraCount < extraSessionConfig.sessionCount)) && attempts < maxAttempts {
             attempts += 1
@@ -173,7 +196,13 @@ class SchedulingEngine: ObservableObject {
                 if shouldInjectExtra && sessionsSinceStartOrLastExtra >= extraSessionConfig.injectAfterEvery {
                      sessionType = .extra
                      sessionDuration = extraSessionConfig.duration
-                     sessionTitle = extraSessionConfig.name
+                     
+                     if useExtraTasks && extraCount < extraTitles.count {
+                         sessionTitle = extraTitles[extraCount]
+                     } else {
+                         sessionTitle = extraSessionConfig.name
+                     }
+                     
                      calendarName = extraSessionConfig.calendarName
                      isExtra = true
                  } else if sessionIndex < sessionOrder.count {
@@ -192,11 +221,19 @@ class SchedulingEngine: ObservableObject {
                     switch sessionType {
                     case .work:
                         sessionDuration = workSessionDuration
-                        sessionTitle = workSessionName
+                        if useWorkTasks && workCount < workTitles.count {
+                            sessionTitle = workTitles[workCount]
+                        } else {
+                            sessionTitle = workSessionName
+                        }
                         calendarName = workCalendarName
                     case .side:
                         sessionDuration = sideSessionDuration
-                        sessionTitle = sideSessionName
+                        if useSideTasks && sideCount < sideTitles.count {
+                            sessionTitle = sideTitles[sideCount]
+                        } else {
+                            sessionTitle = sideSessionName
+                        }
                         calendarName = sideCalendarName
                     case .planning, .extra:
                          // Should not happen in pattern
@@ -209,18 +246,30 @@ class SchedulingEngine: ObservableObject {
                     if workCount < workSessions {
                         sessionType = .work
                         sessionDuration = workSessionDuration
-                        sessionTitle = workSessionName
+                        if useWorkTasks && workCount < workTitles.count {
+                            sessionTitle = workTitles[workCount]
+                        } else {
+                            sessionTitle = workSessionName
+                        }
                         calendarName = workCalendarName
                     } else if sideCount < sideSessions {
                         sessionType = .side
                         sessionDuration = sideSessionDuration
-                        sessionTitle = sideSessionName
+                        if useSideTasks && sideCount < sideTitles.count {
+                            sessionTitle = sideTitles[sideCount]
+                        } else {
+                            sessionTitle = sideSessionName
+                        }
                         calendarName = sideCalendarName
                     } else if extraSessionConfig.enabled && extraCount < extraSessionConfig.sessionCount {
                         // Remaining extras?
                          sessionType = .extra
                          sessionDuration = extraSessionConfig.duration
-                         sessionTitle = extraSessionConfig.name
+                         if useExtraTasks && extraCount < extraTitles.count {
+                             sessionTitle = extraTitles[extraCount]
+                         } else {
+                             sessionTitle = extraSessionConfig.name
+                         }
                          calendarName = extraSessionConfig.calendarName
                          isExtra = true
                     } else {
@@ -275,7 +324,6 @@ class SchedulingEngine: ObservableObject {
                         currentTime = alt.endTime.addingTimeInterval(TimeInterval(appliedRest * 60))
                         currentTime = roundToNextInterval(currentTime)
                         
-                        isFirstSession = false
                         continue
                     }
                 }
@@ -319,7 +367,6 @@ class SchedulingEngine: ObservableObject {
             }
             
             currentTime = potentialEnd.addingTimeInterval(TimeInterval(appliedRest * 60))
-            isFirstSession = false
             
             currentTime = roundToNextInterval(currentTime)
         }
@@ -359,13 +406,25 @@ class SchedulingEngine: ObservableObject {
         if currentType == .work && sideCount < sideSessions {
             alternativeType = .side
             alternativeDuration = sideSessionDuration
-            alternativeTitle = sideSessionName
             alternativeCalendar = sideCalendarName
+            
+            let titles = sideTasks.components(separatedBy: .newlines).filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
+            if useSideTasks && sideCount < titles.count {
+                alternativeTitle = titles[sideCount]
+            } else {
+                alternativeTitle = sideSessionName
+            }
         } else if currentType == .side && workCount < workSessions {
             alternativeType = .work
             alternativeDuration = workSessionDuration
-            alternativeTitle = workSessionName
             alternativeCalendar = workCalendarName
+            
+            let titles = workTasks.components(separatedBy: .newlines).filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
+            if useWorkTasks && workCount < titles.count {
+                alternativeTitle = titles[workCount]
+            } else {
+                alternativeTitle = workSessionName
+            }
         } else {
             return nil
         }

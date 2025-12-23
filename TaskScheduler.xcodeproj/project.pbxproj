@@ -19,11 +19,13 @@
 		010 /* SettingsPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 110 /* SettingsPanel.swift */; };
 		011 /* PresetManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 111 /* PresetManager.swift */; };
 		012 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 201 /* Assets.xcassets */; };
+		2DC4CFE72EFA885900F7A35D /* TaskEditor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2DC4CFE52EFA885900F7A35D /* TaskEditor.swift */; };
+		2DC4CFE82EFA885900F7A35D /* TasksPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2DC4CFE62EFA885900F7A35D /* TasksPanel.swift */; };
 		2DEBECAB2EF4136C002A9D7C /* Icon.icon in Resources */ = {isa = PBXBuildFile; fileRef = 2DEBECAA2EF4136C002A9D7C /* Icon.icon */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
-		100 /* TaskScheduler.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = TaskScheduler.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		100 /* TaskScheduler.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; name = TaskScheduler.app; path = "Add Daily Tasks.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		101 /* TaskSchedulerApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TaskSchedulerApp.swift; sourceTree = "<group>"; };
 		102 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		103 /* Session.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Session.swift; sourceTree = "<group>"; };
@@ -37,6 +39,8 @@
 		111 /* PresetManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PresetManager.swift; sourceTree = "<group>"; };
 		201 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		202 /* TaskScheduler.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = TaskScheduler.entitlements; sourceTree = "<group>"; };
+		2DC4CFE52EFA885900F7A35D /* TaskEditor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TaskEditor.swift; sourceTree = "<group>"; };
+		2DC4CFE62EFA885900F7A35D /* TasksPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TasksPanel.swift; sourceTree = "<group>"; };
 		2DEBECAA2EF4136C002A9D7C /* Icon.icon */ = {isa = PBXFileReference; lastKnownFileType = folder.iconcomposer.icon; path = Icon.icon; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -95,6 +99,8 @@
 		404 /* Views */ = {
 			isa = PBXGroup;
 			children = (
+				2DC4CFE52EFA885900F7A35D /* TaskEditor.swift */,
+				2DC4CFE62EFA885900F7A35D /* TasksPanel.swift */,
 				109 /* TimelineView.swift */,
 				110 /* SettingsPanel.swift */,
 				111 /* PresetManager.swift */,
@@ -188,6 +194,8 @@
 				004 /* SchedulePattern.swift in Sources */,
 				005 /* Preset.swift in Sources */,
 				006 /* CalendarService.swift in Sources */,
+				2DC4CFE72EFA885900F7A35D /* TaskEditor.swift in Sources */,
+				2DC4CFE82EFA885900F7A35D /* TasksPanel.swift in Sources */,
 				007 /* SchedulingEngine.swift in Sources */,
 				008 /* AvailabilityCalculator.swift in Sources */,
 				009 /* TimelineView.swift in Sources */,
