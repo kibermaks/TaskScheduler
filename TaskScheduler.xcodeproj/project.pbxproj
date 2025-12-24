@@ -18,14 +18,14 @@
 		009 /* TimelineView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 109 /* TimelineView.swift */; };
 		010 /* SettingsPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 110 /* SettingsPanel.swift */; };
 		011 /* PresetManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 111 /* PresetManager.swift */; };
-		012 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 201 /* Assets.xcassets */; };
 		2DC4CFE72EFA885900F7A35D /* TaskEditor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2DC4CFE52EFA885900F7A35D /* TaskEditor.swift */; };
 		2DC4CFE82EFA885900F7A35D /* TasksPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2DC4CFE62EFA885900F7A35D /* TasksPanel.swift */; };
+		2DC4CFEA2EFA8E8700F7A35D /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 2DC4CFE92EFA8E8700F7A35D /* Assets.xcassets */; };
 		2DEBECAB2EF4136C002A9D7C /* Icon.icon in Resources */ = {isa = PBXBuildFile; fileRef = 2DEBECAA2EF4136C002A9D7C /* Icon.icon */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
-		100 /* TaskScheduler.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; name = TaskScheduler.app; path = "Add Daily Tasks.app"; sourceTree = BUILT_PRODUCTS_DIR; };
+		100 /* Add Daily Tasks.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Add Daily Tasks.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		101 /* TaskSchedulerApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TaskSchedulerApp.swift; sourceTree = "<group>"; };
 		102 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		103 /* Session.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Session.swift; sourceTree = "<group>"; };
@@ -37,10 +37,10 @@
 		109 /* TimelineView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimelineView.swift; sourceTree = "<group>"; };
 		110 /* SettingsPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsPanel.swift; sourceTree = "<group>"; };
 		111 /* PresetManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PresetManager.swift; sourceTree = "<group>"; };
-		201 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		202 /* TaskScheduler.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = TaskScheduler.entitlements; sourceTree = "<group>"; };
 		2DC4CFE52EFA885900F7A35D /* TaskEditor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TaskEditor.swift; sourceTree = "<group>"; };
 		2DC4CFE62EFA885900F7A35D /* TasksPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TasksPanel.swift; sourceTree = "<group>"; };
+		2DC4CFE92EFA8E8700F7A35D /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		2DEBECAA2EF4136C002A9D7C /* Icon.icon */ = {isa = PBXFileReference; lastKnownFileType = folder.iconcomposer.icon; path = Icon.icon; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -71,9 +71,9 @@
 				403 /* Models */,
 				404 /* Views */,
 				405 /* Services */,
-				201 /* Assets.xcassets */,
 				2DEBECAA2EF4136C002A9D7C /* Icon.icon */,
 				202 /* TaskScheduler.entitlements */,
+				2DC4CFE92EFA8E8700F7A35D /* Assets.xcassets */,
 			);
 			path = TaskScheduler;
 			sourceTree = "<group>";
@@ -81,7 +81,7 @@
 		402 /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				100 /* TaskScheduler.app */,
+				100 /* Add Daily Tasks.app */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -135,7 +135,7 @@
 			);
 			name = TaskScheduler;
 			productName = TaskScheduler;
-			productReference = 100 /* TaskScheduler.app */;
+			productReference = 100 /* Add Daily Tasks.app */;
 			productType = "com.apple.product-type.application";
 		};
 /* End PBXNativeTarget section */
@@ -176,7 +176,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				012 /* Assets.xcassets in Resources */,
+				2DC4CFEA2EFA8E8700F7A35D /* Assets.xcassets in Resources */,
 				2DEBECAB2EF4136C002A9D7C /* Icon.icon in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -347,7 +347,7 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MARKETING_VERSION = 1.0;
+				MARKETING_VERSION = 1.1;
 				PRODUCT_BUNDLE_IDENTIFIER = com.taskscheduler.app;
 				PRODUCT_NAME = "Add Daily Tasks";
 				SWIFT_EMIT_LOC_STRINGS = YES;
@@ -379,7 +379,7 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MARKETING_VERSION = 1.0;
+				MARKETING_VERSION = 1.1;
 				PRODUCT_BUNDLE_IDENTIFIER = com.taskscheduler.app;
 				PRODUCT_NAME = "Add Daily Tasks";
 				SWIFT_EMIT_LOC_STRINGS = YES;
