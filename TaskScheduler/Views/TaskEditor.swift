@@ -81,11 +81,11 @@ struct TaskEditorInternal: NSViewRepresentable {
             parent.text = textView.string
         }
         
-        func textViewDidBeginEditing(_ notification: Notification) {
+        func textDidBeginEditing(_ notification: Notification) {
             parent.isFocused = true
         }
         
-        func textViewDidEndEditing(_ notification: Notification) {
+        func textDidEndEditing(_ notification: Notification) {
             parent.isFocused = false
         }
     }
@@ -98,7 +98,7 @@ struct TaskEditorInternal: NSViewRepresentable {
         let lineRange = nsString.lineRange(for: selectedRange)
         
         // Find indices of all lines
-        var lineRanges: [NSRange] = []
+        _ = []
         nsString.enumerateSubstrings(in: NSRange(location: 0, length: nsString.length), options: .byLines) { _, range, _, _ in
             // lineRange(for:) is more accurate for empty lines at the end, etc.
             // But enumerateSubstrings byLines is cleaner for standard lines.
@@ -120,7 +120,7 @@ struct TaskEditorInternal: NSViewRepresentable {
         let targetIndex = currentIndex + direction
         if targetIndex < 0 || targetIndex >= ranges.count { return }
         
-        var lines = ranges.map { nsString.substring(with: $0) }
+        _ = ranges.map { nsString.substring(with: $0) }
         
         // Ensure the line being moved to the end (if it was the previous last line without a newline) 
         // OR the line being moved FROM the end gets a newline if needed.

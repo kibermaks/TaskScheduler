@@ -143,6 +143,7 @@ struct PresetCard: View {
     let onApply: () -> Void
     var onDelete: (() -> Void)?
     
+    @EnvironmentObject var schedulingEngine: SchedulingEngine
     @State private var isHovered = false
     
     var body: some View {
@@ -153,10 +154,18 @@ struct PresetCard: View {
                     .font(.system(size: 20))
                     .foregroundColor(Color(hex: "8B5CF6"))
                 
-                Text(preset.name)
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundColor(.white)
-                    .lineLimit(1)
+                HStack(spacing: 4) {
+                    Text(preset.name)
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundColor(.white)
+                        .lineLimit(1)
+                    
+                    if schedulingEngine.currentPresetId == preset.id && schedulingEngine.isPresetModified(preset) {
+                         Text("*")
+                            .font(.system(size: 14, weight: .bold))
+                            .foregroundColor(Color(hex: "F59E0B")) // Amber/Orange
+                    }
+                }
                 
                 Spacer()
                 
