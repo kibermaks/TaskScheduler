@@ -209,7 +209,7 @@ struct SettingsPanel: View {
              if schedulingEngine.extraSessionConfig.enabled {
                  // Count (max limit)
                  HStack {
-                     Text("Limit Count:")
+                     Text("Sessions Count:")
                          .font(.system(size: 13))
                          .foregroundColor(.white.opacity(0.7))
                      Spacer()
