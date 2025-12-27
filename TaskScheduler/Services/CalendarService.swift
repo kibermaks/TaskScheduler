@@ -50,7 +50,7 @@ class CalendarService: ObservableObject {
     
     func checkAuthorizationStatus() {
         authorizationStatus = EKEventStore.authorizationStatus(for: .event)
-        if authorizationStatus == .fullAccess || authorizationStatus == .authorized {
+        if authorizationStatus == .fullAccess {
             loadCalendars()
         }
     }
