@@ -5,21 +5,22 @@ import SwiftUI
 /// Core scheduling algorithm ported from AppleScript
 class SchedulingEngine: ObservableObject {
     // MARK: - Configuration
-    @Published var workSessions: Int = 5
-    @Published var sideSessions: Int = 2
-    @Published var workSessionName: String = "Work Session"
-    @Published var sideSessionName: String = "Side Session"
-    @Published var workSessionDuration: Int = 40
-    @Published var sideSessionDuration: Int = 30
-    @Published var planningDuration: Int = 15
-    @Published var restDuration: Int = 20
-    @Published var schedulePlanning: Bool = true
-    @Published var pattern: SchedulePattern = .alternating
-    @Published var workSessionsPerCycle: Int = 2
-    @Published var sideSessionsPerCycle: Int = 1
-    @Published var sideFirst: Bool = false // New
-    @Published var workCalendarName: String = "Work"
-    @Published var sideCalendarName: String = "Side Tasks"
+    // MARK: - Configuration
+    @Published var workSessions: Int = 5 { didSet { saveState() } }
+    @Published var sideSessions: Int = 2 { didSet { saveState() } }
+    @Published var workSessionName: String = "Work Session" { didSet { saveState() } }
+    @Published var sideSessionName: String = "Side Session" { didSet { saveState() } }
+    @Published var workSessionDuration: Int = 40 { didSet { saveState() } }
+    @Published var sideSessionDuration: Int = 30 { didSet { saveState() } }
+    @Published var planningDuration: Int = 15 { didSet { saveState() } }
+    @Published var restDuration: Int = 20 { didSet { saveState() } }
+    @Published var schedulePlanning: Bool = true { didSet { saveState() } }
+    @Published var pattern: SchedulePattern = .alternating { didSet { saveState() } }
+    @Published var workSessionsPerCycle: Int = 2 { didSet { saveState() } }
+    @Published var sideSessionsPerCycle: Int = 1 { didSet { saveState() } }
+    @Published var sideFirst: Bool = false { didSet { saveState() } } // New
+    @Published var workCalendarName: String = "Work" { didSet { saveState() } }
+    @Published var sideCalendarName: String = "Side Tasks" { didSet { saveState() } }
     
     // Task lists and enablement
     @Published var workTasks: String = UserDefaults.standard.string(forKey: "TaskScheduler.WorkTasks") ?? "" {
@@ -42,11 +43,19 @@ class SchedulingEngine: ObservableObject {
     }
     
     // New Rest Durations
-    @Published var sideRestDuration: Int = 15 // Default 75% of 20
-    @Published var extraRestDuration: Int = 20
+    @Published var sideRestDuration: Int = 15 { didSet { saveState() } } // Default 75% of 20
+    @Published var extraRestDuration: Int = 20 { didSet { saveState() } }
     
     // Extra Sessions
-    @Published var extraSessionConfig: ExtraSessionConfig = .default
+    @Published var extraSessionConfig: ExtraSessionConfig = .default { didSet { saveState() } }
+
+    // MARK: - State Tracking
+    @Published var currentPresetId: UUID? {
+        didSet {
+             // Save the ID if it changes (though saveState covers the config, we might want to know which preset was "base")
+             UserDefaults.standard.set(currentPresetId?.uuidString, forKey: "TaskScheduler.CurrentPresetId")
+        }
+    }
     
     // MARK: - Scheduling Settings
     private let existingEventBuffer: Int = 10 // minutes
@@ -57,9 +66,22 @@ class SchedulingEngine: ObservableObject {
     @Published var projectedSessions: [ScheduledSession] = []
     @Published var schedulingMessage: String = ""
     
+    // MARK: - Initialization
+    
+    init() {
+        loadState()
+        
+        // Load last preset ID if exists (though loadState should handle logic, we track the ID separately)
+        if let idStr = UserDefaults.standard.string(forKey: "TaskScheduler.CurrentPresetId"),
+           let id = UUID(uuidString: idStr) {
+            self.currentPresetId = id
+        }
+    }
+    
     // MARK: - Apply Preset
     
     func applyPreset(_ preset: Preset) {
+        // Temporarily disable save to avoid multiple writes? optional.
         workSessions = preset.workSessionCount
         sideSessions = preset.sideSessionCount
         workSessionName = preset.workSessionName
@@ -81,6 +103,9 @@ class SchedulingEngine: ObservableObject {
         workSessionsPerCycle = preset.workSessionsPerCycle
         workCalendarName = preset.calendarMapping.workCalendarName
         sideCalendarName = preset.calendarMapping.sideCalendarName
+        
+        currentPresetId = preset.id
+        saveState()
     }
     
     // MARK: - Save as Preset
@@ -208,7 +233,7 @@ class SchedulingEngine: ObservableObject {
                  } else if sessionIndex < sessionOrder.count {
                     // Standard pattern logic
                     // Check if we've already met the quota for this projected type
-                    var proposedType = sessionOrder[sessionIndex]
+                    let proposedType = sessionOrder[sessionIndex]
                     
                     // If we already have enough of the proposed type, try to skip to next
                     if (proposedType == .work && workCount >= workSessions) ||
@@ -544,5 +569,93 @@ class SchedulingEngine: ObservableObject {
         let possibleSide = totalAvailable / sideWithRest
         
         return (totalAvailable, possibleWork, possibleSide)
+    }
+    
+    // MARK: - State Persistence
+    
+    private var isLoadingState = false
+    
+    private func saveState() {
+        guard !isLoadingState else { return }
+        
+        let state = Preset(
+            id: UUID(), // Dummy ID
+            name: "Current State", // Dummy Name
+            icon: "gear", // Dummy Icon
+            workSessionCount: workSessions,
+            sideSessionCount: sideSessions,
+            workSessionName: workSessionName,
+            sideSessionName: sideSessionName,
+            workSessionDuration: workSessionDuration,
+            sideSessionDuration: sideSessionDuration,
+            planningDuration: planningDuration,
+            restDuration: restDuration,
+            sideRestDuration: sideRestDuration,
+            extraRestDuration: extraRestDuration,
+            schedulePlanning: schedulePlanning,
+            pattern: pattern,
+            workSessionsPerCycle: workSessionsPerCycle,
+            sideSessionsPerCycle: sideSessionsPerCycle,
+            sideFirst: sideFirst,
+            extraSessionConfig: extraSessionConfig,
+            calendarMapping: CalendarMapping(
+                workCalendarName: workCalendarName,
+                sideCalendarName: sideCalendarName
+            )
+        )
+        
+        if let data = try? JSONEncoder().encode(state) {
+            UserDefaults.standard.set(data, forKey: "TaskScheduler.SavedState")
+        }
+    }
+    
+    private func loadState() {
+        guard let data = UserDefaults.standard.data(forKey: "TaskScheduler.SavedState"),
+              let state = try? JSONDecoder().decode(Preset.self, from: data) else {
+            return
+        }
+        
+        isLoadingState = true
+        defer { isLoadingState = false }
+        
+        workSessions = state.workSessionCount
+        sideSessions = state.sideSessionCount
+        workSessionName = state.workSessionName
+        sideSessionName = state.sideSessionName
+        workSessionDuration = state.workSessionDuration
+        sideSessionDuration = state.sideSessionDuration
+        planningDuration = state.planningDuration
+        restDuration = state.restDuration
+        sideRestDuration = state.sideRestDuration
+        extraRestDuration = state.extraRestDuration
+        schedulePlanning = state.schedulePlanning
+        pattern = state.pattern
+        workSessionsPerCycle = state.workSessionsPerCycle
+        sideSessionsPerCycle = state.sideSessionsPerCycle
+        sideFirst = state.sideFirst
+        extraSessionConfig = state.extraSessionConfig
+        workCalendarName = state.calendarMapping.workCalendarName
+        sideCalendarName = state.calendarMapping.sideCalendarName
+    }
+    
+    func isPresetModified(_ preset: Preset) -> Bool {
+        return workSessions != preset.workSessionCount ||
+               sideSessions != preset.sideSessionCount ||
+               workSessionName != preset.workSessionName ||
+               sideSessionName != preset.sideSessionName ||
+               workSessionDuration != preset.workSessionDuration ||
+               sideSessionDuration != preset.sideSessionDuration ||
+               planningDuration != preset.planningDuration ||
+               restDuration != preset.restDuration ||
+               sideRestDuration != preset.sideRestDuration ||
+               extraRestDuration != preset.extraRestDuration ||
+               schedulePlanning != preset.schedulePlanning ||
+               pattern != preset.pattern ||
+               workSessionsPerCycle != preset.workSessionsPerCycle ||
+               sideSessionsPerCycle != preset.sideSessionsPerCycle ||
+               sideFirst != preset.sideFirst ||
+               extraSessionConfig != preset.extraSessionConfig ||
+               workCalendarName != preset.calendarMapping.workCalendarName ||
+               sideCalendarName != preset.calendarMapping.sideCalendarName
     }
 }

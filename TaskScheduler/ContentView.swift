@@ -122,10 +122,30 @@ struct ContentViewBody: View {
         }
         .modifier(SettingsChangeModifier(autoPreview: autoPreview, updatePreview: updateProjectedSchedule))
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
-            if useNowTime && dateSelection == .today {
-                startTime = roundedNowTime()
-            } else if autoPreview {
-                updateProjectedSchedule()
+            let calendar = Calendar.current
+            var dateChanged = false
+            
+            // Check if we need to refresh the date because the day has changed
+            if dateSelection == .today {
+                if !calendar.isDate(selectedDate, inSameDayAs: Date()) {
+                    updateSelectedDate(for: .today)
+                    dateChanged = true
+                }
+            } else if dateSelection == .tomorrow {
+                if let tomorrow = calendar.date(byAdding: .day, value: 1, to: Date()),
+                   !calendar.isDate(selectedDate, inSameDayAs: tomorrow) {
+                    updateSelectedDate(for: .tomorrow)
+                    dateChanged = true
+                }
+            }
+            
+            // If date didn't change (or wasn't stale), perform standard active refresh
+            if !dateChanged {
+                if useNowTime && dateSelection == .today {
+                    startTime = roundedNowTime()
+                } else if autoPreview {
+                    updateProjectedSchedule()
+                }
             }
         }
     }
@@ -244,8 +264,7 @@ struct ContentViewBody: View {
     }
     
     private func requestCalendarAccess() async {
-        if calendarService.authorizationStatus != .fullAccess &&
-           calendarService.authorizationStatus != .authorized {
+        if calendarService.authorizationStatus != .fullAccess {
             let _ = await calendarService.requestAccess()
         }
         await calendarService.fetchEvents(for: selectedDate)
