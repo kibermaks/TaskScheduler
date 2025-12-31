@@ -51,3 +51,8 @@ The project follows a modular architecture with a clear separation of concerns:
 - **SwiftUI**: Main UI framework.
 - **EventKit**: For macOS Calendar integration.
 - **Foundation**: Core logic and date handling.
+
+## 📜 Scripts
+- `./build_app.sh [major]`: Increments version, builds and signs Release .app.
+- `./deploy_app.sh`: Closes app, copies to `/Applications/@My Apps`, and restarts.
+

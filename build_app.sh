@@ -29,6 +29,12 @@ fi
 
 echo "📋 Preparing to build ($INCREMENT_TYPE increment)..."
 
+# 0. Clean Build Directory
+if [ -d "$BUILD_DIR" ]; then
+    echo "🧹 Cleaning previous build artifacts..."
+    rm -rf "$BUILD_DIR"
+fi
+
 # 1. Get Current Version
 CURRENT_VERSION=$(get_version)
 if [ -z "$CURRENT_VERSION" ]; then
@@ -66,6 +72,10 @@ xcrun agvtool new-marketing-version "$NEW_VERSION" > /dev/null
 echo "🔧 Incrementing Build Number..."
 xcrun agvtool next-version -all > /dev/null
 
+# Capture the new build number
+NEW_BUILD_NUMBER=$(agvtool what-version -terse)
+echo "   New Build Number: $NEW_BUILD_NUMBER"
+
 # 5. Build
 echo "🚀 Starting Release Build for $SCHEME..."
 
@@ -78,6 +88,8 @@ xcodebuild -project "$PROJECT" \
            CODE_SIGN_STYLE="Automatic" \
            CODE_SIGNING_REQUIRED="YES" \
            CONFIGURATION_BUILD_DIR="$BUILD_DIR" \
+           MARKETING_VERSION="$NEW_VERSION" \
+           CURRENT_PROJECT_VERSION="$NEW_BUILD_NUMBER" \
            -quiet
 
 # 6. Copy Artifact
@@ -92,6 +104,7 @@ if [ -n "$APP_PATH" ]; then
     fi
     
     cp -R "$APP_PATH" "./$APP_NAME"
+    touch "./$APP_NAME"
     echo "🎉 Done! version $NEW_VERSION is ready in this folder."
 else
     echo "❌ Build failed. Could not find .app."
