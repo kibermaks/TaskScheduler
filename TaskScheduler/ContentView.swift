@@ -1,4 +1,5 @@
 import SwiftUI
+import AppKit
 
 // MARK: - Main Content View
 struct ContentView: View {
@@ -327,19 +328,29 @@ struct SettingsChangeModifier: ViewModifier {
             .onChange(of: engine.pattern) { _, _ in trigger() }
             .onChange(of: engine.schedulePlanning) { _, _ in trigger() }
             .onChange(of: engine.planningDuration) { _, _ in trigger() }
-            .background(extraObservers)
+            .onChange(of: engine.workSessionName) { _, _ in trigger() }
+            .onChange(of: engine.sideSessionName) { _, _ in trigger() }
+            .onChange(of: engine.workCalendarName) { _, _ in trigger() }
+            .onChange(of: engine.sideCalendarName) { _, _ in trigger() }
+            .background(extraObservers1)
+            .background(extraObservers2)
     }
     
-    private var extraObservers: some View {
+    private var extraObservers1: some View {
         Color.clear
             .onChange(of: engine.workSessionsPerCycle) { _, _ in trigger() }
             .onChange(of: engine.sideSessionsPerCycle) { _, _ in trigger() }
+            .onChange(of: engine.sideFirst) { _, _ in trigger() }
             .onChange(of: engine.sideRestDuration) { _, _ in trigger() }
             .onChange(of: engine.extraRestDuration) { _, _ in trigger() }
             .onChange(of: engine.extraSessionConfig.enabled) { _, _ in trigger() }
             .onChange(of: engine.extraSessionConfig.sessionCount) { _, _ in trigger() }
             .onChange(of: engine.extraSessionConfig.injectAfterEvery) { _, _ in trigger() }
             .onChange(of: engine.extraSessionConfig.name) { _, _ in trigger() }
+    }
+    
+    private var extraObservers2: some View {
+        Color.clear
             .onChange(of: engine.extraSessionConfig.duration) { _, _ in trigger() }
             .onChange(of: engine.extraSessionConfig.calendarName) { _, _ in trigger() }
             .onChange(of: engine.workTasks) { _, _ in trigger() }
@@ -375,6 +386,7 @@ struct HeaderView: View {
         }
         .padding(.horizontal, 24)
         .padding(.vertical, 16)
+        .background(WindowDragView())
         .background(Color.black.opacity(0.2))
     }
     
@@ -782,4 +794,44 @@ struct DeleteConfirmationSheet: View {
         .environmentObject(CalendarService())
         .environmentObject(SchedulingEngine())
         .frame(width: 1200, height: 800)
+}
+
+// MARK: - Window Drag & Zoom Helpers
+
+struct WindowDragView: NSViewRepresentable {
+    func makeNSView(context: Context) -> NSView {
+        TitleBarDraggableView()
+    }
+    
+    func updateNSView(_ nsView: NSView, context: Context) {}
+}
+
+class TitleBarDraggableView: NSView {
+    override var mouseDownCanMoveWindow: Bool { true }
+    
+    override func mouseDown(with event: NSEvent) {
+        if event.clickCount == 2 {
+            if let window = window, let screen = window.screen {
+                let currentFrame = window.frame
+                let maxFrame = screen.visibleFrame
+                
+                // Check if we are currently maximized (with a small tolerance)
+                let isMaximized = abs(currentFrame.width - maxFrame.width) < 5 &&
+                                  abs(currentFrame.height - maxFrame.height) < 5
+                
+                if isMaximized {
+                    // Restore is handled by zoom if we were zoomed, but since we are manually setting frame,
+                    // zoom behavior might vary. Surprisingly, user usually wants standard zoom behavior 
+                    // which toggles user/standard states. 
+                    // Let's try calling zoom which often knows how to go back to "User" size.
+                    window.zoom(nil)
+                } else {
+                    // Force maximize
+                    window.setFrame(maxFrame, display: true, animate: true)
+                }
+            }
+        } else {
+            super.mouseDown(with: event)
+        }
+    }
 }

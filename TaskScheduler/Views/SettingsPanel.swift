@@ -365,7 +365,7 @@ struct SettingsPanel: View {
             
             // Work Rest
              HStack {
-                Text("Work Rest:")
+                Text("After Work:")
                     .font(.system(size: 13))
                     .foregroundColor(.white.opacity(0.7))
                 
@@ -383,7 +383,7 @@ struct SettingsPanel: View {
             
             // Side Rest
              HStack {
-                Text("Side Rest:")
+                Text("After Side:")
                     .font(.system(size: 13))
                     .foregroundColor(.white.opacity(0.7))
                 
@@ -401,7 +401,7 @@ struct SettingsPanel: View {
             
             // Extra Rest (only if extra enabled logic? User said 'tied to Extra sessions', maybe always show or only if enabled. Since they asked for parameter, I'll show it.)
              HStack {
-                Text("Extra Rest:")
+                Text("After Extra:")
                     .font(.system(size: 13))
                     .foregroundColor(.white.opacity(0.7))
                 
