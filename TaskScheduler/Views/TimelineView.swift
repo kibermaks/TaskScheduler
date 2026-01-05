@@ -8,7 +8,8 @@ struct TimelineView: View {
     @EnvironmentObject var schedulingEngine: SchedulingEngine
     
     private let hourHeight: CGFloat = 90 // Zoomed in from 60
-    private let timeColumnWidth: CGFloat = 70
+    private let timeColumnWidth: CGFloat = 55
+    
     
     // Popover State
     @State private var selectedSession: ScheduledSession?
@@ -46,7 +47,8 @@ struct TimelineView: View {
                     timeColumnView
                     eventsAreaView
                 }
-                .frame(height: 24 * hourHeight)
+                .padding(.vertical, 20)
+                .frame(height: CGFloat(visibleHours.count) * hourHeight + 40)
                 .onAppear { scrollToStartTime(proxy: proxy) }
                 .onChange(of: startTime) { _, _ in scrollToStartTime(proxy: proxy) }
             }
@@ -65,6 +67,7 @@ struct TimelineView: View {
                 }
                 
                 // Existing events - left half
+    
                 ForEach(calendarService.busySlots) { slot in
                     eventBlock(for: slot, containerWidth: geometry.size.width)
                 }
@@ -74,12 +77,13 @@ struct TimelineView: View {
                     projectedSessionBlock(for: session, containerWidth: geometry.size.width)
                 }
             }
+            .clipped()
         }
     }
     
     private var hourGridLines: some View {
         VStack(spacing: 0) {
-            ForEach(0..<24, id: \.self) { _ in
+            ForEach(visibleHours, id: \.self) { _ in
                 VStack(spacing: 0) {
                     Rectangle()
                         .fill(Color.white.opacity(0.1))
@@ -88,12 +92,18 @@ struct TimelineView: View {
                 }
                 .frame(height: hourHeight)
             }
+            // Bottom edge line
+            Rectangle()
+                .fill(Color.white.opacity(0.1))
+                .frame(height: 1)
         }
     }
     
     private func scrollToStartTime(proxy: ScrollViewProxy) {
         let hour = Calendar.current.component(.hour, from: startTime)
-        proxy.scrollTo("hour-\(max(0, hour - 1))", anchor: .top)
+        let visibleStart = schedulingEngine.hideNightHours ? schedulingEngine.dayStartHour : 0
+        let targetHour = max(visibleStart, hour)
+        proxy.scrollTo("hour-\(targetHour)", anchor: .center)
     }
     
     private var formattedDate: String {
@@ -109,6 +119,21 @@ struct TimelineView: View {
             legendItem(color: Color(hex: "EF4444"), label: "Planning")
             legendItem(color: Color(hex: "10B981"), label: "Extra")
             // legendItem(color: Color.gray.opacity(0.6), label: "Busy")
+            
+            Button(action: {
+                withAnimation {
+                    schedulingEngine.hideNightHours.toggle()
+                }
+            }) {
+                HStack(spacing: 4) {
+                    Image(systemName: schedulingEngine.hideNightHours ? "moon.stars.fill" : "moon.stars")
+                }
+                .padding(8)
+                .background(Color.white.opacity(0.1))
+                .cornerRadius(6)
+            }
+            .buttonStyle(.plain)
+            .help(schedulingEngine.hideNightHours ? "Show 00:00 - 06:00" : "Hide 00:00 - 06:00")
         }
         .font(.system(size: 12))
     }
@@ -125,26 +150,67 @@ struct TimelineView: View {
     
     private var timeColumnView: some View {
         VStack(spacing: 0) {
-            ForEach(0..<24, id: \.self) { hour in
+            ForEach(visibleHours, id: \.self) { hour in
                 HStack {
-                    Spacer()
                     Text(formattedHour(hour))
-                        .font(.system(size: 13, weight: .medium, design: .monospaced))
+                        .font(.system(size: 12, weight: .medium, design: .monospaced))
                         .foregroundColor(.white.opacity(0.5))
+                        .offset(y: -7)
                 }
                 .frame(width: timeColumnWidth, height: hourHeight, alignment: .topTrailing)
                 .padding(.trailing, 8)
                 .id("hour-\(hour)")
             }
+            
+            // End of day mark
+            HStack {
+                let endHour = schedulingEngine.hideNightHours ? schedulingEngine.dayEndHour : 24
+                Text(formattedHour(endHour))
+                    .font(.system(size: 12, weight: .medium, design: .monospaced))
+                    .foregroundColor(.white.opacity(0.5))
+                    .offset(y: -7)
+            }
+            .frame(width: timeColumnWidth, height: 0, alignment: .topTrailing)
+            .padding(.trailing, 8)
         }
     }
     
     private func formattedHour(_ hour: Int) -> String {
-        if hour == 0 { return "12 AM" }
-        if hour < 12 { return "\(hour) AM" }
-        if hour == 12 { return "12 PM" }
-        return "\(hour - 12) PM"
+        let calendar = Calendar.current
+        var components = DateComponents()
+        components.hour = hour
+        
+        // Handle hour 24 and beyond for formatting by shifting to next day
+        if hour >= 24 {
+            components.hour = hour - 24
+            if let date = calendar.date(from: components),
+               let nextDay = calendar.date(byAdding: .day, value: 1, to: date) {
+                let formatter = DateFormatter()
+                formatter.dateStyle = .none
+                formatter.timeStyle = .short
+                return formatter.string(from: nextDay)
+            }
+        }
+        
+        
+        if let date = calendar.date(from: components) {
+            let formatter = DateFormatter()
+            formatter.dateStyle = .none
+            formatter.timeStyle = .short
+            return formatter.string(from: date)
+        }
+        return "\(hour):00"
     }
+    
+    private var visibleHours: [Int] {
+        if schedulingEngine.hideNightHours {
+            return Array(schedulingEngine.dayStartHour..<schedulingEngine.dayEndHour)
+        } else {
+            return Array(0..<24)
+        }
+    }
+    
+    
     
     private func currentTimeIndicator(width: CGFloat) -> some View {
         let yPos = calculateYPosition(for: Date())
@@ -307,8 +373,12 @@ struct TimelineView: View {
         let dayStart = calendar.startOfDay(for: selectedDate)
         let secondsSinceStart = date.timeIntervalSince(dayStart)
         let hours = secondsSinceStart / 3600
-        return CGFloat(hours) * hourHeight
+        
+        let finalHours = hours - (schedulingEngine.hideNightHours ? CGFloat(schedulingEngine.dayStartHour) : 0)
+        return finalHours * hourHeight
     }
+    
+    
     
     private func calculateHeight(from start: Date, to end: Date) -> CGFloat {
         let duration = end.timeIntervalSince(start)
@@ -318,7 +388,8 @@ struct TimelineView: View {
     
     private func timeRangeString(start: Date, end: Date) -> String {
         let formatter = DateFormatter()
-        formatter.dateFormat = "h:mm a"
+        formatter.dateStyle = .none
+        formatter.timeStyle = .short
         return "\(formatter.string(from: start)) - \(formatter.string(from: end))"
     }
 }
