@@ -21,6 +21,18 @@ class SchedulingEngine: ObservableObject {
     @Published var sideFirst: Bool = false { didSet { saveState() } } // New
     @Published var workCalendarName: String = "Work" { didSet { saveState() } }
     @Published var sideCalendarName: String = "Side Tasks" { didSet { saveState() } }
+    @Published var hideNightHours: Bool = UserDefaults.standard.bool(forKey: "TaskScheduler.HideNightHours") {
+        didSet { UserDefaults.standard.set(hideNightHours, forKey: "TaskScheduler.HideNightHours") }
+    }
+    @Published var dayStartHour: Int = (UserDefaults.standard.object(forKey: "TaskScheduler.DayStartHour") as? Int) ?? 6 {
+        didSet { UserDefaults.standard.set(dayStartHour, forKey: "TaskScheduler.DayStartHour") }
+    }
+    @Published var dayEndHour: Int = (UserDefaults.standard.object(forKey: "TaskScheduler.DayEndHour") as? Int) ?? 24 {
+        didSet { UserDefaults.standard.set(dayEndHour, forKey: "TaskScheduler.DayEndHour") }
+    }
+    
+    
+    
     
     // Task lists and enablement
     @Published var workTasks: String = UserDefaults.standard.string(forKey: "TaskScheduler.WorkTasks") ?? "" {
@@ -103,6 +115,7 @@ class SchedulingEngine: ObservableObject {
         workSessionsPerCycle = preset.workSessionsPerCycle
         workCalendarName = preset.calendarMapping.workCalendarName
         sideCalendarName = preset.calendarMapping.sideCalendarName
+        
         
         currentPresetId = preset.id
         saveState()
@@ -504,6 +517,68 @@ class SchedulingEngine: ObservableObject {
         let minutesToAdd = roundingInterval - remainder
         
         return calendar.date(byAdding: .minute, value: minutesToAdd, to: date) ?? date
+    }
+    
+    // MARK: - Single Session Projection
+    
+    func projectSingleSession(
+        type: SessionType,
+        startTime: Date,
+        baseDate: Date,
+        busySlots: [BusyTimeSlot]
+    ) -> ScheduledSession? {
+        let calendar = Calendar.current
+        let endOfDay = calendar.startOfDay(for: calendar.date(byAdding: .day, value: 1, to: baseDate)!)
+        let bufferDuration = TimeInterval(existingEventBuffer * 60)
+        
+        var currentTime = roundToNextInterval(startTime)
+        let sessionDuration: Int
+        switch type {
+        case .work: sessionDuration = workSessionDuration
+        case .side: sessionDuration = sideSessionDuration
+        case .planning: sessionDuration = planningDuration
+        case .extra: sessionDuration = extraSessionConfig.duration
+        }
+
+        var attempts = 0
+        let maxAttempts = 100
+        
+        while attempts < maxAttempts {
+            attempts += 1
+            
+            if currentTime >= endOfDay {
+                return nil
+            }
+            
+            let potentialEnd = currentTime.addingTimeInterval(TimeInterval(sessionDuration * 60))
+            
+            if potentialEnd > endOfDay {
+                return nil
+            }
+            
+            let conflict = findConflict(
+                start: currentTime,
+                end: potentialEnd,
+                busySlots: busySlots,
+                buffer: bufferDuration
+            )
+            
+            if let conflictEnd = conflict {
+                currentTime = roundToNextInterval(conflictEnd)
+                continue
+            }
+            
+            // Found a slot
+            return ScheduledSession(
+                type: type,
+                title: type == .planning ? "Planning" : type.rawValue + " Session",
+                startTime: currentTime,
+                endTime: potentialEnd,
+                calendarName: workCalendarName // Default to work calendar for planning
+            )
+        }
+        
+        return nil
     }
     
     private func findConflict(

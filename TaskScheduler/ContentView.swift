@@ -449,8 +449,6 @@ struct HeaderView: View {
     }
     
     private func formatNowTime() -> String {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "h:mm a"
         let calendar = Calendar.current
         let now = Date()
         let comp = calendar.dateComponents([.year, .month, .day, .hour, .minute], from: now)
@@ -460,6 +458,10 @@ struct HeaderView: View {
         newComp.minute = rounded % 60
         newComp.hour = (comp.hour ?? 0) + (rounded >= 60 ? 1 : 0)
         let date = calendar.date(from: newComp) ?? now
+        
+        let formatter = DateFormatter()
+        formatter.dateStyle = .none
+        formatter.timeStyle = .short
         return formatter.string(from: date)
     }
     
@@ -672,7 +674,8 @@ struct RightPanel: View {
         let sc = sessions.filter { $0.type == .side }.count
         let pc = sessions.filter { $0.type == .planning }.count
         let formatter = DateFormatter()
-        formatter.dateFormat = "h:mm a"
+        formatter.dateStyle = .none
+        formatter.timeStyle = .short
         return VStack(alignment: .leading, spacing: 6) {
             if pc > 0 { countRow(.planning, pc) }
             countRow(.work, wc)
@@ -695,26 +698,72 @@ struct RightPanel: View {
     }
     
     private var actionButtons: some View {
-        VStack(spacing: 12) {
+        let planningExists = calendarService.hasPlanningSession(for: selectedDate)
+        let primaryRed = Color(hex: "EF4444") // Bright Red
+        let paleRed = primaryRed.opacity(0.4)
+        
+        return VStack(spacing: 12) {
             if !autoPreview {
                 Button(action: updatePreview) {
                     HStack { Image(systemName: "eye.fill"); Text("Preview Schedule") }
                         .font(.system(size: 15, weight: .semibold)).frame(maxWidth: .infinity).padding(.vertical, 12)
                         .background(Color(hex: "3B82F6")).foregroundColor(.white).cornerRadius(10)
-                }.buttonStyle(.plain)
+                }
+                .buttonStyle(.plain)
+                .help("Generate a preview of the schedule based on current settings")
             }
+            
+            Button(action: createPlanningSession) {
+                HStack { Image(systemName: "calendar.badge.clock"); Text("Create Just Planning") }
+                    .font(.system(size: 15, weight: .semibold)).frame(maxWidth: .infinity).padding(.vertical, 12)
+                    .background(planningExists ? paleRed : primaryRed)
+                    .foregroundColor(.white).cornerRadius(10)
+            }
+            .buttonStyle(.plain)
+            .help("Immediately schedule a single Planning session at the next available time")
+            
             Button(action: { showingConfirmation = true }) {
                 HStack { Image(systemName: "calendar.badge.plus"); Text("Schedule Sessions") }
                     .font(.system(size: 15, weight: .semibold)).frame(maxWidth: .infinity).padding(.vertical, 12)
                     .background(schedulingEngine.projectedSessions.isEmpty ? Color.gray.opacity(0.3) : Color(hex: "8B5CF6"))
                     .foregroundColor(.white).cornerRadius(10)
-            }.buttonStyle(.plain).disabled(schedulingEngine.projectedSessions.isEmpty)
+            }
+            .buttonStyle(.plain)
+            .disabled(schedulingEngine.projectedSessions.isEmpty)
+            .help("Add all projected sessions to your Calendar")
+            
             Button(action: { deletePastSessions = false; showingDeleteConfirmation = true }) {
                 HStack { Image(systemName: "trash"); Text("Delete Day's Sessions") }
                     .font(.system(size: 13, weight: .medium)).frame(maxWidth: .infinity).padding(.vertical, 10)
                     .background(Color.red.opacity(0.2)).foregroundColor(.red).cornerRadius(8)
                     .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(Color.red.opacity(0.3), lineWidth: 1))
-            }.buttonStyle(.plain)
+            }
+            .buttonStyle(.plain)
+            .help("Remove scheduled sessions for the selected day")
+        }
+    }
+    
+    private func createPlanningSession() {
+        // Project a single planning session
+        if let session = schedulingEngine.projectSingleSession(
+            type: .planning,
+            startTime: effectiveStartTime,
+            baseDate: selectedDate,
+            busySlots: calendarService.busySlots
+        ) {
+            let result = calendarService.createSessions([session])
+            if result.failed == 0 {
+                schedulingEngine.schedulingMessage = "Scheduled Planning session!"
+                // Refresh calendar
+                Task {
+                    await calendarService.fetchEvents(for: selectedDate)
+                    if autoPreview { updatePreview() }
+                }
+            } else {
+                schedulingEngine.schedulingMessage = "Failed to create planning session."
+            }
+        } else {
+            schedulingEngine.schedulingMessage = "Could not find a slot for Planning session."
         }
     }
 }

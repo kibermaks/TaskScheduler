@@ -57,6 +57,74 @@ struct SettingsPanel: View {
         .cornerRadius(12)
     }
     
+    // MARK: - Timeline Visibility Section
+    
+    private var timelineVisibilitySection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Image(systemName: "eye.fill")
+                    .foregroundColor(Color(hex: "3B82F6"))
+                Text("Timeline View")
+                    .font(.headline)
+                    .foregroundColor(.white)
+            }
+            
+            Toggle(isOn: $schedulingEngine.hideNightHours) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Hide night hours")
+                        .font(.system(size: 13))
+                        .foregroundColor(.white.opacity(0.8))
+                    Text(schedulingEngine.hideNightHours ? "Showing \(formattedHour(schedulingEngine.dayStartHour)) - \(formattedHour(schedulingEngine.dayEndHour))" : "Showing full 24h")
+                        .font(.system(size: 11))
+                        .foregroundColor(.white.opacity(0.5))
+                }
+            }
+            .toggleStyle(.switch)
+            .tint(Color(hex: "3B82F6"))
+            
+            if schedulingEngine.hideNightHours {
+                VStack(spacing: 8) {
+                    HStack {
+                        Text("Morning Edge:")
+                            .font(.system(size: 12))
+                            .foregroundColor(.white.opacity(0.6))
+                        Spacer()
+                        Stepper("\(schedulingEngine.dayStartHour):00", value: $schedulingEngine.dayStartHour, in: 0...12)
+                            .labelsHidden()
+                            .scaleEffect(0.8)
+                    }
+                    
+                    HStack {
+                        Text("Night Edge:")
+                            .font(.system(size: 12))
+                            .foregroundColor(.white.opacity(0.6))
+                        Spacer()
+                        Stepper("\(schedulingEngine.dayEndHour):00", value: $schedulingEngine.dayEndHour, in: 13...24)
+                            .labelsHidden()
+                            .scaleEffect(0.8)
+                    }
+                }
+                .padding(.leading, 8)
+            }
+        }
+    }
+    
+    private func formattedHour(_ hour: Int) -> String {
+        let calendar = Calendar.current
+        var components = DateComponents()
+        components.hour = hour % 24
+        
+        let formatter = DateFormatter()
+        formatter.dateStyle = .none
+        formatter.timeStyle = .short
+        
+        if let date = calendar.date(from: components) {
+            return formatter.string(from: date)
+        }
+        return "\(hour):00"
+    }
+    
+    
     // MARK: - Planning Section
     
     private var planningSection: some View {
