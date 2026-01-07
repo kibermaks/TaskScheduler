@@ -22,9 +22,11 @@ get_version() {
 }
 
 # Determine increment type
-INCREMENT_TYPE="minor"
+INCREMENT_TYPE="patch"
 if [[ "$1" == "major" ]]; then
     INCREMENT_TYPE="major"
+elif [[ "$1" == "minor" ]]; then
+    INCREMENT_TYPE="minor"
 fi
 
 echo "📋 Preparing to build ($INCREMENT_TYPE increment)..."
@@ -45,31 +47,38 @@ echo "   Current Version: $CURRENT_VERSION"
 
 # 2. Calculate New Version
 IFS='.' read -r -a parts <<< "$CURRENT_VERSION"
-major="${parts[0]}"
+major="${parts[0]:-1}"
 minor="${parts[1]:-0}"
-patch="${parts[2]:-0}"
+
+NEW_VERSION="$CURRENT_VERSION"
+VERSION_CHANGED=false
 
 if [ "$INCREMENT_TYPE" == "major" ]; then
     major=$((major + 1))
     minor=0
-    patch=0
-else
-    # Default to minor increment
+    NEW_VERSION="$major.$minor"
+    VERSION_CHANGED=true
+elif [ "$INCREMENT_TYPE" == "minor" ]; then
     minor=$((minor + 1))
+    NEW_VERSION="$major.$minor"
+    VERSION_CHANGED=true
+else
+    # Patch increment: we stay on the same marketing version
+    # but we will increment the build number below.
+    NEW_VERSION="$CURRENT_VERSION"
 fi
 
-NEW_VERSION="$major.$minor"
-# If there was a patch originally, keep format? usually X.Y is enough for marketing. 
-# Let's clean it to X.Y
-echo "   New Version:     $NEW_VERSION"
-
-# 3. Apply New Version
-echo "🔧 Updating Project Version..."
-# Use agvtool to set new marketing version
-xcrun agvtool new-marketing-version "$NEW_VERSION" > /dev/null
+if [ "$VERSION_CHANGED" = true ]; then
+    echo "   New Version:     $NEW_VERSION"
+    echo "🔧 Updating Project Version..."
+    xcrun agvtool new-marketing-version "$NEW_VERSION" > /dev/null
+else
+    echo "   Version remains: $NEW_VERSION"
+fi
 
 # 4. Increment Build Number (Project Version)
 echo "🔧 Incrementing Build Number..."
+# agvtool next-version handles the increment of CURRENT_PROJECT_VERSION
 xcrun agvtool next-version -all > /dev/null
 
 # Capture the new build number
@@ -99,13 +108,21 @@ if [ -n "$APP_PATH" ]; then
     APP_NAME=$(basename "$APP_PATH")
     echo "✅ Build successful! Found $APP_NAME"
     
+    # Kill if running
+    APP_PROCESS_NAME="${APP_NAME%.app}"
+    if pgrep -x "$APP_PROCESS_NAME" > /dev/null 2>&1; then
+        echo "🔪 Stopping running instance of $APP_PROCESS_NAME..."
+        killall "$APP_PROCESS_NAME" 2>/dev/null || true
+        sleep 0.5
+    fi
+    
     if [ -d "./$APP_NAME" ]; then
         rm -rf "./$APP_NAME"
     fi
     
     cp -R "$APP_PATH" "./$APP_NAME"
     touch "./$APP_NAME"
-    echo "🎉 Done! version $NEW_VERSION is ready in this folder."
+    echo "🎉 Done! version $NEW_VERSION (build $NEW_BUILD_NUMBER) is ready in this folder."
 else
     echo "❌ Build failed. Could not find .app."
     exit 1

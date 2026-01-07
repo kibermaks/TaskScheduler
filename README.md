@@ -53,6 +53,10 @@ The project follows a modular architecture with a clear separation of concerns:
 - **Foundation**: Core logic and date handling.
 
 ## 📜 Scripts
-- `./build_app.sh [major]`: Increments version, builds and signs Release .app.
-- `./deploy_app.sh`: Closes app, copies to `/Applications/@My Apps`, and restarts.
+- `./build_app.sh [major | minor | patch]`
+    - Increments version, builds and signs Release .app. (by default patch)
+- `./deploy_app.sh`
+    - Closes app, copies to `/Applications/@My Apps`, and restarts.
+- `./build_app.sh && ./deploy_app.sh`
+    - Build and deploy in one step.    
 

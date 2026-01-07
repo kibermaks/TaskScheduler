@@ -2,7 +2,7 @@
 set -e
 
 # Configuration
-APP_NAME="Add Daily Tasks.app"
+APP_NAME="Task Scheduler.app"
 SOURCE_DIR="./build_output"
 DEST_DIR="/Applications/@My Apps"
 
