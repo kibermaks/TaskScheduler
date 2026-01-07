@@ -67,7 +67,7 @@ struct ScheduledSession: Identifiable, Equatable {
 
 // MARK: - Busy Time Slot (from existing calendar events)
 struct BusyTimeSlot: Identifiable {
-    let id: UUID
+    let id: String
     let title: String
     let startTime: Date
     let endTime: Date
@@ -75,7 +75,7 @@ struct BusyTimeSlot: Identifiable {
     let calendarColor: Color
     
     init(from event: EKEvent) {
-        self.id = UUID()
+        self.id = event.eventIdentifier ?? UUID().uuidString
         self.title = event.title ?? "Busy"
         self.startTime = event.startDate
         self.endTime = event.endDate
@@ -87,7 +87,7 @@ struct BusyTimeSlot: Identifiable {
         }
     }
     
-    init(id: UUID = UUID(), title: String, startTime: Date, endTime: Date, calendarName: String, calendarColor: Color = .gray) {
+    init(id: String = UUID().uuidString, title: String, startTime: Date, endTime: Date, calendarName: String, calendarColor: Color = .gray) {
         self.id = id
         self.title = title
         self.startTime = startTime

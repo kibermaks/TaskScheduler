@@ -11,24 +11,60 @@ struct TimelineView: View {
     private let timeColumnWidth: CGFloat = 55
     
     
-    // Popover State
+    // Detail Sheet State
     @State private var selectedSession: ScheduledSession?
     @State private var selectedBusySlot: BusyTimeSlot?
     
+    // Width tracking for adaptive UI - default to 0 to start compact
+    @State private var containerWidth: CGFloat = 0
+    @State private var showingLegendPopover = false
+    
+    private var isNarrow: Bool {
+        // Use a reasonable threshold for narrow width
+        containerWidth < 600
+    }
+
+    private var isExtraNarrow: Bool {
+        // Use a reasonable threshold for narrow width
+        containerWidth < 400
+    }
+    
+    private var showingDetailSheet: Bool {
+        selectedSession != nil || selectedBusySlot != nil
+    }
+    
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            headerView
-            timelineScrollView
+        GeometryReader { geo in
+            ZStack {
+                VStack(alignment: .leading, spacing: 12) {
+                    headerView
+                    timelineScrollView
+                }
+                
+                // Detail sheet overlay
+                if showingDetailSheet {
+                    detailSheetOverlay
+                }
+            }
+            .onAppear {
+                containerWidth = geo.size.width
+            }
+            .onChange(of: geo.size.width) { _, newWidth in
+                containerWidth = newWidth
+            }
         }
     }
     
     private var headerView: some View {
-        HStack {
+        HStack(spacing: 12) {
             Text(formattedDate)
-                .font(.system(size: 20, weight: .semibold))
+                .font(.system(size: isNarrow ? 17 : 20, weight: .bold, design: .rounded))
                 .foregroundColor(.white)
+                .lineLimit(1)
+                .fixedSize(horizontal: true, vertical: false)
+                .layoutPriority(1)
             
-            Spacer()
+            Spacer(minLength: 8)
             
             if calendarService.isLoading {
                 ProgressView()
@@ -108,34 +144,84 @@ struct TimelineView: View {
     
     private var formattedDate: String {
         let formatter = DateFormatter()
-        formatter.dateFormat = "EEEE, MMMM d, yyyy"
+        if isExtraNarrow {
+            formatter.dateFormat = "MMM d, yyyy"
+        } else {
+            formatter.dateFormat = "EEEE, MMMM d, yyyy"
+        }
         return formatter.string(from: selectedDate)
     }
     
     private var legendView: some View {
-        HStack(spacing: 16) {
-            legendItem(color: Color(hex: "8B5CF6"), label: "Work")
-            legendItem(color: Color(hex: "3B82F6"), label: "Side")
-            legendItem(color: Color(hex: "EF4444"), label: "Planning")
-            legendItem(color: Color(hex: "10B981"), label: "Extra")
-            // legendItem(color: Color.gray.opacity(0.6), label: "Busy")
+        HStack(spacing: 12) {
+            if isNarrow {
+                // Compact Legend: Just the "Legend" button, no color boxes
+                Button {
+                    showingLegendPopover.toggle()
+                } label: {
+                    HStack(spacing: 4) {
+                        Text("Legend")
+                            .font(.system(size: 11, weight: .bold))
+                        Image(systemName: "chevron.down")
+                            .font(.system(size: 8, weight: .black))
+                    }
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
+                    .background(Color.white.opacity(0.15))
+                    .foregroundColor(.white)
+                    .cornerRadius(6)
+                }
+                .buttonStyle(.plain)
+                .popover(isPresented: $showingLegendPopover, arrowEdge: .bottom) {
+                    legendPopoverContent
+                }
+            } else {
+                // Wide Legend: Dots with labels
+                HStack(spacing: 16) {
+                    ForEach(SessionType.allCases) { type in
+                        legendItem(color: type.color, label: type.rawValue)
+                    }
+                }
+            }
             
+            // Toggle night button
             Button(action: {
                 withAnimation {
                     schedulingEngine.hideNightHours.toggle()
                 }
             }) {
-                HStack(spacing: 4) {
-                    Image(systemName: schedulingEngine.hideNightHours ? "moon.stars.fill" : "moon.stars")
-                }
-                .padding(8)
-                .background(Color.white.opacity(0.1))
-                .cornerRadius(6)
+                Image(systemName: schedulingEngine.hideNightHours ? "moon.stars.fill" : "moon.stars")
+                    .padding(8)
+                    .background(Color.white.opacity(0.1))
+                    .cornerRadius(6)
             }
             .buttonStyle(.plain)
             .help(schedulingEngine.hideNightHours ? "Show 00:00 - 06:00" : "Hide 00:00 - 06:00")
         }
-        .font(.system(size: 12))
+    }
+    
+    private var legendPopoverContent: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("Session Types")
+                .font(.system(size: 13, weight: .bold))
+                .foregroundColor(.white)
+            
+            Divider().background(Color.white.opacity(0.1))
+            
+            ForEach(SessionType.allCases) { type in
+                HStack(spacing: 8) {
+                    RoundedRectangle(cornerRadius: 3)
+                        .fill(type.color)
+                        .frame(width: 14, height: 14)
+                    Text(type.rawValue)
+                        .font(.system(size: 12))
+                        .foregroundColor(.white.opacity(0.9))
+                    Spacer()
+                }
+            }
+        }
+        .padding(12)
+        .frame(width: 160)
     }
     
     private func legendItem(color: Color, label: String) -> some View {
@@ -145,8 +231,19 @@ struct TimelineView: View {
                 .frame(width: 12, height: 12)
             Text(label)
                 .foregroundColor(.white.opacity(0.7))
+                .fixedSize(horizontal: true, vertical: false)
         }
     }
+}
+
+private struct WidthPreferenceKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = nextValue()
+    }
+}
+
+extension TimelineView {
     
     private var timeColumnView: some View {
         VStack(spacing: 0) {
@@ -235,6 +332,11 @@ struct TimelineView: View {
         let yPos = calculateYPosition(for: slot.startTime)
         let height = calculateHeight(from: slot.startTime, to: slot.endTime)
         let blockWidth = (containerWidth / 2) - 16
+        let blockHeight = max(height, 20)
+        
+        // Calculate center position for .position() modifier
+        let centerX = 8 + blockWidth / 2
+        let centerY = yPos + blockHeight / 2
         
         return ZStack(alignment: .topLeading) {
             RoundedRectangle(cornerRadius: 4)
@@ -258,30 +360,11 @@ struct TimelineView: View {
             }
             .padding(4)
         }
-        .frame(width: blockWidth, height: max(height, 20))
-        .offset(x: 8, y: yPos)
+        .frame(width: blockWidth, height: blockHeight)
+        .position(x: centerX, y: centerY)
         .onTapGesture {
+            selectedSession = nil
             selectedBusySlot = slot
-        }
-        .popover(item: $selectedBusySlot) { slot in
-            VStack(alignment: .leading, spacing: 12) {
-                HStack {
-                    Image(systemName: "calendar")
-                        .foregroundColor(slot.calendarColor)
-                    Text(slot.title)
-                        .font(.headline)
-                }
-                
-                Divider()
-                
-                VStack(alignment: .leading, spacing: 8) {
-                    Label(timeRangeString(start: slot.startTime, end: slot.endTime), systemImage: "clock")
-                    Label(slot.calendarName, systemImage: "tray")
-                }
-                .font(.callout)
-            }
-            .padding()
-            .frame(width: 250)
         }
     }
     
@@ -290,9 +373,14 @@ struct TimelineView: View {
     private func projectedSessionBlock(for session: ScheduledSession, containerWidth: CGFloat) -> some View {
         let yPos = calculateYPosition(for: session.startTime)
         let height = calculateHeight(from: session.startTime, to: session.endTime)
+        let blockHeight = max(height, 20)
         let blockWidth = (containerWidth / 2) - 16
         let xOffset = containerWidth / 2 + 8
         let isCompact = height < 40
+        
+        // Calculate center position for .position() modifier
+        let centerX = xOffset + blockWidth / 2
+        let centerY = yPos + blockHeight / 2
         
         return ZStack(alignment: .topLeading) {
             RoundedRectangle(cornerRadius: 4)
@@ -337,32 +425,109 @@ struct TimelineView: View {
                 .padding(4)
             }
         }
-        .frame(width: blockWidth, height: max(height, 20))
-        .offset(x: xOffset, y: yPos)
+        .frame(width: blockWidth, height: blockHeight)
+        .position(x: centerX, y: centerY)
         .onTapGesture {
+            selectedBusySlot = nil
             selectedSession = session
         }
-        .popover(item: $selectedSession) { session in
+    }
+    
+    // MARK: - Detail Sheet Overlay
+    
+    private var detailSheetOverlay: some View {
+        ZStack {
+            // Dimmed background - click to dismiss
+            Color.black.opacity(0.4)
+                .ignoresSafeArea()
+                .onTapGesture {
+                    withAnimation(.easeOut(duration: 0.2)) {
+                        selectedSession = nil
+                        selectedBusySlot = nil
+                    }
+                }
+            
+            // Detail card
             VStack(alignment: .leading, spacing: 12) {
-                HStack {
-                    Image(systemName: session.type.icon)
-                        .foregroundColor(session.type.color)
-                    Text(session.title)
-                        .font(.headline)
+                if let session = selectedSession {
+                    sessionDetailContent(session)
+                } else if let slot = selectedBusySlot {
+                    busySlotDetailContent(slot)
                 }
-                
-                Divider()
-                
-                VStack(alignment: .leading, spacing: 8) {
-                    Label(timeRangeString(start: session.startTime, end: session.endTime), systemImage: "clock")
-                    Label("\(session.durationMinutes) minutes", systemImage: "hourglass")
-                    Label(session.calendarName, systemImage: "calendar")
-                    Label(session.type.rawValue, systemImage: "tag")
-                }
-                .font(.callout)
             }
-            .padding()
-            .frame(width: 250)
+            .padding(16)
+            .background(
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(Color(hex: "1E293B"))
+                    .shadow(color: .black.opacity(0.3), radius: 20, y: 10)
+            )
+            .frame(maxWidth: 280)
+            .transition(.scale.combined(with: .opacity))
+        }
+        .animation(.spring(response: 0.3, dampingFraction: 0.8), value: showingDetailSheet)
+    }
+    
+    private func sessionDetailContent(_ session: ScheduledSession) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Image(systemName: session.type.icon)
+                    .font(.system(size: 18))
+                    .foregroundColor(session.type.color)
+                Text(session.title)
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundColor(.white)
+                Spacer()
+                Button {
+                    selectedSession = nil
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.system(size: 20))
+                        .foregroundColor(.white.opacity(0.5))
+                }
+                .buttonStyle(.plain)
+            }
+            
+            Divider().background(Color.white.opacity(0.1))
+            
+            VStack(alignment: .leading, spacing: 10) {
+                Label(timeRangeString(start: session.startTime, end: session.endTime), systemImage: "clock")
+                Label("\(session.durationMinutes) minutes", systemImage: "hourglass")
+                Label(session.calendarName, systemImage: "calendar")
+                Label(session.type.rawValue, systemImage: "tag")
+            }
+            .font(.system(size: 14))
+            .foregroundColor(.white.opacity(0.8))
+        }
+    }
+    
+    private func busySlotDetailContent(_ slot: BusyTimeSlot) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Image(systemName: "calendar")
+                    .font(.system(size: 18))
+                    .foregroundColor(slot.calendarColor)
+                Text(slot.title)
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundColor(.white)
+                Spacer()
+                Button {
+                    selectedBusySlot = nil
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.system(size: 20))
+                        .foregroundColor(.white.opacity(0.5))
+                }
+                .buttonStyle(.plain)
+            }
+            
+            Divider().background(Color.white.opacity(0.1))
+            
+            VStack(alignment: .leading, spacing: 10) {
+                Label(timeRangeString(start: slot.startTime, end: slot.endTime), systemImage: "clock")
+                Label(slot.calendarName, systemImage: "tray")
+            }
+            .font(.system(size: 14))
+            .foregroundColor(.white.opacity(0.8))
         }
     }
     

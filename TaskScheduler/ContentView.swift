@@ -392,9 +392,14 @@ struct HeaderView: View {
     
     private var appTitle: some View {
         VStack(alignment: .leading, spacing: 4) {
-            Text("Task Scheduler")
-                .font(.system(size: 28, weight: .bold, design: .rounded))
-                .foregroundColor(.white)
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Text("Task Scheduler")
+                    .font(.system(size: 28, weight: .bold, design: .rounded))
+                    .foregroundColor(.white)
+                Text("v\(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "1.0")")
+                    .font(.system(size: 14, weight: .medium, design: .rounded))
+                    .foregroundColor(.white.opacity(0.4))
+            }
             Text("Plan your productive day")
                 .font(.subheadline)
                 .foregroundColor(.white.opacity(0.6))
