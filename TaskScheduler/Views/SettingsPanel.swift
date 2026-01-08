@@ -38,8 +38,8 @@ struct SettingsPanel: View {
                 
                 Divider().background(Color.white.opacity(0.1))
                 
-                // Extra Sessions Section
-                extraSessionSection
+                // Deep Sessions Section
+                deepSessionSection
                 
                 Divider().background(Color.white.opacity(0.1))
                 
@@ -123,6 +123,7 @@ struct SettingsPanel: View {
         }
         return "\(hour):00"
     }
+    
     
     
     // MARK: - Planning Section
@@ -257,53 +258,50 @@ struct SettingsPanel: View {
         }
     }
     
-    // MARK: - Extra Sessions Section
+    // MARK: - Deep Sessions Section
     
-    private var extraSessionSection: some View {
+    private var deepSessionSection: some View {
          VStack(alignment: .leading, spacing: 12) {
              HStack {
-                 Image(systemName: "plus.circle.fill")
+                 Image(systemName: "bolt.circle.fill")
                      .foregroundColor(Color(hex: "10B981"))
-                 Text("Extra Sessions")
+                 Text("Deep Sessions")
                      .font(.headline)
                      .foregroundColor(.white)
                  Spacer()
-                 Toggle("", isOn: $schedulingEngine.extraSessionConfig.enabled)
+                 Toggle("", isOn: $schedulingEngine.deepSessionConfig.enabled)
                      .labelsHidden()
                      .toggleStyle(.switch)
                      .tint(Color(hex: "10B981"))
              }
              
-             if schedulingEngine.extraSessionConfig.enabled {
-                 // Count (max limit)
+             if schedulingEngine.deepSessionConfig.enabled {
                  HStack {
                      Text("Sessions Count:")
                          .font(.system(size: 13))
                          .foregroundColor(.white.opacity(0.7))
                      Spacer()
-                     Stepper("\(schedulingEngine.extraSessionConfig.sessionCount)", value: $schedulingEngine.extraSessionConfig.sessionCount, in: 1...10)
+                     Stepper("\(schedulingEngine.deepSessionConfig.sessionCount)", value: $schedulingEngine.deepSessionConfig.sessionCount, in: 1...10)
                          .font(.system(size: 13, weight: .medium))
                          .fixedSize()
                  }
                  
-                 // Inject After
                  HStack {
                      Text("Inject after:")
                          .font(.system(size: 13))
                          .foregroundColor(.white.opacity(0.7))
                      Spacer()
-                     Stepper("\(schedulingEngine.extraSessionConfig.injectAfterEvery) sessions", value: $schedulingEngine.extraSessionConfig.injectAfterEvery, in: 1...10)
+                     Stepper("\(schedulingEngine.deepSessionConfig.injectAfterEvery) sessions", value: $schedulingEngine.deepSessionConfig.injectAfterEvery, in: 1...10)
                          .font(.system(size: 13, weight: .medium))
                          .fixedSize()
                  }
-
-                 // Name
+ 
                  HStack {
                      Text("Name:")
                          .font(.system(size: 13))
                          .foregroundColor(.white.opacity(0.7))
                      Spacer()
-                     TextField("Name", text: $schedulingEngine.extraSessionConfig.name)
+                     TextField("Name", text: $schedulingEngine.deepSessionConfig.name)
                          .textFieldStyle(.plain)
                          .font(.system(size: 13))
                          .padding(6)
@@ -312,24 +310,22 @@ struct SettingsPanel: View {
                          .frame(width: 150)
                  }
                  
-                 // Duration
                  HStack {
                      Text("Duration:")
                          .font(.system(size: 13))
                          .foregroundColor(.white.opacity(0.7))
                      Spacer()
-                     Stepper("\(schedulingEngine.extraSessionConfig.duration) min", value: $schedulingEngine.extraSessionConfig.duration, in: 5...120, step: 5)
+                     Stepper("\(schedulingEngine.deepSessionConfig.duration) min", value: $schedulingEngine.deepSessionConfig.duration, in: 5...120, step: 5)
                          .font(.system(size: 13, weight: .medium))
                          .fixedSize()
                  }
                  
-                 // Calendar Picker
                  HStack {
                      Text("Calendar:")
                          .font(.system(size: 13))
                          .foregroundColor(.white.opacity(0.7))
                      Spacer()
-                     Picker("", selection: $schedulingEngine.extraSessionConfig.calendarName) {
+                     Picker("", selection: $schedulingEngine.deepSessionConfig.calendarName) {
                          ForEach(calendarService.calendarNames(), id: \.self) { name in
                              Text(name).tag(name)
                          }
@@ -467,17 +463,16 @@ struct SettingsPanel: View {
                 .fixedSize()
             }
             
-            // Extra Rest (only if extra enabled logic? User said 'tied to Extra sessions', maybe always show or only if enabled. Since they asked for parameter, I'll show it.)
              HStack {
-                Text("After Extra:")
+                Text("After Deep:")
                     .font(.system(size: 13))
                     .foregroundColor(.white.opacity(0.7))
                 
                 Spacer()
                 
                 Stepper(
-                    "\(schedulingEngine.extraRestDuration) min",
-                    value: $schedulingEngine.extraRestDuration,
+                    "\(schedulingEngine.deepRestDuration) min",
+                    value: $schedulingEngine.deepRestDuration,
                     in: 0...60,
                     step: 5
                 )
@@ -494,4 +489,59 @@ struct SettingsPanel: View {
         .environmentObject(CalendarService())
         .frame(width: 320, height: 800)
         .background(Color(hex: "0F172A"))
+}
+
+struct AppSettingsView: View {
+    @EnvironmentObject var schedulingEngine: SchedulingEngine
+    
+    var body: some View {
+        Form {
+            Section("Scheduling Logic") {
+                Toggle("Aware existing tasks", isOn: $schedulingEngine.awareExistingTasks)
+                
+                Text("When enabled, the app only projects remaining tasks needed to meet your quotas by counting existing events on your calendar.")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Tagging System")
+                        .font(.caption)
+                        .fontWeight(.bold)
+                    Text("The app uses hashtags in event notes to identify session types: #work, #side, #deep, #plan. This allows accurate counting even if calendars overlap.")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+                .padding(.top, 4)
+            }
+            
+            Section("Timeline Visibility") {
+                Toggle("Hide night hours", isOn: $schedulingEngine.hideNightHours)
+                
+                HStack {
+                    Text("Morning Edge:")
+                    Spacer()
+                    Stepper("\(schedulingEngine.dayStartHour):00", value: $schedulingEngine.dayStartHour, in: 0...12)
+                }
+                .disabled(!schedulingEngine.hideNightHours)
+                
+                HStack {
+                    Text("Night Edge:")
+                    Spacer()
+                    Stepper("\(schedulingEngine.dayEndHour):00", value: $schedulingEngine.dayEndHour, in: 13...24)
+                }
+                .disabled(!schedulingEngine.hideNightHours)
+                Text("These settings control the visible range of the timeline when 'Hide Night Hours' is enabled.")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+        }
+        .formStyle(.grouped)
+        .frame(width: 400, height: 300)
+        .navigationTitle("Settings")
+    }
+}
+
+#Preview {
+    AppSettingsView()
+        .environmentObject(SchedulingEngine())
 }

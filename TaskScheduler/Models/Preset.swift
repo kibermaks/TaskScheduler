@@ -11,8 +11,8 @@ struct CalendarMapping: Codable, Equatable {
     )
 }
 
-// MARK: - Extra Session Configuration
-struct ExtraSessionConfig: Codable, Equatable {
+// MARK: - Deep Session Configuration
+struct DeepSessionConfig: Codable, Equatable {
     var enabled: Bool
     var sessionCount: Int
     var injectAfterEvery: Int
@@ -20,13 +20,13 @@ struct ExtraSessionConfig: Codable, Equatable {
     var duration: Int
     var calendarName: String
     
-    static let `default` = ExtraSessionConfig(
+    static let `default` = DeepSessionConfig(
         enabled: false,
         sessionCount: 1,
         injectAfterEvery: 3,
-        name: "Extra Session",
+        name: "Deep Session",
         duration: 15,
-        calendarName: "Work" // Default to Work calendar
+        calendarName: "Work"
     )
 }
 
@@ -48,23 +48,21 @@ struct Preset: Identifiable, Codable, Equatable {
     var workSessionDuration: Int
     var sideSessionDuration: Int
     var planningDuration: Int
-    var restDuration: Int // Default Work rest
-    var sideRestDuration: Int // Rest after side session
-    var extraRestDuration: Int // Rest after extra session
-    
-    // Scheduling options
-    var schedulePlanning: Bool
-    var pattern: SchedulePattern
-    var workSessionsPerCycle: Int
     var sideSessionsPerCycle: Int // For Custom Ratio
     var sideFirst: Bool // For Custom Ratio
     
-    // Extra Sessions
-    var extraSessionConfig: ExtraSessionConfig
+    var deepSessionConfig: DeepSessionConfig
     
-    // Calendar mapping
     var calendarMapping: CalendarMapping
     
+    var deepRestDuration: Int
+    
+    var restDuration: Int
+    var sideRestDuration: Int
+    
+    var schedulePlanning: Bool
+    var pattern: SchedulePattern
+    var workSessionsPerCycle: Int
     
     // Default start hour for future days
     var defaultStartHour: Int
@@ -81,14 +79,14 @@ struct Preset: Identifiable, Codable, Equatable {
         sideSessionDuration: Int = 30,
         planningDuration: Int = 15,
         restDuration: Int = 20,
-        sideRestDuration: Int? = nil, // Optional in init, defaults to 75% of restDuration
-        extraRestDuration: Int? = nil,
+        sideRestDuration: Int? = nil,
+        deepRestDuration: Int? = nil,
         schedulePlanning: Bool = true,
         pattern: SchedulePattern = .alternating,
         workSessionsPerCycle: Int = 2,
         sideSessionsPerCycle: Int = 1,
         sideFirst: Bool = false,
-        extraSessionConfig: ExtraSessionConfig = .default,
+        deepSessionConfig: DeepSessionConfig = .default,
         calendarMapping: CalendarMapping = .default,
         defaultStartHour: Int = 8
     ) {
@@ -104,18 +102,20 @@ struct Preset: Identifiable, Codable, Equatable {
         self.planningDuration = planningDuration
         self.restDuration = restDuration
         
-        // Default side rest to 75% of work rest (rounded to nearest 5 mins if possible, but keeping simple int math here)
         self.sideRestDuration = sideRestDuration ?? max(5, Int(Double(restDuration) * 0.75))
-        self.extraRestDuration = extraRestDuration ?? restDuration
+        self.deepRestDuration = deepRestDuration ?? restDuration
         
         self.schedulePlanning = schedulePlanning
         self.pattern = pattern
         self.workSessionsPerCycle = workSessionsPerCycle
         self.sideSessionsPerCycle = sideSessionsPerCycle
         self.sideFirst = sideFirst
-        self.extraSessionConfig = extraSessionConfig
+        self.deepSessionConfig = deepSessionConfig
         self.calendarMapping = calendarMapping
         self.defaultStartHour = defaultStartHour
+        self.schedulePlanning = schedulePlanning
+        self.pattern = pattern
+        self.workSessionsPerCycle = workSessionsPerCycle
     }
     
     enum CodingKeys: String, CodingKey {
@@ -123,9 +123,9 @@ struct Preset: Identifiable, Codable, Equatable {
         case workSessionCount, sideSessionCount
         case workSessionName, sideSessionName
         case workSessionDuration, sideSessionDuration
-        case planningDuration, restDuration, sideRestDuration, extraRestDuration
+        case planningDuration, restDuration, sideRestDuration, deepRestDuration
         case schedulePlanning, pattern, workSessionsPerCycle, sideSessionsPerCycle, sideFirst
-        case extraSessionConfig, calendarMapping, defaultStartHour
+        case deepSessionConfig, calendarMapping, defaultStartHour
     }
     
     init(from decoder: Decoder) throws {
@@ -142,13 +142,13 @@ struct Preset: Identifiable, Codable, Equatable {
         planningDuration = try container.decode(Int.self, forKey: .planningDuration)
         restDuration = try container.decode(Int.self, forKey: .restDuration)
         sideRestDuration = try container.decode(Int.self, forKey: .sideRestDuration)
-        extraRestDuration = try container.decode(Int.self, forKey: .extraRestDuration)
+        deepRestDuration = try container.decodeIfPresent(Int.self, forKey: .deepRestDuration) ?? restDuration
         schedulePlanning = try container.decode(Bool.self, forKey: .schedulePlanning)
         pattern = try container.decode(SchedulePattern.self, forKey: .pattern)
         workSessionsPerCycle = try container.decode(Int.self, forKey: .workSessionsPerCycle)
         sideSessionsPerCycle = try container.decodeIfPresent(Int.self, forKey: .sideSessionsPerCycle) ?? 1
         sideFirst = try container.decodeIfPresent(Bool.self, forKey: .sideFirst) ?? false
-        extraSessionConfig = try container.decode(ExtraSessionConfig.self, forKey: .extraSessionConfig)
+        deepSessionConfig = try container.decode(DeepSessionConfig.self, forKey: .deepSessionConfig)
         calendarMapping = try container.decode(CalendarMapping.self, forKey: .calendarMapping)
         defaultStartHour = try container.decodeIfPresent(Int.self, forKey: .defaultStartHour) ?? 8
     }

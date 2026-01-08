@@ -6,7 +6,7 @@ enum SessionType: String, Codable, CaseIterable, Identifiable {
     case work = "Work"
     case side = "Side"
     case planning = "Planning"
-    case extra = "Extra"
+    case deep = "Deep"
     
     var id: String { rawValue }
     
@@ -15,7 +15,7 @@ enum SessionType: String, Codable, CaseIterable, Identifiable {
         case .work: return 40
         case .side: return 30
         case .planning: return 15
-        case .extra: return 15
+        case .deep: return 15
         }
     }
     
@@ -24,7 +24,7 @@ enum SessionType: String, Codable, CaseIterable, Identifiable {
         case .work: return Color(hex: "8B5CF6")      // Purple
         case .side: return Color(hex: "3B82F6")       // Blue
         case .planning: return Color(hex: "EF4444")   // Red
-        case .extra: return Color(hex: "10B981")      // Emerald Green
+        case .deep: return Color(hex: "10B981")      // Emerald Green
         }
     }
     
@@ -33,7 +33,7 @@ enum SessionType: String, Codable, CaseIterable, Identifiable {
         case .work: return "briefcase.fill"
         case .side: return "star.fill"
         case .planning: return "calendar.badge.clock"
-        case .extra: return "plus.circle.fill"
+        case .deep: return "bolt.circle.fill"
         }
     }
 }
@@ -46,6 +46,7 @@ struct ScheduledSession: Identifiable, Equatable {
     var startTime: Date
     var endTime: Date
     let calendarName: String
+    let notes: String?
     
     var duration: TimeInterval {
         endTime.timeIntervalSince(startTime)
@@ -55,13 +56,14 @@ struct ScheduledSession: Identifiable, Equatable {
         Int(duration / 60)
     }
     
-    init(id: UUID = UUID(), type: SessionType, title: String, startTime: Date, endTime: Date, calendarName: String) {
+    init(id: UUID = UUID(), type: SessionType, title: String, startTime: Date, endTime: Date, calendarName: String, notes: String? = nil) {
         self.id = id
         self.type = type
         self.title = title
         self.startTime = startTime
         self.endTime = endTime
         self.calendarName = calendarName
+        self.notes = notes
     }
 }
 
@@ -71,6 +73,7 @@ struct BusyTimeSlot: Identifiable {
     let title: String
     let startTime: Date
     let endTime: Date
+    let notes: String?
     let calendarName: String
     let calendarColor: Color
     
@@ -79,6 +82,7 @@ struct BusyTimeSlot: Identifiable {
         self.title = event.title ?? "Busy"
         self.startTime = event.startDate
         self.endTime = event.endDate
+        self.notes = event.notes
         self.calendarName = event.calendar?.title ?? "Unknown"
         if let cgColor = event.calendar?.cgColor {
             self.calendarColor = Color(cgColor: cgColor)
@@ -87,11 +91,12 @@ struct BusyTimeSlot: Identifiable {
         }
     }
     
-    init(id: String = UUID().uuidString, title: String, startTime: Date, endTime: Date, calendarName: String, calendarColor: Color = .gray) {
+    init(id: String = UUID().uuidString, title: String, startTime: Date, endTime: Date, notes: String? = nil, calendarName: String, calendarColor: Color = .gray) {
         self.id = id
         self.title = title
         self.startTime = startTime
         self.endTime = endTime
+        self.notes = notes
         self.calendarName = calendarName
         self.calendarColor = calendarColor
     }

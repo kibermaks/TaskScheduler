@@ -5,11 +5,11 @@ struct TasksPanel: View {
     
     @StateObject private var workAction = TaskEditorAction()
     @StateObject private var sideAction = TaskEditorAction()
-    @StateObject private var extraAction = TaskEditorAction()
+    @StateObject private var deepAction = TaskEditorAction()
     
     @State private var isWorkFocused = false
     @State private var isSideFocused = false
-    @State private var isExtraFocused = false
+    @State private var isDeepFocused = false
     
     var body: some View {
         ScrollView {
@@ -39,13 +39,13 @@ struct TasksPanel: View {
                 Divider().background(Color.white.opacity(0.1))
                 
                 taskSection(
-                    title: "Extra Tasks",
-                    icon: "plus.circle.fill",
+                    title: "Deep Tasks",
+                    icon: "bolt.circle.fill",
                     iconColor: Color(hex: "10B981"),
-                    isEnabled: $schedulingEngine.useExtraTasks,
-                    text: $schedulingEngine.extraTasks,
-                    action: extraAction,
-                    isFocused: $isExtraFocused
+                    isEnabled: $schedulingEngine.useDeepTasks,
+                    text: $schedulingEngine.deepTasks,
+                    action: deepAction,
+                    isFocused: $isDeepFocused
                 )
             }
             .padding()
