@@ -25,7 +25,7 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
-		100 /* Add Daily Tasks.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Add Daily Tasks.app"; sourceTree = BUILT_PRODUCTS_DIR; };
+		100 /* Task Scheduler.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Task Scheduler.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		101 /* TaskSchedulerApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TaskSchedulerApp.swift; sourceTree = "<group>"; };
 		102 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		103 /* Session.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Session.swift; sourceTree = "<group>"; };
@@ -81,7 +81,7 @@
 		402 /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				100 /* Add Daily Tasks.app */,
+				100 /* Task Scheduler.app */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -135,7 +135,7 @@
 			);
 			name = TaskScheduler;
 			productName = TaskScheduler;
-			productReference = 100 /* Add Daily Tasks.app */;
+			productReference = 100 /* Task Scheduler.app */;
 			productType = "com.apple.product-type.application";
 		};
 /* End PBXNativeTarget section */
@@ -338,7 +338,7 @@
 				CODE_SIGN_ENTITLEMENTS = TaskScheduler/TaskScheduler.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 19;
+				CURRENT_PROJECT_VERSION = 37;
 				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_ASSET_PATHS = "";
 				ENABLE_APP_SANDBOX = YES;
@@ -348,8 +348,8 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleShortVersionString = "$(MARKETING_VERSION)";
 				INFOPLIST_KEY_CFBundleVersion = "$(CURRENT_PROJECT_VERSION)";
-				INFOPLIST_KEY_CFBundleDisplayName = "Add Daily Tasks";
-				INFOPLIST_KEY_CFBundleName = "Add Daily Tasks";
+				INFOPLIST_KEY_CFBundleDisplayName = "Task Scheduler";
+				INFOPLIST_KEY_CFBundleName = "Task Scheduler";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity";
 				INFOPLIST_KEY_NSCalendarsUsageDescription = "Task Scheduler needs access to your calendars to read existing events and schedule new sessions.";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
@@ -358,10 +358,11 @@
 					"@executable_path/../Frameworks",
 				);
 				MARKETING_VERSION = 1.1;
-				PRODUCT_BUNDLE_IDENTIFIER = com.taskscheduler.app;
-				PRODUCT_NAME = "Add Daily Tasks";
+				PRODUCT_BUNDLE_IDENTIFIER = com.kibermaks.TaskScheduler;
+				PRODUCT_NAME = "Task Scheduler";
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
+				VERSIONING_SYSTEM = "apple-generic";
 			};
 			name = Debug;
 		};
@@ -374,7 +375,7 @@
 				CODE_SIGN_ENTITLEMENTS = TaskScheduler/TaskScheduler.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 19;
+				CURRENT_PROJECT_VERSION = 37;
 				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_ASSET_PATHS = "";
 				ENABLE_APP_SANDBOX = YES;
@@ -384,8 +385,8 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleShortVersionString = "$(MARKETING_VERSION)";
 				INFOPLIST_KEY_CFBundleVersion = "$(CURRENT_PROJECT_VERSION)";
-				INFOPLIST_KEY_CFBundleDisplayName = "Add Daily Tasks";
-				INFOPLIST_KEY_CFBundleName = "Add Daily Tasks";
+				INFOPLIST_KEY_CFBundleDisplayName = "Task Scheduler";
+				INFOPLIST_KEY_CFBundleName = "Task Scheduler";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity";
 				INFOPLIST_KEY_NSCalendarsUsageDescription = "Task Scheduler needs access to your calendars to read existing events and schedule new sessions.";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
@@ -394,10 +395,11 @@
 					"@executable_path/../Frameworks",
 				);
 				MARKETING_VERSION = 1.1;
-				PRODUCT_BUNDLE_IDENTIFIER = com.taskscheduler.app;
-				PRODUCT_NAME = "Add Daily Tasks";
+				PRODUCT_BUNDLE_IDENTIFIER = com.kibermaks.TaskScheduler;
+				PRODUCT_NAME = "Task Scheduler";
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
+				VERSIONING_SYSTEM = "apple-generic";
 			};
 			name = Release;
 		};
