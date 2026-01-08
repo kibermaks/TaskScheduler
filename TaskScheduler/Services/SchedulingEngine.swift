@@ -159,13 +159,16 @@ class SchedulingEngine: ObservableObject {
         baseDate: Date,
         busySlots: [BusyTimeSlot],
         includePlanning: Bool,
-        existingSessions: (work: Int, side: Int, deep: Int)? = nil
+        existingSessions: (work: Int, side: Int, deep: Int)? = nil,
+        existingTitles: Set<String>? = nil
     ) -> [ScheduledSession] {
         var sessions: [ScheduledSession] = []
-        var currentTime = roundToNextInterval(startTime)
-        
         let calendar = Calendar.current
+        let startOfDay = calendar.startOfDay(for: baseDate)
         let endOfDay = calendar.startOfDay(for: calendar.date(byAdding: .day, value: 1, to: baseDate)!)
+        
+        let roundedStart = roundToNextInterval(startTime)
+        var currentTime = max(roundedStart, startOfDay)
         
         let bufferDuration = TimeInterval(existingEventBuffer * 60)
         var planningNeeded = includePlanning && schedulePlanning
@@ -197,9 +200,20 @@ class SchedulingEngine: ObservableObject {
         let maxAttempts = 500
         
         // Prepare task titles
-        let workTitles = workTasks.components(separatedBy: .newlines).filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
-        let sideTitles = sideTasks.components(separatedBy: .newlines).filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
-        let deepTitles = deepTasks.components(separatedBy: .newlines).filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
+        var workTitles = workTasks.components(separatedBy: .newlines).filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
+        var sideTitles = sideTasks.components(separatedBy: .newlines).filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
+        var deepTitles = deepTasks.components(separatedBy: .newlines).filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
+        
+        // Smart allocation: Remove titles that already exist on the calendar today
+        if let existing = existingTitles {
+            workTitles = workTitles.filter { !existing.contains($0) }
+            sideTitles = sideTitles.filter { !existing.contains($0) }
+            deepTitles = deepTitles.filter { !existing.contains($0) }
+        }
+        
+        var projectedWorkCount = 0
+        var projectedSideCount = 0
+        var projectedDeepCount = 0
         
         while (workCount < workSessions || sideCount < sideSessions || planningNeeded || (deepSessionConfig.enabled && deepCount < deepSessionConfig.sessionCount)) && attempts < maxAttempts {
             attempts += 1
@@ -255,12 +269,12 @@ class SchedulingEngine: ObservableObject {
                     switch sessionType {
                     case .work:
                         sessionDuration = workSessionDuration
-                        sessionTitle = (useWorkTasks && workCount < workTitles.count) ? workTitles[workCount] : workSessionName
+                        sessionTitle = (useWorkTasks && projectedWorkCount < workTitles.count) ? workTitles[projectedWorkCount] : workSessionName
                         calendarName = workCalendarName
                         sessionTag = "#work"
                     case .side:
                         sessionDuration = sideSessionDuration
-                        sessionTitle = (useSideTasks && sideCount < sideTitles.count) ? sideTitles[sideCount] : sideSessionName
+                        sessionTitle = (useSideTasks && projectedSideCount < sideTitles.count) ? sideTitles[projectedSideCount] : sideSessionName
                         calendarName = sideCalendarName
                         sessionTag = "#side"
                     case .planning, .deep:
@@ -273,19 +287,19 @@ class SchedulingEngine: ObservableObject {
                     if workCount < workSessions {
                         sessionType = .work
                         sessionDuration = workSessionDuration
-                        sessionTitle = (useWorkTasks && workCount < workTitles.count) ? workTitles[workCount] : workSessionName
+                        sessionTitle = (useWorkTasks && projectedWorkCount < workTitles.count) ? workTitles[projectedWorkCount] : workSessionName
                         calendarName = workCalendarName
                         sessionTag = "#work"
                     } else if sideCount < sideSessions {
                         sessionType = .side
                         sessionDuration = sideSessionDuration
-                        sessionTitle = (useSideTasks && sideCount < sideTitles.count) ? sideTitles[sideCount] : sideSessionName
+                        sessionTitle = (useSideTasks && projectedSideCount < sideTitles.count) ? sideTitles[projectedSideCount] : sideSessionName
                         calendarName = sideCalendarName
                         sessionTag = "#side"
                     } else if deepSessionConfig.enabled && deepCount < deepSessionConfig.sessionCount {
                          sessionType = .deep
                          sessionDuration = deepSessionConfig.duration
-                         sessionTitle = (useDeepTasks && deepCount < deepTitles.count) ? deepTitles[deepCount] : deepSessionConfig.name
+                         sessionTitle = (useDeepTasks && projectedDeepCount < deepTitles.count) ? deepTitles[projectedDeepCount] : deepSessionConfig.name
                          calendarName = deepSessionConfig.calendarName
                          sessionTag = "#deep"
                          isDeep = true
@@ -306,9 +320,28 @@ class SchedulingEngine: ObservableObject {
             
             if let conflictEnd = conflict {
                 if !planningNeeded && !isDeep {
-                    if let alt = tryAlternativeSession(currentTime: currentTime, conflictEnd: conflictEnd, currentType: sessionType, workCount: workCount, sideCount: sideCount, busySlots: busySlots, buffer: bufferDuration, endOfDay: endOfDay) {
+                    if let alt = tryAlternativeSession(
+                        currentTime: currentTime,
+                        conflictEnd: conflictEnd,
+                        currentType: sessionType,
+                        workCount: workCount,
+                        sideCount: sideCount,
+                        busySlots: busySlots,
+                        buffer: bufferDuration,
+                        endOfDay: endOfDay,
+                        workTitles: workTitles,
+                        sideTitles: sideTitles,
+                        projectedWorkCount: projectedWorkCount,
+                        projectedSideCount: projectedSideCount
+                    ) {
                         sessions.append(alt)
-                        if alt.type == .work { workCount += 1 } else { sideCount += 1 }
+                        if alt.type == .work {
+                            workCount += 1
+                            projectedWorkCount += 1
+                        } else {
+                            sideCount += 1
+                            projectedSideCount += 1
+                        }
                         regularSessionsScheduled += 1
                         let appliedRest = alt.type == .side ? sideRestDuration : restDuration
                         currentTime = roundToNextInterval(alt.endTime.addingTimeInterval(TimeInterval(appliedRest * 60)))
@@ -336,15 +369,18 @@ class SchedulingEngine: ObservableObject {
                 appliedRest = max(5, restDuration / 2)
             } else if isDeep {
                 deepCount += 1
+                projectedDeepCount += 1
                 appliedRest = deepRestDuration
             } else {
                 switch sessionType {
                 case .work:
                     workCount += 1
+                    projectedWorkCount += 1
                     regularSessionsScheduled += 1
                     appliedRest = restDuration
                 case .side:
                     sideCount += 1
+                    projectedSideCount += 1
                     regularSessionsScheduled += 1
                     appliedRest = sideRestDuration
                 default: break
@@ -366,7 +402,11 @@ class SchedulingEngine: ObservableObject {
         }
 
         if sessions.isEmpty {
-            schedulingMessage = "No suitable time slots found." + existingNote
+            if awareExistingTasks && workCount >= workSessions && sideCount >= sideSessions {
+                schedulingMessage = "Daily quota met by existing sessions." + existingNote
+            } else {
+                schedulingMessage = "No suitable time slots found or quota already met." + existingNote
+            }
         } else if workCount < workSessions || sideCount < sideSessions {
             schedulingMessage = "Projected \(sessions.count) sessions. Quota not met." + existingNote
         } else {
@@ -387,7 +427,11 @@ class SchedulingEngine: ObservableObject {
         sideCount: Int,
         busySlots: [BusyTimeSlot],
         buffer: TimeInterval,
-        endOfDay: Date
+        endOfDay: Date,
+        workTitles: [String],
+        sideTitles: [String],
+        projectedWorkCount: Int,
+        projectedSideCount: Int
     ) -> ScheduledSession? {
         // If we can't fit a work session, try side (and vice versa)
         let alternativeType: SessionType
@@ -399,24 +443,12 @@ class SchedulingEngine: ObservableObject {
             alternativeType = .side
             alternativeDuration = sideSessionDuration
             alternativeCalendar = sideCalendarName
-            
-            let titles = sideTasks.components(separatedBy: .newlines).filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
-            if useSideTasks && sideCount < titles.count {
-                alternativeTitle = titles[sideCount]
-            } else {
-                alternativeTitle = sideSessionName
-            }
+            alternativeTitle = (useSideTasks && projectedSideCount < sideTitles.count) ? sideTitles[projectedSideCount] : sideSessionName
         } else if currentType == .side && workCount < workSessions {
             alternativeType = .work
             alternativeDuration = workSessionDuration
             alternativeCalendar = workCalendarName
-            
-            let titles = workTasks.components(separatedBy: .newlines).filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
-            if useWorkTasks && workCount < titles.count {
-                alternativeTitle = titles[workCount]
-            } else {
-                alternativeTitle = workSessionName
-            }
+            alternativeTitle = (useWorkTasks && projectedWorkCount < workTitles.count) ? workTitles[projectedWorkCount] : workSessionName
         } else {
             return nil
         }
@@ -563,10 +595,13 @@ class SchedulingEngine: ObservableObject {
         busySlots: [BusyTimeSlot]
     ) -> (availableMinutes: Int, possibleWorkSessions: Int, possibleSideSessions: Int, possibleDeepSessions: Int) {
         let calendar = Calendar.current
+        let startOfDay = calendar.startOfDay(for: baseDate)
         let endOfDay = calendar.startOfDay(for: calendar.date(byAdding: .day, value: 1, to: baseDate)!)
         
+        let effectiveStart = max(startTime, startOfDay)
+        
         var totalAvailable = 0
-        var currentTime = startTime
+        var currentTime = effectiveStart
         let bufferDuration = TimeInterval(existingEventBuffer * 60)
         
         // Sort busy slots by start time

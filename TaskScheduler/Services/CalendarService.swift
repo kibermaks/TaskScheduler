@@ -182,11 +182,11 @@ class CalendarService: ObservableObject {
         workCalendar: String,
         sideCalendar: String,
         deepConfig: DeepSessionConfig?
-    ) -> (work: Int, side: Int, deep: Int) {
+    ) -> (work: Int, side: Int, deep: Int, titles: Set<String>) {
         let calendar = Calendar.current
         let startOfDay = calendar.startOfDay(for: date)
         guard let endOfDay = calendar.date(byAdding: .day, value: 1, to: startOfDay) else {
-            return (0, 0, 0)
+            return (0, 0, 0, [])
         }
         
         var calendarsToFetch = [workCalendar, sideCalendar]
@@ -196,7 +196,7 @@ class CalendarService: ObservableObject {
         let uniqueNames = Array(Set(calendarsToFetch))
         let calendars = availableCalendars.filter { uniqueNames.contains($0.title) }
         
-        if calendars.isEmpty { return (0, 0, 0) }
+        if calendars.isEmpty { return (0, 0, 0, []) }
         
         let predicate = eventStore.predicateForEvents(withStart: startOfDay, end: endOfDay, calendars: calendars)
         let events = eventStore.events(matching: predicate)
@@ -205,8 +205,14 @@ class CalendarService: ObservableObject {
         var workCount = 0
         var sideCount = 0
         var deepCount = 0
+        var titles = Set<String>()
         
         for event in validEvents {
+            let eventTitle = event.title ?? ""
+            if !eventTitle.isEmpty {
+                titles.insert(eventTitle)
+            }
+            
             let notes = (event.notes ?? "").lowercased()
             let calName = event.calendar?.title ?? ""
             
@@ -227,7 +233,7 @@ class CalendarService: ObservableObject {
             }
         }
         
-        return (workCount, sideCount, deepCount)
+        return (workCount, sideCount, deepCount, titles)
     }
 
     // MARK: - Check for Existing Planning Session

@@ -15,7 +15,7 @@ enum SchedulePattern: String, Codable, CaseIterable, Identifiable {
         case .alternating:
             return "Work first, then Side (e.g., W→W→S→W→W→S)"
         case .alternatingReverse:
-            return "Side first, then Work (e.g., S→S→W→S→S→W)"
+            return "Side first, then Work (e.g., S→W→W→S→W→W)"
         case .allWorkFirst:
             return "Schedules all Work sessions first, then Side sessions"
         case .allSideFirst:
