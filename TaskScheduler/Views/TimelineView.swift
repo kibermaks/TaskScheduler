@@ -394,7 +394,8 @@ extension TimelineView {
                 .fill(session.type.color.opacity(0.8))
                 .overlay(
                     RoundedRectangle(cornerRadius: 4)
-                        .strokeBorder(session.type.color, lineWidth: 2)
+                        .stroke(style: StrokeStyle(lineWidth: 1.5, dash: [4, 2]))
+                        .foregroundColor(session.type.color)
                 )
                 .shadow(color: session.type.color.opacity(0.3), radius: 3, y: 1)
             

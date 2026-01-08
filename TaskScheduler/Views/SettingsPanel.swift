@@ -4,6 +4,23 @@ struct SettingsPanel: View {
     @EnvironmentObject var schedulingEngine: SchedulingEngine
     @EnvironmentObject var calendarService: CalendarService
     
+    @Binding var hasSeenPatternsGuide: Bool
+    @Binding var showingPatternsGuide: Bool
+    
+    @State private var showingWorkHelp = false
+    @State private var showingSideHelp = false
+    @State private var showingDeepHelp = false
+    @State private var showingPlanningHelp = false
+    @State private var showingPatternHelp = false
+    @State private var showingRestHelp = false
+    
+    private let workHelpText = "Work sessions are your primary focus blocks. Use these for your main professional tasks or projects that require sustained concentration."
+    private let sideHelpText = "Side sessions are for secondary tasks or 'life admin'. Perfect for paying bills, checking something new, responding to emails, or handling quick errands."
+    private let deepHelpText = "Deep sessions (often called Deep Work) are rare, high-intensity focus blocks. They are injected periodically for your most demanding creative or analytical work."
+    private let planningHelpText = "The Planning session is a short block at the start of your day to review your tasks and organize your sequence. It ensures you start with clarity."
+    private let patternHelpText = "Scheduling patterns define how Work and Side sessions are interleaved. 'Alternating' swaps between them, while 'Concentrated' groups types together."
+    private let restHelpText = "Rest intervals are crucial for maintaining peak performance. Choose different durations for after-work, after-side, or after-deep sessions to recharge effectively."
+    
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
@@ -12,7 +29,6 @@ struct SettingsPanel: View {
                 
                 Divider().background(Color.white.opacity(0.1))
                 
-                // Work Sessions Section
                 sessionSection(
                     title: "Work Sessions",
                     icon: "briefcase.fill",
@@ -20,7 +36,9 @@ struct SettingsPanel: View {
                     count: $schedulingEngine.workSessions,
                     name: $schedulingEngine.workSessionName,
                     duration: $schedulingEngine.workSessionDuration,
-                    calendar: $schedulingEngine.workCalendarName
+                    calendar: $schedulingEngine.workCalendarName,
+                    helpText: workHelpText,
+                    isShowingHelp: $showingWorkHelp
                 )
                 
                 Divider().background(Color.white.opacity(0.1))
@@ -33,7 +51,9 @@ struct SettingsPanel: View {
                     count: $schedulingEngine.sideSessions,
                     name: $schedulingEngine.sideSessionName,
                     duration: $schedulingEngine.sideSessionDuration,
-                    calendar: $schedulingEngine.sideCalendarName
+                    calendar: $schedulingEngine.sideCalendarName,
+                    helpText: sideHelpText,
+                    isShowingHelp: $showingSideHelp
                 )
                 
                 Divider().background(Color.white.opacity(0.1))
@@ -55,6 +75,25 @@ struct SettingsPanel: View {
         }
         .background(Color.white.opacity(0.03))
         .cornerRadius(12)
+        .onChange(of: schedulingEngine.pattern) { _, _ in
+            triggerPatternsGuide()
+        }
+        .onChange(of: schedulingEngine.workSessionsPerCycle) { _, _ in
+            triggerPatternsGuide()
+        }
+        .onChange(of: schedulingEngine.sideSessionsPerCycle) { _, _ in
+            triggerPatternsGuide()
+        }
+        .onChange(of: schedulingEngine.sideFirst) { _, _ in
+            triggerPatternsGuide()
+        }
+    }
+    
+    private func triggerPatternsGuide() {
+        if !hasSeenPatternsGuide {
+            showingPatternsGuide = true
+            hasSeenPatternsGuide = true
+        }
     }
     
     // MARK: - Timeline Visibility Section
@@ -89,9 +128,7 @@ struct SettingsPanel: View {
                             .font(.system(size: 12))
                             .foregroundColor(.white.opacity(0.6))
                         Spacer()
-                        Stepper("\(schedulingEngine.dayStartHour):00", value: $schedulingEngine.dayStartHour, in: 0...12)
-                            .labelsHidden()
-                            .scaleEffect(0.8)
+                        NumericInputField(value: $schedulingEngine.dayStartHour, range: 0...12, unit: "h")
                     }
                     
                     HStack {
@@ -99,9 +136,7 @@ struct SettingsPanel: View {
                             .font(.system(size: 12))
                             .foregroundColor(.white.opacity(0.6))
                         Spacer()
-                        Stepper("\(schedulingEngine.dayEndHour):00", value: $schedulingEngine.dayEndHour, in: 13...24)
-                            .labelsHidden()
-                            .scaleEffect(0.8)
+                        NumericInputField(value: $schedulingEngine.dayEndHour, range: 13...24, unit: "h")
                     }
                 }
                 .padding(.leading, 8)
@@ -130,12 +165,27 @@ struct SettingsPanel: View {
     
     private var planningSection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            HStack {
+            HStack(spacing: 8) {
                 Image(systemName: "calendar.badge.clock")
                     .foregroundColor(Color(hex: "EF4444"))
                 Text("Planning Session")
                     .font(.headline)
                     .foregroundColor(.white)
+                
+                Button {
+                    showingPlanningHelp.toggle()
+                } label: {
+                    Image(systemName: "info.circle")
+                        .font(.system(size: 13))
+                        .foregroundColor(.white.opacity(0.4))
+                }
+                .buttonStyle(.plain)
+                .popover(isPresented: $showingPlanningHelp) {
+                    Text(planningHelpText)
+                        .font(.system(size: 13))
+                        .padding()
+                        .frame(width: 250)
+                }
             }
             
             Toggle(isOn: $schedulingEngine.schedulePlanning) {
@@ -154,14 +204,12 @@ struct SettingsPanel: View {
                     
                     Spacer()
                     
-                    Stepper(
-                        "\(schedulingEngine.planningDuration) min",
+                    NumericInputField(
                         value: $schedulingEngine.planningDuration,
-                        in: 5...60,
-                        step: 5
+                        range: 5...60,
+                        step: 5,
+                        unit: "min"
                     )
-                    .font(.system(size: 13, weight: .medium))
-                    .fixedSize()
                 }
             }
         }
@@ -176,15 +224,32 @@ struct SettingsPanel: View {
         count: Binding<Int>,
         name: Binding<String>,
         duration: Binding<Int>,
-        calendar: Binding<String>
+        calendar: Binding<String>,
+        helpText: String,
+        isShowingHelp: Binding<Bool>
     ) -> some View {
         VStack(alignment: .leading, spacing: 12) {
-            HStack {
+            HStack(spacing: 8) {
                 Image(systemName: icon)
                     .foregroundColor(iconColor)
                 Text(title)
                     .font(.headline)
                     .foregroundColor(.white)
+                
+                Button {
+                    isShowingHelp.wrappedValue.toggle()
+                } label: {
+                    Image(systemName: "info.circle")
+                        .font(.system(size: 13))
+                        .foregroundColor(.white.opacity(0.4))
+                }
+                .buttonStyle(.plain)
+                .popover(isPresented: isShowingHelp) {
+                    Text(helpText)
+                        .font(.system(size: 13))
+                        .padding()
+                        .frame(width: 250)
+                }
             }
             
             // Count
@@ -195,13 +260,7 @@ struct SettingsPanel: View {
                 
                 Spacer()
                 
-                Stepper(
-                    "\(count.wrappedValue)",
-                    value: count,
-                    in: 0...15
-                )
-                .font(.system(size: 13, weight: .medium))
-                .fixedSize()
+                NumericInputField(value: count, range: 0...15)
             }
             
             // Name
@@ -229,14 +288,12 @@ struct SettingsPanel: View {
                 
                 Spacer()
                 
-                Stepper(
-                    "\(duration.wrappedValue) min",
+                NumericInputField(
                     value: duration,
-                    in: 10...120,
-                    step: 5
+                    range: 10...120,
+                    step: 5,
+                    unit: "min"
                 )
-                .font(.system(size: 13, weight: .medium))
-                .fixedSize()
             }
             
             // Calendar
@@ -262,12 +319,28 @@ struct SettingsPanel: View {
     
     private var deepSessionSection: some View {
          VStack(alignment: .leading, spacing: 12) {
-             HStack {
+             HStack(spacing: 8) {
                  Image(systemName: "bolt.circle.fill")
                      .foregroundColor(Color(hex: "10B981"))
                  Text("Deep Sessions")
                      .font(.headline)
                      .foregroundColor(.white)
+                 
+                 Button {
+                     showingDeepHelp.toggle()
+                 } label: {
+                     Image(systemName: "info.circle")
+                         .font(.system(size: 13))
+                         .foregroundColor(.white.opacity(0.4))
+                 }
+                 .buttonStyle(.plain)
+                 .popover(isPresented: $showingDeepHelp) {
+                     Text(deepHelpText)
+                         .font(.system(size: 13))
+                         .padding()
+                         .frame(width: 250)
+                 }
+                 
                  Spacer()
                  Toggle("", isOn: $schedulingEngine.deepSessionConfig.enabled)
                      .labelsHidden()
@@ -281,9 +354,7 @@ struct SettingsPanel: View {
                          .font(.system(size: 13))
                          .foregroundColor(.white.opacity(0.7))
                      Spacer()
-                     Stepper("\(schedulingEngine.deepSessionConfig.sessionCount)", value: $schedulingEngine.deepSessionConfig.sessionCount, in: 1...10)
-                         .font(.system(size: 13, weight: .medium))
-                         .fixedSize()
+                     NumericInputField(value: $schedulingEngine.deepSessionConfig.sessionCount, range: 1...10)
                  }
                  
                  HStack {
@@ -291,9 +362,7 @@ struct SettingsPanel: View {
                          .font(.system(size: 13))
                          .foregroundColor(.white.opacity(0.7))
                      Spacer()
-                     Stepper("\(schedulingEngine.deepSessionConfig.injectAfterEvery) sessions", value: $schedulingEngine.deepSessionConfig.injectAfterEvery, in: 1...10)
-                         .font(.system(size: 13, weight: .medium))
-                         .fixedSize()
+                     NumericInputField(value: $schedulingEngine.deepSessionConfig.injectAfterEvery, range: 1...10, unit: "sessions")
                  }
  
                  HStack {
@@ -315,9 +384,7 @@ struct SettingsPanel: View {
                          .font(.system(size: 13))
                          .foregroundColor(.white.opacity(0.7))
                      Spacer()
-                     Stepper("\(schedulingEngine.deepSessionConfig.duration) min", value: $schedulingEngine.deepSessionConfig.duration, in: 5...120, step: 5)
-                         .font(.system(size: 13, weight: .medium))
-                         .fixedSize()
+                     NumericInputField(value: $schedulingEngine.deepSessionConfig.duration, range: 5...120, step: 5, unit: "min")
                  }
                  
                  HStack {
@@ -341,12 +408,27 @@ struct SettingsPanel: View {
     
     private var patternSection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            HStack {
+            HStack(spacing: 8) {
                 Image(systemName: "arrow.left.arrow.right")
                     .foregroundColor(Color(hex: "10B981"))
                 Text("Scheduling Pattern")
                     .font(.headline)
                     .foregroundColor(.white)
+                
+                Button {
+                    showingPatternHelp.toggle()
+                } label: {
+                    Image(systemName: "info.circle")
+                        .font(.system(size: 13))
+                        .foregroundColor(.white.opacity(0.4))
+                }
+                .buttonStyle(.plain)
+                .popover(isPresented: $showingPatternHelp) {
+                    Text(patternHelpText)
+                        .font(.system(size: 13))
+                        .padding()
+                        .frame(width: 250)
+                }
             }
             
             HStack {
@@ -379,13 +461,7 @@ struct SettingsPanel: View {
                     
                     Spacer()
                     
-                    Stepper(
-                        "\(schedulingEngine.workSessionsPerCycle)",
-                        value: $schedulingEngine.workSessionsPerCycle,
-                        in: 1...5
-                    )
-                    .font(.system(size: 13, weight: .medium))
-                    .fixedSize()
+                    NumericInputField(value: $schedulingEngine.workSessionsPerCycle, range: 1...5)
                 }
             }
             
@@ -397,13 +473,7 @@ struct SettingsPanel: View {
                     
                     Spacer()
                     
-                    Stepper(
-                        "\(schedulingEngine.sideSessionsPerCycle)",
-                        value: $schedulingEngine.sideSessionsPerCycle,
-                        in: 1...5
-                    )
-                    .font(.system(size: 13, weight: .medium))
-                    .fixedSize()
+                    NumericInputField(value: $schedulingEngine.sideSessionsPerCycle, range: 1...5)
                 }
                 
                 Toggle("Side First", isOn: $schedulingEngine.sideFirst)
@@ -419,129 +489,72 @@ struct SettingsPanel: View {
     
     private var restSection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            HStack {
+            HStack(spacing: 8) {
                 Image(systemName: "cup.and.saucer.fill")
                     .foregroundColor(Color(hex: "F59E0B"))
                 Text("Rest Between Sessions")
                     .font(.headline)
                     .foregroundColor(.white)
+                
+                Button {
+                    showingRestHelp.toggle()
+                } label: {
+                    Image(systemName: "info.circle")
+                        .font(.system(size: 13))
+                        .foregroundColor(.white.opacity(0.4))
+                }
+                .buttonStyle(.plain)
+                .popover(isPresented: $showingRestHelp) {
+                    Text(restHelpText)
+                        .font(.system(size: 13))
+                        .padding()
+                        .frame(width: 250)
+                }
             }
             
-            // Work Rest
-             HStack {
-                Text("After Work:")
-                    .font(.system(size: 13))
-                    .foregroundColor(.white.opacity(0.7))
-                
-                Spacer()
-                
-                Stepper(
-                    "\(schedulingEngine.restDuration) min",
-                    value: $schedulingEngine.restDuration,
-                    in: 0...60,
-                    step: 5
-                )
-                .font(.system(size: 13, weight: .medium))
-                .fixedSize()
-            }
-            
-            // Side Rest
-             HStack {
-                Text("After Side:")
-                    .font(.system(size: 13))
-                    .foregroundColor(.white.opacity(0.7))
-                
-                Spacer()
-                
-                Stepper(
-                    "\(schedulingEngine.sideRestDuration) min",
-                    value: $schedulingEngine.sideRestDuration,
-                    in: 0...60,
-                    step: 5
-                )
-                .font(.system(size: 13, weight: .medium))
-                .fixedSize()
-            }
-            
-             HStack {
-                Text("After Deep:")
-                    .font(.system(size: 13))
-                    .foregroundColor(.white.opacity(0.7))
-                
-                Spacer()
-                
-                Stepper(
-                    "\(schedulingEngine.deepRestDuration) min",
-                    value: $schedulingEngine.deepRestDuration,
-                    in: 0...60,
-                    step: 5
-                )
-                .font(.system(size: 13, weight: .medium))
-                .fixedSize()
-            }
+             // Work Rest
+              HStack {
+                 Text("After Work:")
+                     .font(.system(size: 13))
+                     .foregroundColor(.white.opacity(0.7))
+                 
+                 Spacer()
+                 
+                 NumericInputField(value: $schedulingEngine.restDuration, range: 0...60, step: 5, unit: "min")
+             }
+             
+             // Side Rest
+              HStack {
+                 Text("After Side:")
+                     .font(.system(size: 13))
+                     .foregroundColor(.white.opacity(0.7))
+                 
+                 Spacer()
+                 
+                 NumericInputField(value: $schedulingEngine.sideRestDuration, range: 0...60, step: 5, unit: "min")
+             }
+             
+              HStack {
+                 Text("After Deep:")
+                     .font(.system(size: 13))
+                     .foregroundColor(.white.opacity(0.7))
+                 
+                 Spacer()
+                 
+                 NumericInputField(value: $schedulingEngine.deepRestDuration, range: 0...60, step: 5, unit: "min")
+             }
         }
     }
 }
 
 #Preview {
-    SettingsPanel()
+    SettingsPanel(
+        hasSeenPatternsGuide: .constant(false),
+        showingPatternsGuide: .constant(false)
+    )
         .environmentObject(SchedulingEngine())
         .environmentObject(CalendarService())
         .frame(width: 320, height: 800)
         .background(Color(hex: "0F172A"))
 }
 
-struct AppSettingsView: View {
-    @EnvironmentObject var schedulingEngine: SchedulingEngine
-    
-    var body: some View {
-        Form {
-            Section("Scheduling Logic") {
-                Toggle("Aware existing tasks", isOn: $schedulingEngine.awareExistingTasks)
-                
-                Text("When enabled, the app only projects remaining tasks needed to meet your quotas by counting existing events on your calendar.")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-                
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Tagging System")
-                        .font(.caption)
-                        .fontWeight(.bold)
-                    Text("The app uses hashtags in event notes to identify session types: #work, #side, #deep, #plan. This allows accurate counting even if calendars overlap.")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                }
-                .padding(.top, 4)
-            }
-            
-            Section("Timeline Visibility") {
-                Toggle("Hide night hours", isOn: $schedulingEngine.hideNightHours)
-                
-                HStack {
-                    Text("Morning Edge:")
-                    Spacer()
-                    Stepper("\(schedulingEngine.dayStartHour):00", value: $schedulingEngine.dayStartHour, in: 0...12)
-                }
-                .disabled(!schedulingEngine.hideNightHours)
-                
-                HStack {
-                    Text("Night Edge:")
-                    Spacer()
-                    Stepper("\(schedulingEngine.dayEndHour):00", value: $schedulingEngine.dayEndHour, in: 13...24)
-                }
-                .disabled(!schedulingEngine.hideNightHours)
-                Text("These settings control the visible range of the timeline when 'Hide Night Hours' is enabled.")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-            }
-        }
-        .formStyle(.grouped)
-        .frame(width: 400, height: 300)
-        .navigationTitle("Settings")
-    }
-}
-
-#Preview {
-    AppSettingsView()
-        .environmentObject(SchedulingEngine())
-}

@@ -18,6 +18,12 @@ struct ContentView: View {
     @State private var selectedPreset: Preset?
     @State private var showingNewPresetSheet = false
     @State private var nowTimer: Timer?
+    @AppStorage("hasSeenWelcome") private var hasSeenWelcome = false
+    @AppStorage("hasSeenPatternsGuide") private var hasSeenPatternsGuide = false
+    @AppStorage("hasSeenTasksGuide") private var hasSeenTasksGuide = false
+    @State private var showingWelcome = false
+    @State private var showingPatternsGuide = false
+    @State private var showingTasksGuide = false
     
     enum DateSelection: String, CaseIterable {
         case today = "Today"
@@ -38,7 +44,13 @@ struct ContentView: View {
             presets: $presets,
             selectedPreset: $selectedPreset,
             showingNewPresetSheet: $showingNewPresetSheet,
-            nowTimer: $nowTimer
+            nowTimer: $nowTimer,
+            hasSeenWelcome: $hasSeenWelcome,
+            showingWelcome: $showingWelcome,
+            hasSeenPatternsGuide: $hasSeenPatternsGuide,
+            showingPatternsGuide: $showingPatternsGuide,
+            hasSeenTasksGuide: $hasSeenTasksGuide,
+            showingTasksGuide: $showingTasksGuide
         )
     }
 }
@@ -60,6 +72,12 @@ struct ContentViewBody: View {
     @Binding var selectedPreset: Preset?
     @Binding var showingNewPresetSheet: Bool
     @Binding var nowTimer: Timer?
+    @Binding var hasSeenWelcome: Bool
+    @Binding var showingWelcome: Bool
+    @Binding var hasSeenPatternsGuide: Bool
+    @Binding var showingPatternsGuide: Bool
+    @Binding var hasSeenTasksGuide: Bool
+    @Binding var showingTasksGuide: Bool
     
     var body: some View {
         ZStack {
@@ -98,15 +116,50 @@ struct ContentViewBody: View {
             )
             .environmentObject(schedulingEngine)
         }
+        .sheet(isPresented: $showingWelcome) {
+            WelcomeScreen()
+        }
+        .sheet(isPresented: $showingPatternsGuide) {
+            PatternsGuide()
+        }
+        .sheet(isPresented: $showingTasksGuide) {
+            TasksGuide()
+        }
+        .onAppear {
+            if !hasSeenWelcome {
+                showingWelcome = true
+                hasSeenWelcome = true
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: Notification.Name("ShowWelcomeScreen"))) { _ in
+            showingWelcome = true
+        }
+        .onReceive(NotificationCenter.default.publisher(for: Notification.Name("ShowPatternsGuide"))) { _ in
+            showingPatternsGuide = true
+        }
+        .onReceive(NotificationCenter.default.publisher(for: Notification.Name("ShowTasksGuide"))) { _ in
+            showingTasksGuide = true
+        }
         .task { await requestCalendarAccess() }
         .onAppear { onAppearActions() }
         .onDisappear { nowTimer?.invalidate() }
         .onChange(of: dateSelection) { _, newSelection in
             updateSelectedDate(for: newSelection)
         }
-        .onChange(of: selectedDate) { _, _ in
+        .onChange(of: selectedDate) { _, newDate in
             Task {
-                await calendarService.fetchEvents(for: selectedDate)
+                // If we are in custom mode, we might want to update startTime's day to match selectedDate
+                // so that the scheduler doesn't look at a different day's 08:00
+                if dateSelection == .custom {
+                    let calendar = Calendar.current
+                    let hour = calendar.component(.hour, from: startTime)
+                    let minute = calendar.component(.minute, from: startTime)
+                    if let updatedStartTime = calendar.date(bySettingHour: hour, minute: minute, second: 0, of: newDate) {
+                        startTime = updatedStartTime
+                    }
+                }
+                
+                await calendarService.fetchEvents(for: newDate)
                 if autoPreview { updateProjectedSchedule() }
             }
         }
@@ -120,6 +173,9 @@ struct ContentViewBody: View {
         .onChange(of: calendarService.lastRefresh) { _, _ in
             // Calendar events changed externally (from Calendar.app)
             if autoPreview { updateProjectedSchedule() }
+        }
+        .onChange(of: autoPreview) { _, enabled in
+            if enabled { updateProjectedSchedule() }
         }
         .modifier(SettingsChangeModifier(autoPreview: autoPreview, updatePreview: updateProjectedSchedule))
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
@@ -164,6 +220,12 @@ struct ContentViewBody: View {
             startTime = calendar.date(bySettingHour: 8, minute: 0, second: 0, of: selectedDate) ?? selectedDate
         case .custom:
             useNowTime = false
+            // Sync startTime day with selectedDate
+            let hour = calendar.component(.hour, from: startTime)
+            let minute = calendar.component(.minute, from: startTime)
+            if let updatedStartTime = calendar.date(bySettingHour: hour, minute: minute, second: 0, of: selectedDate) {
+                startTime = updatedStartTime
+            }
         }
     }
     
@@ -184,7 +246,11 @@ struct ContentViewBody: View {
                 showingNewPresetSheet: $showingNewPresetSheet,
                 autoPreview: autoPreview,
                 updatePreview: updateProjectedSchedule,
-                applyPreset: applyPreset
+                applyPreset: applyPreset,
+                hasSeenPatternsGuide: $hasSeenPatternsGuide,
+                showingPatternsGuide: $showingPatternsGuide,
+                hasSeenTasksGuide: $hasSeenTasksGuide,
+                showingTasksGuide: $showingTasksGuide
             )
             
             Divider().background(Color.white.opacity(0.1))
@@ -269,7 +335,8 @@ struct ContentViewBody: View {
             baseDate: selectedDate,
             busySlots: calendarService.busySlots,
             includePlanning: !planningExists,
-            existingSessions: (work: existing.work, side: existing.side, deep: existing.deep)
+            existingSessions: (work: existing.work, side: existing.side, deep: existing.deep),
+            existingTitles: existing.titles
         )
     }
     
@@ -434,8 +501,8 @@ struct HeaderView: View {
             if dateSelection == .custom {
                 DatePicker("", selection: $selectedDate, displayedComponents: .date)
                     .labelsHidden()
-                    .datePickerStyle(.field)
-                    .frame(width: 130)
+                    .datePickerStyle(.compact)
+                    .frame(width: 100)
             }
         }
     }
@@ -481,16 +548,43 @@ struct HeaderView: View {
     }
     
     private var autoToggle: some View {
-        Toggle(isOn: $autoPreview) {
-            HStack(spacing: 4) {
-                Image(systemName: "eye.fill")
-                Text("Auto")
+        HStack(spacing: 16) {
+            // Refresh Mode Button
+            Button {
+                autoPreview.toggle()
+            } label: {
+                HStack(spacing: 6) {
+                    Image(systemName: autoPreview ? "eye.fill" : "eye.slash.fill")
+                    Text(autoPreview ? "Auto Refresh" : "Manual Refresh")
+                        .font(.system(size: 13, weight: .medium))
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .background(
+                    RoundedRectangle(cornerRadius: 8)
+                        .fill(autoPreview ? Color(hex: "3B82F6") : Color.white.opacity(0.1))
+                        .shadow(color: .black.opacity(autoPreview ? 0.3 : 0), radius: 2, x: 0, y: 1)
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 8)
+                        .stroke(Color.white.opacity(autoPreview ? 0.3 : 0.1), lineWidth: 1)
+                )
+                .foregroundColor(autoPreview ? .white : .white.opacity(0.6))
             }
-            .font(.system(size: 13))
-            .foregroundColor(.white.opacity(0.8))
+            .buttonStyle(.plain)
+            .help(autoPreview ? "Auto: App updates schedule as you change settings." : "Manual: Click to trigger update or switch to Auto.")
+            
+            // Settings Link
+            SettingsLink {
+                Image(systemName: "gearshape.fill")
+                    .font(.system(size: 16))
+                    .foregroundColor(.white.opacity(0.4))
+                    .padding(8)
+                    .background(RoundedRectangle(cornerRadius: 8).fill(Color.white.opacity(0.1)))
+            }
+            .buttonStyle(.plain)
+            .help("App Settings")
         }
-        .toggleStyle(.switch)
-        .tint(Color(hex: "3B82F6"))
     }
 }
 
@@ -503,6 +597,11 @@ struct LeftPanel: View {
     let autoPreview: Bool
     let updatePreview: () -> Void
     let applyPreset: (Preset) -> Void
+    
+    @Binding var hasSeenPatternsGuide: Bool
+    @Binding var showingPatternsGuide: Bool
+    @Binding var hasSeenTasksGuide: Bool
+    @Binding var showingTasksGuide: Bool
     
     @State private var selectedTab: TabArea = .settings
     
@@ -519,10 +618,19 @@ struct LeftPanel: View {
                 VStack(spacing: 0) {
                     presetDropdown
                     Divider().background(Color.white.opacity(0.1))
-                    SettingsPanel()
+                    SettingsPanel(
+                        hasSeenPatternsGuide: $hasSeenPatternsGuide,
+                        showingPatternsGuide: $showingPatternsGuide
+                    )
                 }
             } else {
                 TasksPanel()
+            }
+        }
+        .onChange(of: selectedTab) { _, newTab in
+            if newTab == .tasks && !hasSeenTasksGuide {
+                showingTasksGuide = true
+                hasSeenTasksGuide = true
             }
         }
         .frame(width: 320)
@@ -551,13 +659,14 @@ struct LeftPanel: View {
     }
     
     private var presetDropdown: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack {
+        HStack(spacing: 12) {
+            HStack(spacing: 8) {
                 Image(systemName: "bookmark.fill").foregroundColor(Color(hex: "8B5CF6"))
                 Text("Preset").font(.headline).foregroundColor(.white)
-                Spacer()
             }
+            Spacer()
             presetMenu
+                .frame(width: 170)
         }
         .padding(.bottom, 12)
     }
@@ -577,7 +686,8 @@ struct LeftPanel: View {
             HStack {
                 if let p = selectedPreset {
                     Image(systemName: p.icon).foregroundColor(Color(hex: "8B5CF6"))
-                    Text(p.name).foregroundColor(.white)
+                    let modified = schedulingEngine.isPresetModified(p)
+                    Text(p.name + (modified ? " ＊" : "")).foregroundColor(.white)
                 } else {
                     Image(systemName: "doc").foregroundColor(.white.opacity(0.5))
                     Text("No Preset Selected").foregroundColor(.white.opacity(0.5))
@@ -633,6 +743,12 @@ struct RightPanel: View {
     @Binding var deletePastSessions: Bool
     let updatePreview: () -> Void
     
+    @State private var showingAvailabilityHelp = false
+    @State private var showingProjectionHelp = false
+    
+    private let availabilityHelp = "Shows calculated free time gaps in your calendar. 'Possible' counts indicate how many sessions of each type could fit into these gaps based on your duration settings."
+    private let projectionHelp = "A live preview of where your sessions will be placed. Events with dashed borders are projected and don't exist in your calendar until you click 'Schedule All'."
+    
     var body: some View {
         VStack(spacing: 20) {
             availabilityCard
@@ -650,6 +766,23 @@ struct RightPanel: View {
             HStack {
                 Image(systemName: "clock.fill").foregroundColor(Color(hex: "3B82F6"))
                 Text("Availability").font(.headline).foregroundColor(.white)
+                
+                Spacer()
+                
+                Button {
+                    showingAvailabilityHelp.toggle()
+                } label: {
+                    Image(systemName: "info.circle")
+                        .font(.system(size: 13))
+                        .foregroundColor(.white.opacity(0.4))
+                }
+                .buttonStyle(.plain)
+                .popover(isPresented: $showingAvailabilityHelp) {
+                    Text(availabilityHelp)
+                        .font(.system(size: 13))
+                        .padding()
+                        .frame(width: 250)
+                }
             }
             VStack(alignment: .leading, spacing: 8) {
                 row("Available Time:", "\(avail.availableMinutes / 60)h \(avail.availableMinutes % 60)m")
@@ -674,9 +807,36 @@ struct RightPanel: View {
             HStack {
                 Image(systemName: "list.bullet.clipboard.fill").foregroundColor(Color(hex: "8B5CF6"))
                 Text("Projected Sessions").font(.headline).foregroundColor(.white)
+                
+                Spacer()
+                
+                Button {
+                    showingProjectionHelp.toggle()
+                } label: {
+                    Image(systemName: "info.circle")
+                        .font(.system(size: 13))
+                        .foregroundColor(.white.opacity(0.4))
+                }
+                .buttonStyle(.plain)
+                .popover(isPresented: $showingProjectionHelp) {
+                    Text(projectionHelp)
+                        .font(.system(size: 13))
+                        .padding()
+                        .frame(width: 250)
+                }
             }
             if sessions.isEmpty {
-                Text("Enable 'Auto' or click 'Preview'").font(.system(size: 12)).foregroundColor(.white.opacity(0.5)).padding(.vertical, 8)
+                if schedulingEngine.awareExistingTasks && schedulingEngine.schedulingMessage.contains("quota met") {
+                    Text("Daily quotas satisfied")
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundColor(Color(hex: "10B981"))
+                        .padding(.vertical, 8)
+                } else {
+                    Text("Enable 'Auto' or click 'Preview'")
+                        .font(.system(size: 12))
+                        .foregroundColor(.white.opacity(0.5))
+                        .padding(.vertical, 8)
+                }
             } else {
                 sessionStats(sessions)
             }
@@ -693,7 +853,14 @@ struct RightPanel: View {
                 .padding(.top, -4)
             }
         }
-        .padding().background(Color.white.opacity(0.05)).cornerRadius(12)
+        .padding()
+        .background(Color.white.opacity(0.05))
+        .cornerRadius(12)
+        .overlay(
+            RoundedRectangle(cornerRadius: 12)
+                .stroke(style: StrokeStyle(lineWidth: 1, dash: [4, 4]))
+                .foregroundColor(Color.white.opacity(0.15))
+        )
     }
     
     private func sessionStats(_ sessions: [ScheduledSession]) -> some View {
