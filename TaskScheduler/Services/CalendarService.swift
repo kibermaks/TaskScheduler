@@ -32,14 +32,12 @@ class CalendarService: ObservableObject {
     // MARK: - Notification Observer
     
     private func setupNotificationObserver() {
-        // Listen for calendar changes
         notificationObserver = NotificationCenter.default.addObserver(
             forName: .EKEventStoreChanged,
             object: eventStore,
             queue: .main
         ) { [weak self] _ in
             guard let self = self, let date = self.currentFetchDate else { return }
-            // Refresh events when calendar changes
             Task {
                 await self.fetchEvents(for: date)
             }
@@ -132,7 +130,8 @@ class CalendarService: ObservableObject {
         title: String,
         startDate: Date,
         endDate: Date,
-        calendarName: String
+        calendarName: String,
+        notes: String? = nil
     ) -> Bool {
         guard let calendar = getCalendar(named: calendarName) else {
             errorMessage = "Calendar '\(calendarName)' not found"
@@ -144,6 +143,7 @@ class CalendarService: ObservableObject {
         event.startDate = startDate
         event.endDate = endDate
         event.calendar = calendar
+        event.notes = notes
         
         do {
             try eventStore.save(event, span: .thisEvent)
@@ -163,7 +163,8 @@ class CalendarService: ObservableObject {
                 title: session.title,
                 startDate: session.startTime,
                 endDate: session.endTime,
-                calendarName: session.calendarName
+                calendarName: session.calendarName,
+                notes: session.notes
             ) {
                 successCount += 1
             } else {
@@ -174,6 +175,61 @@ class CalendarService: ObservableObject {
         return (successCount, failCount)
     }
     
+    // MARK: - Count Existing Sessions
+    
+    func countExistingSessions(
+        for date: Date,
+        workCalendar: String,
+        sideCalendar: String,
+        deepConfig: DeepSessionConfig?
+    ) -> (work: Int, side: Int, deep: Int) {
+        let calendar = Calendar.current
+        let startOfDay = calendar.startOfDay(for: date)
+        guard let endOfDay = calendar.date(byAdding: .day, value: 1, to: startOfDay) else {
+            return (0, 0, 0)
+        }
+        
+        var calendarsToFetch = [workCalendar, sideCalendar]
+        if let deep = deepConfig, deep.enabled {
+            calendarsToFetch.append(deep.calendarName)
+        }
+        let uniqueNames = Array(Set(calendarsToFetch))
+        let calendars = availableCalendars.filter { uniqueNames.contains($0.title) }
+        
+        if calendars.isEmpty { return (0, 0, 0) }
+        
+        let predicate = eventStore.predicateForEvents(withStart: startOfDay, end: endOfDay, calendars: calendars)
+        let events = eventStore.events(matching: predicate)
+        let validEvents = events.filter { !$0.isAllDay }
+        
+        var workCount = 0
+        var sideCount = 0
+        var deepCount = 0
+        
+        for event in validEvents {
+            let notes = (event.notes ?? "").lowercased()
+            let calName = event.calendar?.title ?? ""
+            
+            if notes.contains("#work") {
+                workCount += 1
+            } else if notes.contains("#side") {
+                sideCount += 1
+            } else if notes.contains("#deep") {
+                deepCount += 1
+            } else {
+                if calName == workCalendar {
+                    workCount += 1
+                } else if calName == sideCalendar {
+                    sideCount += 1
+                } else if let deep = deepConfig, deep.enabled, calName == deep.calendarName {
+                    deepCount += 1
+                }
+            }
+        }
+        
+        return (workCount, sideCount, deepCount)
+    }
+
     // MARK: - Check for Existing Planning Session
     
     func hasPlanningSession(for date: Date, planningEventName: String = "Planning") -> Bool {
@@ -184,7 +240,10 @@ class CalendarService: ObservableObject {
         let predicate = eventStore.predicateForEvents(withStart: startOfDay, end: endOfDay, calendars: nil)
         let events = eventStore.events(matching: predicate)
         
-        return events.contains { $0.title == planningEventName }
+        return events.contains { 
+            ($0.title ?? "") == planningEventName || 
+            ($0.notes ?? "").lowercased().contains("#plan")
+        }
     }
     
     // MARK: - Delete Events
@@ -197,7 +256,6 @@ class CalendarService: ObservableObject {
             return (0, 0)
         }
         
-        // Get the calendars to delete from
         let calendarsToDelete = availableCalendars.filter { calendarNames.contains($0.title) }
         
         guard !calendarsToDelete.isEmpty else {
@@ -240,7 +298,6 @@ class CalendarService: ObservableObject {
         let predicate = eventStore.predicateForEvents(withStart: startOfDay, end: endOfDay, calendars: calendarsToDelete)
         let events = eventStore.events(matching: predicate)
         
-        // Filter: match session names if provided, otherwise delete all
         let sessionsToDelete = events.filter { event in
             guard let title = event.title else { return false }
             if let names = sessionNames, !names.isEmpty {
@@ -281,7 +338,6 @@ class CalendarService: ObservableObject {
         let predicate = eventStore.predicateForEvents(withStart: startOfDay, end: endOfDay, calendars: calendarsToDelete)
         let events = eventStore.events(matching: predicate)
         
-        // Filter: match session names if provided (AND check cutoff), otherwise just check cutoff
         let sessionsToDelete = events.filter { event in
             guard event.startDate >= cutoffTime else { return false }
             

@@ -357,6 +357,13 @@ extension TimelineView {
                         .font(.system(size: 10))
                         .foregroundColor(.white.opacity(0.7))
                 }
+                
+                if let notes = slot.notes, !notes.isEmpty, height > 45 {
+                    Text(notes)
+                        .font(.system(size: 9))
+                        .foregroundColor(.white.opacity(0.8))
+                        .lineLimit(1)
+                }
             }
             .padding(4)
         }
@@ -416,7 +423,7 @@ extension TimelineView {
                         .font(.system(size: 10, weight: .medium))
                         .foregroundColor(.white.opacity(0.9))
                     
-                    if height > 55 {
+                    if height > 65 {
                         Text("\(session.durationMinutes) min")
                             .font(.system(size: 9))
                             .foregroundColor(.white.opacity(0.7))
@@ -525,6 +532,16 @@ extension TimelineView {
             VStack(alignment: .leading, spacing: 10) {
                 Label(timeRangeString(start: slot.startTime, end: slot.endTime), systemImage: "clock")
                 Label(slot.calendarName, systemImage: "tray")
+                
+                if let notes = slot.notes, !notes.isEmpty {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Divider().background(Color.white.opacity(0.1))
+                        Text("Notes:")
+                            .font(.system(size: 12, weight: .bold))
+                        Text(notes)
+                            .font(.system(size: 12))
+                    }
+                }
             }
             .font(.system(size: 14))
             .foregroundColor(.white.opacity(0.8))

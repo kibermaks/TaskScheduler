@@ -256,11 +256,20 @@ struct ContentViewBody: View {
     
     func updateProjectedSchedule() {
         let planningExists = calendarService.hasPlanningSession(for: selectedDate)
+        
+        let existing = calendarService.countExistingSessions(
+            for: selectedDate,
+            workCalendar: schedulingEngine.workCalendarName,
+            sideCalendar: schedulingEngine.sideCalendarName,
+            deepConfig: schedulingEngine.deepSessionConfig
+        )
+        
         _ = schedulingEngine.generateSchedule(
             startTime: effectiveStartTime,
             baseDate: selectedDate,
             busySlots: calendarService.busySlots,
-            includePlanning: !planningExists
+            includePlanning: !planningExists,
+            existingSessions: (work: existing.work, side: existing.side, deep: existing.deep)
         )
     }
     
@@ -288,8 +297,8 @@ struct ContentViewBody: View {
     private func deleteScheduledSessions() {
         // Collect all calendars to clear
         var calendars = [schedulingEngine.workCalendarName, schedulingEngine.sideCalendarName]
-        if schedulingEngine.extraSessionConfig.enabled {
-            calendars.append(schedulingEngine.extraSessionConfig.calendarName)
+        if schedulingEngine.deepSessionConfig.enabled {
+            calendars.append(schedulingEngine.deepSessionConfig.calendarName)
         }
         
         // Remove duplicates if any calendars share the same name
@@ -341,24 +350,25 @@ struct SettingsChangeModifier: ViewModifier {
             .onChange(of: engine.workSessionsPerCycle) { _, _ in trigger() }
             .onChange(of: engine.sideSessionsPerCycle) { _, _ in trigger() }
             .onChange(of: engine.sideFirst) { _, _ in trigger() }
+            .onChange(of: engine.awareExistingTasks) { _, _ in trigger() }
             .onChange(of: engine.sideRestDuration) { _, _ in trigger() }
-            .onChange(of: engine.extraRestDuration) { _, _ in trigger() }
-            .onChange(of: engine.extraSessionConfig.enabled) { _, _ in trigger() }
-            .onChange(of: engine.extraSessionConfig.sessionCount) { _, _ in trigger() }
-            .onChange(of: engine.extraSessionConfig.injectAfterEvery) { _, _ in trigger() }
-            .onChange(of: engine.extraSessionConfig.name) { _, _ in trigger() }
+            .onChange(of: engine.deepRestDuration) { _, _ in trigger() }
+            .onChange(of: engine.deepSessionConfig.enabled) { _, _ in trigger() }
+            .onChange(of: engine.deepSessionConfig.sessionCount) { _, _ in trigger() }
+            .onChange(of: engine.deepSessionConfig.injectAfterEvery) { _, _ in trigger() }
+            .onChange(of: engine.deepSessionConfig.name) { _, _ in trigger() }
     }
     
     private var extraObservers2: some View {
         Color.clear
-            .onChange(of: engine.extraSessionConfig.duration) { _, _ in trigger() }
-            .onChange(of: engine.extraSessionConfig.calendarName) { _, _ in trigger() }
+            .onChange(of: engine.deepSessionConfig.duration) { _, _ in trigger() }
+            .onChange(of: engine.deepSessionConfig.calendarName) { _, _ in trigger() }
             .onChange(of: engine.workTasks) { _, _ in trigger() }
             .onChange(of: engine.sideTasks) { _, _ in trigger() }
-            .onChange(of: engine.extraTasks) { _, _ in trigger() }
+            .onChange(of: engine.deepTasks) { _, _ in trigger() }
             .onChange(of: engine.useWorkTasks) { _, _ in trigger() }
             .onChange(of: engine.useSideTasks) { _, _ in trigger() }
-            .onChange(of: engine.useExtraTasks) { _, _ in trigger() }
+            .onChange(of: engine.useDeepTasks) { _, _ in trigger() }
     }
     
     private func trigger() {
@@ -589,12 +599,12 @@ struct LeftPanel: View {
             workSessionDuration: schedulingEngine.workSessionDuration, sideSessionDuration: schedulingEngine.sideSessionDuration,
             planningDuration: schedulingEngine.planningDuration, restDuration: schedulingEngine.restDuration,
             sideRestDuration: schedulingEngine.sideRestDuration,
-            extraRestDuration: schedulingEngine.extraRestDuration,
+            deepRestDuration: schedulingEngine.deepRestDuration,
             schedulePlanning: schedulingEngine.schedulePlanning, pattern: schedulingEngine.pattern,
             workSessionsPerCycle: schedulingEngine.workSessionsPerCycle,
             sideSessionsPerCycle: schedulingEngine.sideSessionsPerCycle,
             sideFirst: schedulingEngine.sideFirst,
-            extraSessionConfig: schedulingEngine.extraSessionConfig,
+            deepSessionConfig: schedulingEngine.deepSessionConfig,
             calendarMapping: CalendarMapping(workCalendarName: schedulingEngine.workCalendarName, sideCalendarName: schedulingEngine.sideCalendarName))
         PresetStorage.shared.updatePreset(updated)
         presets = PresetStorage.shared.loadPresets()
@@ -806,10 +816,10 @@ struct DeleteConfirmationSheet: View {
                         Circle().fill(Color(hex: "3B82F6")).frame(width: 6, height: 6)
                         Text(schedulingEngine.sideCalendarName)
                     }
-                    if schedulingEngine.extraSessionConfig.enabled {
+                    if schedulingEngine.deepSessionConfig.enabled {
                         HStack {
                             Circle().fill(Color(hex: "10B981")).frame(width: 6, height: 6)
-                            Text(schedulingEngine.extraSessionConfig.calendarName)
+                            Text(schedulingEngine.deepSessionConfig.calendarName)
                         }
                     }
                 }

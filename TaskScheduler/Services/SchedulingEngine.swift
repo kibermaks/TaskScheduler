@@ -24,6 +24,9 @@ class SchedulingEngine: ObservableObject {
     @Published var hideNightHours: Bool = UserDefaults.standard.bool(forKey: "TaskScheduler.HideNightHours") {
         didSet { UserDefaults.standard.set(hideNightHours, forKey: "TaskScheduler.HideNightHours") }
     }
+    @Published var awareExistingTasks: Bool = UserDefaults.standard.object(forKey: "TaskScheduler.AwareExistingTasks") as? Bool ?? true {
+        didSet { UserDefaults.standard.set(awareExistingTasks, forKey: "TaskScheduler.AwareExistingTasks") }
+    }
     @Published var dayStartHour: Int = (UserDefaults.standard.object(forKey: "TaskScheduler.DayStartHour") as? Int) ?? 6 {
         didSet { UserDefaults.standard.set(dayStartHour, forKey: "TaskScheduler.DayStartHour") }
     }
@@ -41,8 +44,8 @@ class SchedulingEngine: ObservableObject {
     @Published var sideTasks: String = UserDefaults.standard.string(forKey: "TaskScheduler.SideTasks") ?? "" {
         didSet { UserDefaults.standard.set(sideTasks, forKey: "TaskScheduler.SideTasks") }
     }
-    @Published var extraTasks: String = UserDefaults.standard.string(forKey: "TaskScheduler.ExtraTasks") ?? "" {
-        didSet { UserDefaults.standard.set(extraTasks, forKey: "TaskScheduler.ExtraTasks") }
+    @Published var deepTasks: String = UserDefaults.standard.string(forKey: "TaskScheduler.DeepTasks") ?? "" {
+        didSet { UserDefaults.standard.set(deepTasks, forKey: "TaskScheduler.DeepTasks") }
     }
     @Published var useWorkTasks: Bool = UserDefaults.standard.bool(forKey: "TaskScheduler.UseWorkTasks") {
         didSet { UserDefaults.standard.set(useWorkTasks, forKey: "TaskScheduler.UseWorkTasks") }
@@ -50,16 +53,14 @@ class SchedulingEngine: ObservableObject {
     @Published var useSideTasks: Bool = UserDefaults.standard.bool(forKey: "TaskScheduler.UseSideTasks") {
         didSet { UserDefaults.standard.set(useSideTasks, forKey: "TaskScheduler.UseSideTasks") }
     }
-    @Published var useExtraTasks: Bool = UserDefaults.standard.bool(forKey: "TaskScheduler.UseExtraTasks") {
-        didSet { UserDefaults.standard.set(useExtraTasks, forKey: "TaskScheduler.UseExtraTasks") }
+    @Published var useDeepTasks: Bool = UserDefaults.standard.bool(forKey: "TaskScheduler.UseDeepTasks") {
+        didSet { UserDefaults.standard.set(useDeepTasks, forKey: "TaskScheduler.UseDeepTasks") }
     }
     
-    // New Rest Durations
-    @Published var sideRestDuration: Int = 15 { didSet { saveState() } } // Default 75% of 20
-    @Published var extraRestDuration: Int = 20 { didSet { saveState() } }
+    @Published var sideRestDuration: Int = 15 { didSet { saveState() } }
+    @Published var deepRestDuration: Int = 20 { didSet { saveState() } }
     
-    // Extra Sessions
-    @Published var extraSessionConfig: ExtraSessionConfig = .default { didSet { saveState() } }
+    @Published var deepSessionConfig: DeepSessionConfig = .default { didSet { saveState() } }
 
     // MARK: - State Tracking
     @Published var currentPresetId: UUID? {
@@ -105,9 +106,9 @@ class SchedulingEngine: ObservableObject {
         
         // New params
         sideRestDuration = preset.sideRestDuration
-        extraRestDuration = preset.extraRestDuration
+        deepRestDuration = preset.deepRestDuration
         sideSessionsPerCycle = preset.sideSessionsPerCycle
-        extraSessionConfig = preset.extraSessionConfig
+        deepSessionConfig = preset.deepSessionConfig
         sideFirst = preset.sideFirst
         
         schedulePlanning = preset.schedulePlanning
@@ -136,13 +137,13 @@ class SchedulingEngine: ObservableObject {
             planningDuration: planningDuration,
             restDuration: restDuration,
             sideRestDuration: sideRestDuration,
-            extraRestDuration: extraRestDuration,
+            deepRestDuration: deepRestDuration,
             schedulePlanning: schedulePlanning,
             pattern: pattern,
             workSessionsPerCycle: workSessionsPerCycle,
             sideSessionsPerCycle: sideSessionsPerCycle,
             sideFirst: sideFirst,
-            extraSessionConfig: extraSessionConfig,
+            deepSessionConfig: deepSessionConfig,
             calendarMapping: CalendarMapping(
                 workCalendarName: workCalendarName,
                 sideCalendarName: sideCalendarName
@@ -157,7 +158,8 @@ class SchedulingEngine: ObservableObject {
         startTime: Date,
         baseDate: Date,
         busySlots: [BusyTimeSlot],
-        includePlanning: Bool
+        includePlanning: Bool,
+        existingSessions: (work: Int, side: Int, deep: Int)? = nil
     ) -> [ScheduledSession] {
         var sessions: [ScheduledSession] = []
         var currentTime = roundToNextInterval(startTime)
@@ -181,8 +183,15 @@ class SchedulingEngine: ObservableObject {
         var sessionIndex = 0
         var workCount = 0
         var sideCount = 0
-        var extraCount = 0
-        var regularSessionsScheduled = 0 // Tracks Work + Side specifically for injection logic
+        var deepCount = 0
+        var regularSessionsScheduled = 0
+        
+        if awareExistingTasks, let existing = existingSessions {
+            workCount = existing.work
+            sideCount = existing.side
+            deepCount = existing.deep
+            regularSessionsScheduled = workCount + sideCount
+        }
         
         var attempts = 0
         let maxAttempts = 500
@@ -190,65 +199,52 @@ class SchedulingEngine: ObservableObject {
         // Prepare task titles
         let workTitles = workTasks.components(separatedBy: .newlines).filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
         let sideTitles = sideTasks.components(separatedBy: .newlines).filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
-        let extraTitles = extraTasks.components(separatedBy: .newlines).filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
+        let deepTitles = deepTasks.components(separatedBy: .newlines).filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
         
-        while (workCount < workSessions || sideCount < sideSessions || planningNeeded || (extraSessionConfig.enabled && extraCount < extraSessionConfig.sessionCount)) && attempts < maxAttempts {
+        while (workCount < workSessions || sideCount < sideSessions || planningNeeded || (deepSessionConfig.enabled && deepCount < deepSessionConfig.sessionCount)) && attempts < maxAttempts {
             attempts += 1
             
             if currentTime >= endOfDay {
-                schedulingMessage = "Reached end of day before all sessions could be scheduled."
+                schedulingMessage = "Reached end of day."
                 break
             }
             
-            // Determine what to schedule next
             var sessionType: SessionType
             var sessionDuration: Int
             var sessionTitle: String
             var calendarName: String
-            var isExtra = false
+            var sessionTag: String
+            var isDeep = false
             
             if planningNeeded {
                 sessionType = .planning
                 sessionDuration = planningDuration
                 sessionTitle = "Planning"
                 calendarName = workCalendarName
+                sessionTag = "#plan"
             } else {
-                // Check if we should inject an extra session
-                // Logic: Inject after every N regular sessions
-                let shouldInjectExtra = extraSessionConfig.enabled
-                    && extraCount < extraSessionConfig.sessionCount
+                let shouldInjectDeep = deepSessionConfig.enabled
+                    && deepCount < deepSessionConfig.sessionCount
                     && regularSessionsScheduled > 0
-                    && regularSessionsScheduled % extraSessionConfig.injectAfterEvery == 0
-                    // Ensure we don't inject immediately again if we just did (though loop structure normally handles this if we track properly)
-                    // We need to verify if the LAST scheduled session was NOT an extra session (to avoid double tap if logic allows)
-                    // But regularSessionsScheduled only increments on regular sessions, so this condition holds until next regular session
                 
-                // However, we must ensure we haven't ALREADY acted on this specific regular count milestone.
-                // E.g. at 3, we inject. loop continues. at 3 again? No, because we need to NOT increment regular count.
-                // We need to track if we just injected for this milestone.
-                // A simpler way: 'sessionsSinceLastExtra'.
-                
-                // Let's refactor injection trigger:
-                let sessionsSinceStartOrLastExtra = regularSessionsScheduled - (extraCount * extraSessionConfig.injectAfterEvery)
+                let sessionsSinceLastDeep = regularSessionsScheduled - (deepCount * deepSessionConfig.injectAfterEvery)
                  
-                if shouldInjectExtra && sessionsSinceStartOrLastExtra >= extraSessionConfig.injectAfterEvery {
-                     sessionType = .extra
-                     sessionDuration = extraSessionConfig.duration
+                if shouldInjectDeep && sessionsSinceLastDeep >= deepSessionConfig.injectAfterEvery {
+                     sessionType = .deep
+                     sessionDuration = deepSessionConfig.duration
                      
-                     if useExtraTasks && extraCount < extraTitles.count {
-                         sessionTitle = extraTitles[extraCount]
+                     if useDeepTasks && deepCount < deepTitles.count {
+                         sessionTitle = deepTitles[deepCount]
                      } else {
-                         sessionTitle = extraSessionConfig.name
+                         sessionTitle = deepSessionConfig.name
                      }
                      
-                     calendarName = extraSessionConfig.calendarName
-                     isExtra = true
+                     calendarName = deepSessionConfig.calendarName
+                     sessionTag = "#deep"
+                     isDeep = true
                  } else if sessionIndex < sessionOrder.count {
-                    // Standard pattern logic
-                    // Check if we've already met the quota for this projected type
                     let proposedType = sessionOrder[sessionIndex]
                     
-                    // If we already have enough of the proposed type, try to skip to next
                     if (proposedType == .work && workCount >= workSessions) ||
                        (proposedType == .side && sideCount >= sideSessions) {
                         sessionIndex += 1
@@ -259,136 +255,88 @@ class SchedulingEngine: ObservableObject {
                     switch sessionType {
                     case .work:
                         sessionDuration = workSessionDuration
-                        if useWorkTasks && workCount < workTitles.count {
-                            sessionTitle = workTitles[workCount]
-                        } else {
-                            sessionTitle = workSessionName
-                        }
+                        sessionTitle = (useWorkTasks && workCount < workTitles.count) ? workTitles[workCount] : workSessionName
                         calendarName = workCalendarName
+                        sessionTag = "#work"
                     case .side:
                         sessionDuration = sideSessionDuration
-                        if useSideTasks && sideCount < sideTitles.count {
-                            sessionTitle = sideTitles[sideCount]
-                        } else {
-                            sessionTitle = sideSessionName
-                        }
+                        sessionTitle = (useSideTasks && sideCount < sideTitles.count) ? sideTitles[sideCount] : sideSessionName
                         calendarName = sideCalendarName
-                    case .planning, .extra:
-                         // Should not happen in pattern
+                        sessionTag = "#side"
+                    case .planning, .deep:
                          sessionDuration = workSessionDuration
                          sessionTitle = "Unknown"
                          calendarName = workCalendarName
+                         sessionTag = ""
                     }
                 } else {
-                    // Try to schedule remaining sessions (if pattern exhausted but counts not met)
                     if workCount < workSessions {
                         sessionType = .work
                         sessionDuration = workSessionDuration
-                        if useWorkTasks && workCount < workTitles.count {
-                            sessionTitle = workTitles[workCount]
-                        } else {
-                            sessionTitle = workSessionName
-                        }
+                        sessionTitle = (useWorkTasks && workCount < workTitles.count) ? workTitles[workCount] : workSessionName
                         calendarName = workCalendarName
+                        sessionTag = "#work"
                     } else if sideCount < sideSessions {
                         sessionType = .side
                         sessionDuration = sideSessionDuration
-                        if useSideTasks && sideCount < sideTitles.count {
-                            sessionTitle = sideTitles[sideCount]
-                        } else {
-                            sessionTitle = sideSessionName
-                        }
+                        sessionTitle = (useSideTasks && sideCount < sideTitles.count) ? sideTitles[sideCount] : sideSessionName
                         calendarName = sideCalendarName
-                    } else if extraSessionConfig.enabled && extraCount < extraSessionConfig.sessionCount {
-                        // Remaining extras?
-                         sessionType = .extra
-                         sessionDuration = extraSessionConfig.duration
-                         if useExtraTasks && extraCount < extraTitles.count {
-                             sessionTitle = extraTitles[extraCount]
-                         } else {
-                             sessionTitle = extraSessionConfig.name
-                         }
-                         calendarName = extraSessionConfig.calendarName
-                         isExtra = true
+                        sessionTag = "#side"
+                    } else if deepSessionConfig.enabled && deepCount < deepSessionConfig.sessionCount {
+                         sessionType = .deep
+                         sessionDuration = deepSessionConfig.duration
+                         sessionTitle = (useDeepTasks && deepCount < deepTitles.count) ? deepTitles[deepCount] : deepSessionConfig.name
+                         calendarName = deepSessionConfig.calendarName
+                         sessionTag = "#deep"
+                         isDeep = true
                     } else {
-                        break // Done
+                        break
                     }
                 }
             }
             
             let potentialEnd = currentTime.addingTimeInterval(TimeInterval(sessionDuration * 60))
             
-            // Check if session exceeds day boundary
             if potentialEnd > endOfDay {
-                schedulingMessage = "Cannot fit remaining sessions before end of day."
+                schedulingMessage = "Cannot fit remaining sessions."
                 break
             }
             
-            // Check for conflicts
-            let conflict = findConflict(
-                start: currentTime,
-                end: potentialEnd,
-                busySlots: busySlots,
-                buffer: bufferDuration
-            )
+            let conflict = findConflict(start: currentTime, end: potentialEnd, busySlots: busySlots, buffer: bufferDuration)
             
             if let conflictEnd = conflict {
-                // Try alternative fitting (only for regular sessions)
-                if !planningNeeded && !isExtra {
-                    let alternativeSession = tryAlternativeSession(
-                        currentTime: currentTime,
-                        conflictEnd: conflictEnd,
-                        currentType: sessionType,
-                        workCount: workCount,
-                        sideCount: sideCount,
-                        busySlots: busySlots,
-                        buffer: bufferDuration,
-                        endOfDay: endOfDay
-                    )
-                    
-                    if let alt = alternativeSession {
+                if !planningNeeded && !isDeep {
+                    if let alt = tryAlternativeSession(currentTime: currentTime, conflictEnd: conflictEnd, currentType: sessionType, workCount: workCount, sideCount: sideCount, busySlots: busySlots, buffer: bufferDuration, endOfDay: endOfDay) {
                         sessions.append(alt)
-                        if alt.type == .work {
-                            workCount += 1
-                        } else {
-                            sideCount += 1
-                        }
+                        if alt.type == .work { workCount += 1 } else { sideCount += 1 }
                         regularSessionsScheduled += 1
-                        
-                        // Add rest
-                        var appliedRest = restDuration
-                        if alt.type == .side { appliedRest = sideRestDuration }
-                        
-                        currentTime = alt.endTime.addingTimeInterval(TimeInterval(appliedRest * 60))
-                        currentTime = roundToNextInterval(currentTime)
-                        
+                        let appliedRest = alt.type == .side ? sideRestDuration : restDuration
+                        currentTime = roundToNextInterval(alt.endTime.addingTimeInterval(TimeInterval(appliedRest * 60)))
                         continue
                     }
                 }
-                
                 currentTime = roundToNextInterval(conflictEnd)
                 continue
             }
             
-            // Schedule the session
             let session = ScheduledSession(
                 type: sessionType,
                 title: sessionTitle,
                 startTime: currentTime,
                 endTime: potentialEnd,
-                calendarName: calendarName
+                calendarName: calendarName,
+                notes: sessionTag
             )
             sessions.append(session)
             
-            // Update counters and apply specific rest
-            var appliedRest = restDuration // Default
+            var appliedRest = restDuration
             
             if planningNeeded {
                 planningNeeded = false
                 appliedRest = max(5, restDuration / 2)
-            } else if isExtra {
-                extraCount += 1
-                appliedRest = extraRestDuration
+            } else if isDeep {
+                deepCount += 1
+                appliedRest = deepRestDuration
             } else {
                 switch sessionType {
                 case .work:
@@ -404,17 +352,15 @@ class SchedulingEngine: ObservableObject {
                 sessionIndex += 1
             }
             
-            currentTime = potentialEnd.addingTimeInterval(TimeInterval(appliedRest * 60))
-            
-            currentTime = roundToNextInterval(currentTime)
+            currentTime = roundToNextInterval(potentialEnd.addingTimeInterval(TimeInterval(appliedRest * 60)))
         }
         
         projectedSessions = sessions
         
         if sessions.isEmpty {
-            schedulingMessage = "Could not find any suitable time slots."
+            schedulingMessage = "No suitable time slots."
         } else if workCount < workSessions || sideCount < sideSessions {
-            schedulingMessage = "Scheduled \(sessions.count) sessions. Some sessions couldn't be placed."
+            schedulingMessage = "Scheduled \(sessions.count) sessions. Quota not met."
         } else {
             schedulingMessage = "Successfully projected \(sessions.count) sessions."
         }
@@ -488,7 +434,8 @@ class SchedulingEngine: ObservableObject {
                 title: alternativeTitle,
                 startTime: currentTime,
                 endTime: potentialEnd,
-                calendarName: alternativeCalendar
+                calendarName: alternativeCalendar,
+                notes: alternativeType == .work ? "#work" : "#side"
             )
         }
         
@@ -537,7 +484,7 @@ class SchedulingEngine: ObservableObject {
         case .work: sessionDuration = workSessionDuration
         case .side: sessionDuration = sideSessionDuration
         case .planning: sessionDuration = planningDuration
-        case .extra: sessionDuration = extraSessionConfig.duration
+        case .deep: sessionDuration = deepSessionConfig.duration
         }
 
         var attempts = 0
@@ -574,7 +521,8 @@ class SchedulingEngine: ObservableObject {
                 title: type == .planning ? "Planning" : type.rawValue + " Session",
                 startTime: currentTime,
                 endTime: potentialEnd,
-                calendarName: workCalendarName // Default to work calendar for planning
+                calendarName: workCalendarName,
+                notes: type == .work ? "#work" : (type == .side ? "#side" : (type == .planning ? "#plan" : "#deep"))
             )
         }
         
@@ -666,13 +614,13 @@ class SchedulingEngine: ObservableObject {
             planningDuration: planningDuration,
             restDuration: restDuration,
             sideRestDuration: sideRestDuration,
-            extraRestDuration: extraRestDuration,
+            deepRestDuration: deepRestDuration,
             schedulePlanning: schedulePlanning,
             pattern: pattern,
             workSessionsPerCycle: workSessionsPerCycle,
             sideSessionsPerCycle: sideSessionsPerCycle,
             sideFirst: sideFirst,
-            extraSessionConfig: extraSessionConfig,
+            deepSessionConfig: deepSessionConfig,
             calendarMapping: CalendarMapping(
                 workCalendarName: workCalendarName,
                 sideCalendarName: sideCalendarName
@@ -702,13 +650,13 @@ class SchedulingEngine: ObservableObject {
         planningDuration = state.planningDuration
         restDuration = state.restDuration
         sideRestDuration = state.sideRestDuration
-        extraRestDuration = state.extraRestDuration
+        deepRestDuration = state.deepRestDuration
         schedulePlanning = state.schedulePlanning
         pattern = state.pattern
         workSessionsPerCycle = state.workSessionsPerCycle
         sideSessionsPerCycle = state.sideSessionsPerCycle
         sideFirst = state.sideFirst
-        extraSessionConfig = state.extraSessionConfig
+        deepSessionConfig = state.deepSessionConfig
         workCalendarName = state.calendarMapping.workCalendarName
         sideCalendarName = state.calendarMapping.sideCalendarName
     }
@@ -723,13 +671,13 @@ class SchedulingEngine: ObservableObject {
                planningDuration != preset.planningDuration ||
                restDuration != preset.restDuration ||
                sideRestDuration != preset.sideRestDuration ||
-               extraRestDuration != preset.extraRestDuration ||
+               deepRestDuration != preset.deepRestDuration ||
                schedulePlanning != preset.schedulePlanning ||
                pattern != preset.pattern ||
                workSessionsPerCycle != preset.workSessionsPerCycle ||
                sideSessionsPerCycle != preset.sideSessionsPerCycle ||
                sideFirst != preset.sideFirst ||
-               extraSessionConfig != preset.extraSessionConfig ||
+               deepSessionConfig != preset.deepSessionConfig ||
                workCalendarName != preset.calendarMapping.workCalendarName ||
                sideCalendarName != preset.calendarMapping.sideCalendarName
     }
