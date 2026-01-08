@@ -123,6 +123,7 @@ if [ -n "$APP_PATH" ]; then
     cp -R "$APP_PATH" "./$APP_NAME"
     touch "./$APP_NAME"
     echo "🎉 Done! version $NEW_VERSION (build $NEW_BUILD_NUMBER) is ready in this folder."
+    open "./$APP_NAME"
 else
     echo "❌ Build failed. Could not find .app."
     exit 1

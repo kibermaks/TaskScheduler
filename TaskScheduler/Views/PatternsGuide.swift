@@ -60,6 +60,7 @@ struct PatternsGuide: View {
                         }
                     }
                 }
+                .frame(maxHeight: .infinity)
                 
                 // Footer
                 VStack(spacing: 24) {
@@ -123,7 +124,7 @@ struct PatternsGuide: View {
                 .font(.system(size: 72))
                 .foregroundColor(page.color)
             
-            VStack(spacing: 8) {
+            VStack(spacing: 12) {
                 Text(page.title)
                     .font(.system(size: 32, weight: .bold, design: .rounded))
                     .foregroundColor(.white)

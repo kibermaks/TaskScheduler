@@ -41,6 +41,7 @@ struct TaskEditorInternal: NSViewRepresentable {
         textView.autoresizingMask = [.width]
         textView.delegate = context.coordinator
         textView.insertionPointColor = .white
+        textView.textContainerInset = NSSize(width: 8, height: 8)
         
         textView.onMoveUp = { moveLine(textView: textView, direction: -1) }
         textView.onMoveDown = { moveLine(textView: textView, direction: 1) }

@@ -119,7 +119,7 @@ struct TasksGuide: View {
     }
     
     private func pageView(for page: WelcomePage) -> some View {
-        VStack(spacing: 24) {
+        VStack(spacing: 16) {
             Image(systemName: page.image)
                 .font(.system(size: 72))
                 .foregroundColor(page.color)

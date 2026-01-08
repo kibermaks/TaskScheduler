@@ -22,6 +22,11 @@
 		2DC4CFE82EFA885900F7A35D /* TasksPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2DC4CFE62EFA885900F7A35D /* TasksPanel.swift */; };
 		2DC4CFEA2EFA8E8700F7A35D /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 2DC4CFE92EFA8E8700F7A35D /* Assets.xcassets */; };
 		2DEBECAB2EF4136C002A9D7C /* Icon.icon in Resources */ = {isa = PBXBuildFile; fileRef = 2DEBECAA2EF4136C002A9D7C /* Icon.icon */; };
+		012 /* WelcomeScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 112 /* WelcomeScreen.swift */; };
+		013 /* PatternsGuide.swift in Sources */ = {isa = PBXBuildFile; fileRef = 113 /* PatternsGuide.swift */; };
+		014 /* TasksGuide.swift in Sources */ = {isa = PBXBuildFile; fileRef = 114 /* TasksGuide.swift */; };
+		015 /* AppSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 115 /* AppSettingsView.swift */; };
+		016 /* NumericInputField.swift in Sources */ = {isa = PBXBuildFile; fileRef = 116 /* NumericInputField.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -42,6 +47,11 @@
 		2DC4CFE62EFA885900F7A35D /* TasksPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TasksPanel.swift; sourceTree = "<group>"; };
 		2DC4CFE92EFA8E8700F7A35D /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		2DEBECAA2EF4136C002A9D7C /* Icon.icon */ = {isa = PBXFileReference; lastKnownFileType = folder.iconcomposer.icon; path = Icon.icon; sourceTree = "<group>"; };
+		112 /* WelcomeScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WelcomeScreen.swift; sourceTree = "<group>"; };
+		113 /* PatternsGuide.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PatternsGuide.swift; sourceTree = "<group>"; };
+		114 /* TasksGuide.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TasksGuide.swift; sourceTree = "<group>"; };
+		115 /* AppSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppSettingsView.swift; sourceTree = "<group>"; };
+		116 /* NumericInputField.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NumericInputField.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -104,6 +114,11 @@
 				109 /* TimelineView.swift */,
 				110 /* SettingsPanel.swift */,
 				111 /* PresetManager.swift */,
+				112 /* WelcomeScreen.swift */,
+				113 /* PatternsGuide.swift */,
+				114 /* TasksGuide.swift */,
+				115 /* AppSettingsView.swift */,
+				116 /* NumericInputField.swift */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -201,6 +216,11 @@
 				009 /* TimelineView.swift in Sources */,
 				010 /* SettingsPanel.swift in Sources */,
 				011 /* PresetManager.swift in Sources */,
+				012 /* WelcomeScreen.swift in Sources */,
+				013 /* PatternsGuide.swift in Sources */,
+				014 /* TasksGuide.swift in Sources */,
+				015 /* AppSettingsView.swift in Sources */,
+				016 /* NumericInputField.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -338,10 +358,10 @@
 				CODE_SIGN_ENTITLEMENTS = TaskScheduler/TaskScheduler.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 45;
+				CURRENT_PROJECT_VERSION = 75;
 				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_ASSET_PATHS = "";
-				ENABLE_APP_SANDBOX = YES;
+				ENABLE_APP_SANDBOX = NO;
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_PREVIEWS = YES;
 				ENABLE_RESOURCE_ACCESS_CALENDARS = YES;
@@ -375,10 +395,10 @@
 				CODE_SIGN_ENTITLEMENTS = TaskScheduler/TaskScheduler.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 45;
+				CURRENT_PROJECT_VERSION = 75;
 				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_ASSET_PATHS = "";
-				ENABLE_APP_SANDBOX = YES;
+				ENABLE_APP_SANDBOX = NO;
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_PREVIEWS = YES;
 				ENABLE_RESOURCE_ACCESS_CALENDARS = YES;
