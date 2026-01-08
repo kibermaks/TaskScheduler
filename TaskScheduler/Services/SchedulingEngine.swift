@@ -357,12 +357,20 @@ class SchedulingEngine: ObservableObject {
         
         projectedSessions = sessions
         
+        var existingNote = ""
+        if awareExistingTasks, let existing = existingSessions {
+            let total = existing.work + existing.side + existing.deep
+            if total > 0 {
+                existingNote = " (Found \(total) existing sessions)"
+            }
+        }
+
         if sessions.isEmpty {
-            schedulingMessage = "No suitable time slots."
+            schedulingMessage = "No suitable time slots found." + existingNote
         } else if workCount < workSessions || sideCount < sideSessions {
-            schedulingMessage = "Scheduled \(sessions.count) sessions. Quota not met."
+            schedulingMessage = "Projected \(sessions.count) sessions. Quota not met." + existingNote
         } else {
-            schedulingMessage = "Successfully projected \(sessions.count) sessions."
+            schedulingMessage = "Successfully projected \(sessions.count) sessions." + existingNote
         }
         
         return sessions
@@ -553,7 +561,7 @@ class SchedulingEngine: ObservableObject {
         startTime: Date,
         baseDate: Date,
         busySlots: [BusyTimeSlot]
-    ) -> (availableMinutes: Int, possibleWorkSessions: Int, possibleSideSessions: Int) {
+    ) -> (availableMinutes: Int, possibleWorkSessions: Int, possibleSideSessions: Int, possibleDeepSessions: Int) {
         let calendar = Calendar.current
         let endOfDay = calendar.startOfDay(for: calendar.date(byAdding: .day, value: 1, to: baseDate)!)
         
@@ -587,11 +595,13 @@ class SchedulingEngine: ObservableObject {
         // Calculate possible sessions (with rest between)
         let workWithRest = workSessionDuration + restDuration
         let sideWithRest = sideSessionDuration + restDuration
+        let deepWithRest = deepSessionConfig.duration + deepRestDuration
         
-        let possibleWork = totalAvailable / workWithRest
-        let possibleSide = totalAvailable / sideWithRest
+        let possibleWork = totalAvailable / max(1, workWithRest)
+        let possibleSide = totalAvailable / max(1, sideWithRest)
+        let possibleDeep = totalAvailable / max(1, deepWithRest)
         
-        return (totalAvailable, possibleWork, possibleSide)
+        return (totalAvailable, possibleWork, possibleSide, possibleDeep)
     }
     
     // MARK: - State Persistence

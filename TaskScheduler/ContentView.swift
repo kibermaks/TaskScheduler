@@ -655,6 +655,9 @@ struct RightPanel: View {
                 row("Available Time:", "\(avail.availableMinutes / 60)h \(avail.availableMinutes % 60)m")
                 row("Possible Work:", "\(avail.possibleWorkSessions) sessions", Color(hex: "8B5CF6"))
                 row("Possible Side:", "\(avail.possibleSideSessions) sessions", Color(hex: "3B82F6"))
+                if schedulingEngine.deepSessionConfig.enabled {
+                    row("Possible Deep:", "\(avail.possibleDeepSessions) sessions", Color(hex: "10B981"))
+                }
             }
             .font(.system(size: 13)).foregroundColor(.white.opacity(0.8))
         }
@@ -680,6 +683,15 @@ struct RightPanel: View {
             if !schedulingEngine.schedulingMessage.isEmpty {
                 Text(schedulingEngine.schedulingMessage).font(.system(size: 11)).foregroundColor(.yellow.opacity(0.8))
             }
+            
+            if schedulingEngine.awareExistingTasks {
+                HStack(spacing: 4) {
+                    Image(systemName: "brain.head.profile").font(.system(size: 10))
+                    Text("Accounting for existing sessions from calendar").font(.system(size: 10)).italic()
+                }
+                .foregroundColor(.white.opacity(0.4))
+                .padding(.top, -4)
+            }
         }
         .padding().background(Color.white.opacity(0.05)).cornerRadius(12)
     }
@@ -688,6 +700,7 @@ struct RightPanel: View {
         let wc = sessions.filter { $0.type == .work }.count
         let sc = sessions.filter { $0.type == .side }.count
         let pc = sessions.filter { $0.type == .planning }.count
+        let dc = sessions.filter { $0.type == .deep }.count
         let formatter = DateFormatter()
         formatter.dateStyle = .none
         formatter.timeStyle = .short
@@ -695,6 +708,7 @@ struct RightPanel: View {
             if pc > 0 { countRow(.planning, pc) }
             countRow(.work, wc)
             countRow(.side, sc)
+            if dc > 0 { countRow(.deep, dc) }
             Divider().background(Color.white.opacity(0.2))
             HStack { Text("Total:").fontWeight(.medium); Spacer(); Text("\(sessions.count) sessions").fontWeight(.semibold) }
             if let last = sessions.last {
