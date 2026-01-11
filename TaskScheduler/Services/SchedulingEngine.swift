@@ -21,7 +21,7 @@ class SchedulingEngine: ObservableObject {
     @Published var sideFirst: Bool = false { didSet { saveState() } } // New
     @Published var workCalendarName: String = "Work" { didSet { saveState() } }
     @Published var sideCalendarName: String = "Side Tasks" { didSet { saveState() } }
-    @Published var hideNightHours: Bool = UserDefaults.standard.bool(forKey: "TaskScheduler.HideNightHours") {
+    @Published var hideNightHours: Bool = UserDefaults.standard.object(forKey: "TaskScheduler.HideNightHours") as? Bool ?? true {
         didSet { UserDefaults.standard.set(hideNightHours, forKey: "TaskScheduler.HideNightHours") }
     }
     @Published var awareExistingTasks: Bool = UserDefaults.standard.object(forKey: "TaskScheduler.AwareExistingTasks") as? Bool ?? true {

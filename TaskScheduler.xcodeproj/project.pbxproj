@@ -27,6 +27,8 @@
 		014 /* TasksGuide.swift in Sources */ = {isa = PBXBuildFile; fileRef = 114 /* TasksGuide.swift */; };
 		015 /* AppSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 115 /* AppSettingsView.swift */; };
 		016 /* NumericInputField.swift in Sources */ = {isa = PBXBuildFile; fileRef = 116 /* NumericInputField.swift */; };
+		017 /* CalendarPermissionView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 117 /* CalendarPermissionView.swift */; };
+		018 /* CalendarSetupView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 118 /* CalendarSetupView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -52,6 +54,8 @@
 		114 /* TasksGuide.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TasksGuide.swift; sourceTree = "<group>"; };
 		115 /* AppSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppSettingsView.swift; sourceTree = "<group>"; };
 		116 /* NumericInputField.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NumericInputField.swift; sourceTree = "<group>"; };
+		117 /* CalendarPermissionView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalendarPermissionView.swift; sourceTree = "<group>"; };
+		118 /* CalendarSetupView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalendarSetupView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -119,6 +123,8 @@
 				114 /* TasksGuide.swift */,
 				115 /* AppSettingsView.swift */,
 				116 /* NumericInputField.swift */,
+				117 /* CalendarPermissionView.swift */,
+				118 /* CalendarSetupView.swift */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -221,6 +227,8 @@
 				014 /* TasksGuide.swift in Sources */,
 				015 /* AppSettingsView.swift in Sources */,
 				016 /* NumericInputField.swift in Sources */,
+				017 /* CalendarPermissionView.swift in Sources */,
+				018 /* CalendarSetupView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -358,7 +366,7 @@
 				CODE_SIGN_ENTITLEMENTS = TaskScheduler/TaskScheduler.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 75;
+				CURRENT_PROJECT_VERSION = 97;
 				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_ASSET_PATHS = "";
 				ENABLE_APP_SANDBOX = NO;
@@ -395,7 +403,7 @@
 				CODE_SIGN_ENTITLEMENTS = TaskScheduler/TaskScheduler.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 75;
+				CURRENT_PROJECT_VERSION = 97;
 				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_ASSET_PATHS = "";
 				ENABLE_APP_SANDBOX = NO;

@@ -1,6 +1,7 @@
 import Foundation
 import EventKit
 import SwiftUI
+import AppKit
 
 // MARK: - Calendar Service
 /// Manages all interactions with macOS Calendar via EventKit
@@ -249,6 +250,40 @@ class CalendarService: ObservableObject {
         return events.contains { 
             ($0.title ?? "") == planningEventName || 
             ($0.notes ?? "").lowercased().contains("#plan")
+        }
+    }
+    
+    // MARK: - Calendar Management
+    
+    func createCalendar(named name: String, color: Color) {
+        // Double check if it already exists
+        if getCalendar(named: name) != nil { return }
+        
+        let newCalendar = EKCalendar(for: .event, eventStore: eventStore)
+        newCalendar.title = name
+        
+        // Find a suitable source (Local or iCloud)
+        let sources = eventStore.sources
+        // Prefer iCloud or Local
+        if let bestSource = sources.first(where: { $0.sourceType == .calDAV && $0.title == "iCloud" }) ??
+                            sources.first(where: { $0.sourceType == .local }) {
+            newCalendar.source = bestSource
+        } else {
+            // Fallback to first available source
+            newCalendar.source = sources.first
+        }
+        
+        // Set color
+        if let nsColor = NSColor(color) as? NSColor { // Cast purely to avoid ambiguity if needed, though NSColor(Color) works
+             newCalendar.cgColor = nsColor.cgColor
+        }
+        
+        do {
+            try eventStore.saveCalendar(newCalendar, commit: true)
+            // Reload to include the new calendar
+            loadCalendars()
+        } catch {
+            errorMessage = "Failed to create calendar '\(name)': \(error.localizedDescription)"
         }
     }
     

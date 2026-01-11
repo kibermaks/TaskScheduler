@@ -21,9 +21,11 @@ struct ContentView: View {
     @AppStorage("hasSeenWelcome") private var hasSeenWelcome = false
     @AppStorage("hasSeenPatternsGuide") private var hasSeenPatternsGuide = false
     @AppStorage("hasSeenTasksGuide") private var hasSeenTasksGuide = false
+    @AppStorage("hasCompletedSetup") private var hasCompletedSetup = false
     @State private var showingWelcome = false
     @State private var showingPatternsGuide = false
     @State private var showingTasksGuide = false
+    @State private var showingCalendarSetup = false
     
     enum DateSelection: String, CaseIterable {
         case today = "Today"
@@ -32,26 +34,52 @@ struct ContentView: View {
     }
     
     var body: some View {
-        ContentViewBody(
-            selectedDate: $selectedDate,
-            startTime: $startTime,
-            showingConfirmation: $showingConfirmation,
-            showingDeleteConfirmation: $showingDeleteConfirmation,
-            dateSelection: $dateSelection,
-            autoPreview: $autoPreview,
-            useNowTime: $useNowTime,
-            deletePastSessions: $deletePastSessions,
-            presets: $presets,
-            selectedPreset: $selectedPreset,
-            showingNewPresetSheet: $showingNewPresetSheet,
-            nowTimer: $nowTimer,
-            hasSeenWelcome: $hasSeenWelcome,
-            showingWelcome: $showingWelcome,
-            hasSeenPatternsGuide: $hasSeenPatternsGuide,
-            showingPatternsGuide: $showingPatternsGuide,
-            hasSeenTasksGuide: $hasSeenTasksGuide,
-            showingTasksGuide: $showingTasksGuide
-        )
+        Group {
+            if calendarService.authorizationStatus != .fullAccess {
+                // Show permission screen if not authorized
+                CalendarPermissionView()
+            } else if !hasCompletedSetup {
+                // Show setup screen after permission is granted
+                CalendarSetupView()
+            } else {
+                // Show main app once everything is ready
+                ContentViewBody(
+                    selectedDate: $selectedDate,
+                    startTime: $startTime,
+                    showingConfirmation: $showingConfirmation,
+                    showingDeleteConfirmation: $showingDeleteConfirmation,
+                    dateSelection: $dateSelection,
+                    autoPreview: $autoPreview,
+                    useNowTime: $useNowTime,
+                    deletePastSessions: $deletePastSessions,
+                    presets: $presets,
+                    selectedPreset: $selectedPreset,
+                    showingNewPresetSheet: $showingNewPresetSheet,
+                    nowTimer: $nowTimer,
+                    hasSeenWelcome: $hasSeenWelcome,
+                    showingWelcome: $showingWelcome,
+                    hasSeenPatternsGuide: $hasSeenPatternsGuide,
+                    showingPatternsGuide: $showingPatternsGuide,
+                    hasSeenTasksGuide: $hasSeenTasksGuide,
+                    showingTasksGuide: $showingTasksGuide
+                )
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+            // Check permission status when app becomes active
+            calendarService.checkAuthorizationStatus()
+            
+            // Check if setup was completed
+            hasCompletedSetup = UserDefaults.standard.bool(forKey: "TaskScheduler.HasCompletedSetup")
+        }
+        .onReceive(NotificationCenter.default.publisher(for: Notification.Name("SetupCompleted"))) { _ in
+            // Update setup completion status
+            hasCompletedSetup = true
+        }
+        .onReceive(NotificationCenter.default.publisher(for: Notification.Name("ResetCalendarSetup"))) { _ in
+            // Reset setup for testing
+            hasCompletedSetup = false
+        }
     }
 }
 
@@ -126,6 +154,7 @@ struct ContentViewBody: View {
             TasksGuide()
         }
         .onAppear {
+            // Only show welcome screen after setup is complete
             if !hasSeenWelcome {
                 showingWelcome = true
                 hasSeenWelcome = true
@@ -315,9 +344,32 @@ struct ContentViewBody: View {
     
     private func applyPreset(_ preset: Preset) {
         selectedPreset = preset
+        
+        // Ensure calendars exist
+        ensureCalendarsExist(for: preset)
+        
         schedulingEngine.applyPreset(preset)
         PresetStorage.shared.saveLastActivePresetId(preset.id)
         if autoPreview { updateProjectedSchedule() }
+    }
+    
+    private func ensureCalendarsExist(for preset: Preset) {
+        let workName = preset.calendarMapping.workCalendarName
+        if calendarService.getCalendar(named: workName) == nil {
+            calendarService.createCalendar(named: workName, color: .blue)
+        }
+        
+        let sideName = preset.calendarMapping.sideCalendarName
+        if calendarService.getCalendar(named: sideName) == nil {
+            calendarService.createCalendar(named: sideName, color: .orange)
+        }
+        
+        if preset.deepSessionConfig.enabled {
+            let deepName = preset.deepSessionConfig.calendarName
+            if calendarService.getCalendar(named: deepName) == nil {
+                calendarService.createCalendar(named: deepName, color: .purple)
+            }
+        }
     }
     
     func updateProjectedSchedule() {

@@ -85,6 +85,16 @@ struct AppSettingsView: View {
                         Label("Reset All Dirty Triggers", systemImage: "arrow.counterclockwise")
                     }
                     
+                    Button(action: resetCalendarSetup) {
+                        Label("Reset Calendar Setup", systemImage: "calendar.badge.clock")
+                    }
+                    
+                    Text("This will show the calendar setup screen again for testing.")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                    
+                    Divider()
+                    
                     Button(role: .destructive, action: resetCalendarPermissions) {
                         Label("Reset Calendar Permissions", systemImage: "lock.slash.fill")
                     }
@@ -106,6 +116,12 @@ struct AppSettingsView: View {
                 window.setContentSize(NSSize(width: 550, height: 640))
             }
         }
+    }
+    
+    private func resetCalendarSetup() {
+        UserDefaults.standard.set(false, forKey: "TaskScheduler.HasCompletedSetup")
+        // Post notification to trigger refresh in ContentView
+        NotificationCenter.default.post(name: Notification.Name("ResetCalendarSetup"), object: nil)
     }
     
     private func resetCalendarPermissions() {
