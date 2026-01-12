@@ -18,8 +18,13 @@ struct CalendarSetupView: View {
     
     var body: some View {
         ZStack {
-            // Transparent background (removed gradient)
-            Color.clear.ignoresSafeArea()
+            // Background gradient
+            LinearGradient(
+                colors: [Color(hex: "0F172A"), Color(hex: "1E293B")],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+            .ignoresSafeArea()
             
             // Main content container with frosted glass effect
             VStack(spacing: 0) {
@@ -80,6 +85,7 @@ struct CalendarSetupView: View {
                     }
                 }
                 .padding(16)
+                .frame(maxWidth: .infinity, alignment: .leading)
                 .background(
                     RoundedRectangle(cornerRadius: 12)
                         .fill(Color(hex: "3B82F6").opacity(0.15))
@@ -200,9 +206,11 @@ struct CalendarSetupView: View {
                     )
             )
             .padding(40)
+            .frame(width: 800)
         }
-        .frame(width: 800, height: .infinity)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .onAppear {
+            calendarService.loadCalendars()
             loadAvailableCalendars()
         }
     }
@@ -323,18 +331,37 @@ struct CalendarSetupView: View {
         let calendars = calendarService.calendarNames()
         guard !calendars.isEmpty else { return }
         
-        // Smart matching for Work calendar
+        func prioritizedMatch(from candidates: [String], keywords: [String]) -> String? {
+            // 1. Look for exact matches, in priority order
+            for keyword in keywords {
+                if let exact = candidates.first(where: { $0.lowercased() == keyword.lowercased() }) {
+                    return exact
+                }
+            }
+            // 2. Otherwise, look for first by keyword in order (not exact, substring, but respect keyword priority)
+            for keyword in keywords {
+                if let contains = candidates.first(where: { $0.lowercased().contains(keyword.lowercased()) }) {
+                    return contains
+                }
+            }
+            // 3. Fallback
+            return nil
+        }
+        
+        // Work: prioritize "work" then "tasks"
         if selectedWorkCalendar.isEmpty {
-            if let match = calendars.first(where: { $0.lowercased().contains("work") || $0.lowercased().contains("focus") }) {
+            let workKeywords = ["work", "tasks"]
+            if let match = prioritizedMatch(from: calendars, keywords: workKeywords) {
                 selectedWorkCalendar = match
             } else {
                 selectedWorkCalendar = calendars.first ?? ""
             }
         }
-        
-        // Smart matching for Side calendar
+
+        // Side: prioritize "side" then "admin" then "personal"
         if selectedSideCalendar.isEmpty {
-            if let match = calendars.first(where: { $0.lowercased().contains("side") || $0.lowercased().contains("admin") || $0.lowercased().contains("personal") }) {
+            let sideKeywords = ["side", "admin", "personal"]
+            if let match = prioritizedMatch(from: calendars, keywords: sideKeywords) {
                 selectedSideCalendar = match
             } else if calendars.count > 1 {
                 selectedSideCalendar = calendars[1]
@@ -343,9 +370,10 @@ struct CalendarSetupView: View {
             }
         }
         
-        // Smart matching for Deep calendar
+        // Deep: prioritize "deep" then "focus" then "work"
         if selectedDeepCalendar.isEmpty {
-            if let match = calendars.first(where: { $0.lowercased().contains("deep") || $0.lowercased().contains("focus") }) {
+            let deepKeywords = ["deep", "focus", "work"]
+            if let match = prioritizedMatch(from: calendars, keywords: deepKeywords) {
                 selectedDeepCalendar = match
             } else if calendars.count > 2 {
                 selectedDeepCalendar = calendars[2]
@@ -378,18 +406,25 @@ struct CalendarSetupView: View {
         
         isCompleting = true
         
-        // Save to scheduling engine
+        // Save to scheduling engine (these will trigger saveState() via didSet)
         schedulingEngine.workCalendarName = selectedWorkCalendar
         schedulingEngine.sideCalendarName = selectedSideCalendar
-        schedulingEngine.deepSessionConfig.calendarName = selectedDeepCalendar
         
-        // Mark setup as complete
-        UserDefaults.standard.set(true, forKey: "TaskScheduler.HasCompletedSetup")
+        // Update deep session config (need to create a new instance to trigger didSet)
+        var deepConfig = schedulingEngine.deepSessionConfig
+        deepConfig.calendarName = selectedDeepCalendar
+        schedulingEngine.deepSessionConfig = deepConfig
         
-        // Trigger refresh notification
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-            NotificationCenter.default.post(name: Notification.Name("SetupCompleted"), object: nil)
-            isCompleting = false
+        // Give a moment for all saves to complete, then mark setup as complete
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+            // Mark setup as complete
+            UserDefaults.standard.set(true, forKey: "TaskScheduler.HasCompletedSetup")
+            
+            // Trigger refresh notification
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                NotificationCenter.default.post(name: Notification.Name("SetupCompleted"), object: nil)
+                isCompleting = false
+            }
         }
     }
 }

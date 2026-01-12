@@ -15,6 +15,18 @@ struct TimelineView: View {
     @State private var selectedSession: ScheduledSession?
     @State private var selectedBusySlot: BusyTimeSlot?
     
+    // Inline Editing State (only for BusyTimeSlot)
+    @State private var editingTitle: String?
+    @State private var editingNotes: String?
+    @State private var editingURL: String?
+    @FocusState private var focusedField: EditField?
+    
+    enum EditField {
+        case title
+        case notes
+        case url
+    }
+    
     // Width tracking for adaptive UI - default to 0 to start compact
     @State private var containerWidth: CGFloat = 0
     @State private var showingLegendPopover = false
@@ -369,9 +381,15 @@ extension TimelineView {
         }
         .frame(width: blockWidth, height: blockHeight)
         .position(x: centerX, y: centerY)
-        .onTapGesture {
+        .onTapGesture(count: 2) {
             selectedSession = nil
             selectedBusySlot = slot
+        }
+        .contextMenu {
+            Button("View Details") {
+                selectedSession = nil
+                selectedBusySlot = slot
+            }
         }
     }
     
@@ -435,9 +453,15 @@ extension TimelineView {
         }
         .frame(width: blockWidth, height: blockHeight)
         .position(x: centerX, y: centerY)
-        .onTapGesture {
+        .onTapGesture(count: 2) {
             selectedBusySlot = nil
             selectedSession = session
+        }
+        .contextMenu {
+            Button("View Details") {
+                selectedBusySlot = nil
+                selectedSession = session
+            }
         }
     }
     
@@ -452,6 +476,7 @@ extension TimelineView {
                     withAnimation(.easeOut(duration: 0.2)) {
                         selectedSession = nil
                         selectedBusySlot = nil
+                        resetEditingState()
                     }
                 }
             
@@ -514,12 +539,34 @@ extension TimelineView {
                 Image(systemName: "calendar")
                     .font(.system(size: 18))
                     .foregroundColor(slot.calendarColor)
-                Text(slot.title)
+                
+                // Inline editable title
+                if let editingTitle = editingTitle {
+                    TextField("Event title", text: Binding(
+                        get: { editingTitle },
+                        set: { self.editingTitle = $0 }
+                    ))
+                    .textFieldStyle(.plain)
                     .font(.system(size: 16, weight: .semibold))
                     .foregroundColor(.white)
+                    .focused($focusedField, equals: .title)
+                    .onSubmit {
+                        saveTitle(for: slot, newTitle: editingTitle)
+                    }
+                } else {
+                    Text(slot.title)
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundColor(.white)
+                        .onTapGesture {
+                            editingTitle = slot.title
+                            focusedField = .title
+                        }
+                }
+                
                 Spacer()
                 Button {
                     selectedBusySlot = nil
+                    resetEditingState()
                 } label: {
                     Image(systemName: "xmark.circle.fill")
                         .font(.system(size: 20))
@@ -534,18 +581,124 @@ extension TimelineView {
                 Label(timeRangeString(start: slot.startTime, end: slot.endTime), systemImage: "clock")
                 Label(slot.calendarName, systemImage: "tray")
                 
-                if let notes = slot.notes, !notes.isEmpty {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Divider().background(Color.white.opacity(0.1))
-                        Text("Notes:")
-                            .font(.system(size: 12, weight: .bold))
-                        Text(notes)
+                // Notes section with inline editing
+                VStack(alignment: .leading, spacing: 4) {
+                    Divider().background(Color.white.opacity(0.1))
+                    
+                    if let editingNotes = editingNotes {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("Notes:")
+                                .font(.system(size: 12, weight: .bold))
+                                .foregroundColor(.white.opacity(0.8))
+                            TextEditor(text: Binding(
+                                get: { editingNotes },
+                                set: { self.editingNotes = $0 }
+                            ))
                             .font(.system(size: 12))
+                            .foregroundColor(.white)
+                            .scrollContentBackground(.hidden)
+                            .background(Color.white.opacity(0.05))
+                            .cornerRadius(4)
+                            .frame(minHeight: 60, maxHeight: 100)
+                            .focused($focusedField, equals: .notes)
+                        }
+                    } else if let notes = slot.notes, !notes.isEmpty {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("Notes:")
+                                .font(.system(size: 12, weight: .bold))
+                            Text(notes)
+                                .font(.system(size: 12))
+                                .foregroundColor(.white.opacity(0.8))
+                        }
+                        .onTapGesture {
+                            editingNotes = notes
+                            focusedField = .notes
+                        }
+                    } else {
+                        Button {
+                            editingNotes = ""
+                            focusedField = .notes
+                        } label: {
+                            HStack(spacing: 4) {
+                                Image(systemName: "plus.circle")
+                                    .font(.system(size: 11))
+                                Text("Add note")
+                                    .font(.system(size: 12))
+                            }
+                            .foregroundColor(.white.opacity(0.5))
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                
+                // URL section with inline editing
+                VStack(alignment: .leading, spacing: 4) {
+                    Divider().background(Color.white.opacity(0.1))
+                    
+                    if let editingURL = editingURL {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("URL:")
+                                .font(.system(size: 12, weight: .bold))
+                                .foregroundColor(.white.opacity(0.8))
+                            TextField("https://example.com", text: Binding(
+                                get: { editingURL },
+                                set: { self.editingURL = $0 }
+                            ))
+                            .textFieldStyle(.plain)
+                            .font(.system(size: 11))
+                            .foregroundColor(.white.opacity(0.8))
+                            .padding(6)
+                            .background(Color.white.opacity(0.05))
+                            .cornerRadius(4)
+                            .focused($focusedField, equals: .url)
+                            .onSubmit {
+                                saveURL(for: slot, newURL: editingURL)
+                            }
+                        }
+                    } else if let url = slot.url {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("URL:")
+                                .font(.system(size: 12, weight: .bold))
+                            Link(url.absoluteString, destination: url)
+                                .font(.system(size: 11))
+                                .foregroundColor(Color(hex: "3B82F6"))
+                                .lineLimit(1)
+                        }
+                        .onTapGesture {
+                            editingURL = url.absoluteString
+                            focusedField = .url
+                        }
+                    } else {
+                        Button {
+                            editingURL = ""
+                            focusedField = .url
+                        } label: {
+                            HStack(spacing: 4) {
+                                Image(systemName: "plus.circle")
+                                    .font(.system(size: 11))
+                                Text("Add URL")
+                                    .font(.system(size: 12))
+                            }
+                            .foregroundColor(.white.opacity(0.5))
+                        }
+                        .buttonStyle(.plain)
                     }
                 }
             }
             .font(.system(size: 14))
             .foregroundColor(.white.opacity(0.8))
+        }
+        .onChange(of: focusedField) { oldValue, newValue in
+            // Auto-save when focus leaves a field
+            if oldValue == .title && newValue != .title, let title = editingTitle {
+                saveTitle(for: slot, newTitle: title)
+            }
+            if oldValue == .notes && newValue != .notes, let notes = editingNotes {
+                saveNotes(for: slot, newNotes: notes)
+            }
+            if oldValue == .url && newValue != .url, let urlString = editingURL {
+                saveURL(for: slot, newURL: urlString)
+            }
         }
     }
     
@@ -574,6 +727,82 @@ extension TimelineView {
         formatter.dateStyle = .none
         formatter.timeStyle = .short
         return "\(formatter.string(from: start)) - \(formatter.string(from: end))"
+    }
+    
+    // MARK: - Inline Editing Helpers
+    
+    private func saveTitle(for slot: BusyTimeSlot, newTitle: String) {
+        guard !newTitle.isEmpty else {
+            editingTitle = nil
+            return
+        }
+        
+        let success = calendarService.updateEvent(
+            eventId: slot.id,
+            title: newTitle,
+            notes: nil,
+            url: nil
+        )
+        
+        if success {
+            Task {
+                await calendarService.fetchEvents(for: selectedDate)
+                editingTitle = nil
+            }
+        }
+    }
+    
+    private func saveNotes(for slot: BusyTimeSlot, newNotes: String) {
+        let notesToSave = newNotes.isEmpty ? nil : newNotes
+        
+        let success = calendarService.updateEvent(
+            eventId: slot.id,
+            title: nil,
+            notes: notesToSave,
+            url: nil
+        )
+        
+        if success {
+            Task {
+                await calendarService.fetchEvents(for: selectedDate)
+                editingNotes = nil
+            }
+        }
+    }
+    
+    private func saveURL(for slot: BusyTimeSlot, newURL: String) {
+        let urlToSave: URL?
+        if newURL.isEmpty {
+            urlToSave = nil
+        } else {
+            // Try to create URL, add https:// if no scheme
+            var urlString = newURL.trimmingCharacters(in: .whitespaces)
+            if !urlString.hasPrefix("http://") && !urlString.hasPrefix("https://") {
+                urlString = "https://" + urlString
+            }
+            urlToSave = URL(string: urlString)
+        }
+        
+        let success = calendarService.updateEvent(
+            eventId: slot.id,
+            title: nil,
+            notes: nil,
+            url: urlToSave
+        )
+        
+        if success {
+            Task {
+                await calendarService.fetchEvents(for: selectedDate)
+                editingURL = nil
+            }
+        }
+    }
+    
+    private func resetEditingState() {
+        editingTitle = nil
+        editingNotes = nil
+        editingURL = nil
+        focusedField = nil
     }
 }
 

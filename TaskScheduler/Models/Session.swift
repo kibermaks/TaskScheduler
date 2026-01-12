@@ -74,6 +74,7 @@ struct BusyTimeSlot: Identifiable {
     let startTime: Date
     let endTime: Date
     let notes: String?
+    let url: URL?
     let calendarName: String
     let calendarColor: Color
     
@@ -83,6 +84,7 @@ struct BusyTimeSlot: Identifiable {
         self.startTime = event.startDate
         self.endTime = event.endDate
         self.notes = event.notes
+        self.url = event.url
         self.calendarName = event.calendar?.title ?? "Unknown"
         if let cgColor = event.calendar?.cgColor {
             self.calendarColor = Color(cgColor: cgColor)
@@ -91,12 +93,13 @@ struct BusyTimeSlot: Identifiable {
         }
     }
     
-    init(id: String = UUID().uuidString, title: String, startTime: Date, endTime: Date, notes: String? = nil, calendarName: String, calendarColor: Color = .gray) {
+    init(id: String = UUID().uuidString, title: String, startTime: Date, endTime: Date, notes: String? = nil, url: URL? = nil, calendarName: String, calendarColor: Color = .gray) {
         self.id = id
         self.title = title
         self.startTime = startTime
         self.endTime = endTime
         self.notes = notes
+        self.url = url
         self.calendarName = calendarName
         self.calendarColor = calendarColor
     }

@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct WelcomeScreen: View {
+    @AppStorage("hasSeenWelcome") private var hasSeenWelcome = false
     @Environment(\.dismiss) var dismiss
     @State private var currentPage = 0
     
@@ -33,7 +34,7 @@ struct WelcomeScreen: View {
     
     var body: some View {
         ZStack {
-            // Background
+            // Background gradient
             LinearGradient(
                 colors: [Color(hex: "0F172A"), Color(hex: "1E293B")],
                 startPoint: .topLeading,
@@ -41,11 +42,14 @@ struct WelcomeScreen: View {
             )
             .ignoresSafeArea()
             
+            // Main content container with frosted glass effect
             VStack(spacing: 10) {
                 // Header
                 HStack {
                     Spacer()
-                    Button { dismiss() } label: {
+                    Button { 
+                        handleClose()
+                    } label: {
                         Image(systemName: "xmark")
                             .font(.system(size: 14, weight: .bold))
                             .foregroundColor(.white.opacity(0.4))
@@ -53,6 +57,7 @@ struct WelcomeScreen: View {
                             .background(Circle().fill(Color.white.opacity(0.1)))
                     }
                     .buttonStyle(.plain)
+                    .keyboardShortcut(.escape, modifiers: [])
                 }
                 .padding(.horizontal, 24)
                 .padding(.top, 16)
@@ -70,6 +75,7 @@ struct WelcomeScreen: View {
                     }
                 }
                 .frame(maxHeight: .infinity)
+                .clipped()
                 
                 // Interactivity / Concepts
                 Group {
@@ -103,7 +109,7 @@ struct WelcomeScreen: View {
                     HStack(spacing: 16) {
                         if currentPage > 0 {
                             Button {
-                                withAnimation { currentPage -= 1 }
+                                handleBack()
                             } label: {
                                 Text("Back")
                                     .font(.system(size: 16, weight: .bold))
@@ -119,11 +125,7 @@ struct WelcomeScreen: View {
                         }
                         
                         Button {
-                            if currentPage < pages.count - 1 {
-                                withAnimation { currentPage += 1 }
-                            } else {
-                                dismiss()
-                            }
+                            handleNext()
                         } label: {
                             Text(currentPage == pages.count - 1 ? "Start Planning" : "Next")
                                 .font(.system(size: 16, weight: .bold))
@@ -137,12 +139,66 @@ struct WelcomeScreen: View {
                                 )
                         }
                         .buttonStyle(.plain)
+                        .keyboardShortcut(.defaultAction)
                     }
                 }
                 .padding(.bottom, 40)
             }
+            .background(
+                RoundedRectangle(cornerRadius: 20)
+                    .fill(Color(hex: "1E293B").opacity(0.95))
+                    .shadow(color: .black.opacity(0.3), radius: 30, y: 10)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 20)
+                    .stroke(
+                        LinearGradient(
+                            colors: [
+                                Color.white.opacity(0.2),
+                                Color.white.opacity(0.05)
+                            ],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        ),
+                        lineWidth: 1
+                    )
+            )
+            .padding(40)
+            .frame(width: 500, height: 750)
         }
-        .frame(width: 500, height: 750)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .focusable()
+        .focusEffectDisabled()
+        .onKeyPress(.space) { handleNext(); return .handled }
+        .onKeyPress(.return) { handleNext(); return .handled }
+        .onKeyPress(.escape) { handleClose(); return .handled }
+        .onKeyPress(.leftArrow) { handleBack(); return .handled }
+        .onKeyPress(.rightArrow) { handleNext(); return .handled }
+        .onAppear {
+            // Request focus when view appears
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                NSApp.keyWindow?.makeFirstResponder(nil)
+            }
+        }
+    }
+    
+    private func handleNext() {
+        if currentPage < pages.count - 1 {
+            withAnimation { currentPage += 1 }
+        } else {
+            handleClose()
+        }
+    }
+    
+    private func handleBack() {
+        if currentPage > 0 {
+            withAnimation { currentPage -= 1 }
+        }
+    }
+    
+    private func handleClose() {
+        hasSeenWelcome = true
+        // Don't call dismiss() - let ContentView handle the transition
     }
     
     private func pageView(for page: WelcomePage) -> some View {

@@ -1,6 +1,9 @@
 #!/bin/bash
 set -e
 
+# Start timer
+BUILD_START_TIME=$(date +%s)
+
 # Configuration
 SCHEME="TaskScheduler"
 PROJECT="TaskScheduler.xcodeproj"
@@ -122,7 +125,21 @@ if [ -n "$APP_PATH" ]; then
     
     cp -R "$APP_PATH" "./$APP_NAME"
     touch "./$APP_NAME"
+    
+    # Calculate build duration
+    BUILD_END_TIME=$(date +%s)
+    BUILD_DURATION=$((BUILD_END_TIME - BUILD_START_TIME))
+    BUILD_MINUTES=$((BUILD_DURATION / 60))
+    BUILD_SECONDS=$((BUILD_DURATION % 60))
+    
+    if [ $BUILD_MINUTES -gt 0 ]; then
+        DURATION_STR="${BUILD_MINUTES}m ${BUILD_SECONDS}s"
+    else
+        DURATION_STR="${BUILD_SECONDS}s"
+    fi
+    
     echo "🎉 Done! version $NEW_VERSION (build $NEW_BUILD_NUMBER) is ready in this folder."
+    echo "⏱️  Build completed in $DURATION_STR"
     open "./$APP_NAME"
 else
     echo "❌ Build failed. Could not find .app."

@@ -3,6 +3,7 @@ import SwiftUI
 struct TasksGuide: View {
     @Environment(\.dismiss) var dismiss
     @State private var currentPage = 0
+    @AppStorage("hasSeenTasksGuide") private var hasSeenTasksGuide = false
     
     let pages = [
         WelcomePage(
@@ -37,7 +38,9 @@ struct TasksGuide: View {
             VStack(spacing: 10) {
                 HStack {
                     Spacer()
-                    Button { dismiss() } label: {
+                    Button { 
+                        handleClose()
+                    } label: {
                         Image(systemName: "xmark")
                             .font(.system(size: 14, weight: .bold))
                             .foregroundColor(.white.opacity(0.4))
@@ -45,6 +48,7 @@ struct TasksGuide: View {
                             .background(Circle().fill(Color.white.opacity(0.1)))
                     }
                     .buttonStyle(.plain)
+                    .keyboardShortcut(.escape, modifiers: [])
                 }
                 .padding(.horizontal, 24)
                 .padding(.top, 16)
@@ -76,7 +80,7 @@ struct TasksGuide: View {
                     HStack(spacing: 16) {
                         if currentPage > 0 {
                             Button {
-                                withAnimation { currentPage -= 1 }
+                                handleBack()
                             } label: {
                                 Text("Back")
                                     .font(.system(size: 16, weight: .bold))
@@ -92,11 +96,7 @@ struct TasksGuide: View {
                         }
                         
                         Button {
-                            if currentPage < pages.count - 1 {
-                                withAnimation { currentPage += 1 }
-                            } else {
-                                dismiss()
-                            }
+                            handleNext()
                         } label: {
                             Text(currentPage == pages.count - 1 ? "Start Organizing" : "Next")
                                 .font(.system(size: 16, weight: .bold))
@@ -110,12 +110,44 @@ struct TasksGuide: View {
                                 )
                         }
                         .buttonStyle(.plain)
+                        .keyboardShortcut(.defaultAction)
                     }
                 }
                 .padding(.bottom, 40)
             }
         }
         .frame(width: 500, height: 600)
+        .focusable()
+        .onKeyPress(.space) { handleNext(); return .handled }
+        .onKeyPress(.return) { handleNext(); return .handled }
+        .onKeyPress(.escape) { handleClose(); return .handled }
+        .onKeyPress(.leftArrow) { handleBack(); return .handled }
+        .onKeyPress(.rightArrow) { handleNext(); return .handled }
+        .onAppear {
+            // Request focus when view appears
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                NSApp.keyWindow?.makeFirstResponder(nil)
+            }
+        }
+    }
+    
+    private func handleNext() {
+        if currentPage < pages.count - 1 {
+            withAnimation { currentPage += 1 }
+        } else {
+            handleClose()
+        }
+    }
+    
+    private func handleBack() {
+        if currentPage > 0 {
+            withAnimation { currentPage -= 1 }
+        }
+    }
+    
+    private func handleClose() {
+        hasSeenTasksGuide = true
+        dismiss()
     }
     
     private func pageView(for page: WelcomePage) -> some View {

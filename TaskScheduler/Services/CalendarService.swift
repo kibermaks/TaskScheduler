@@ -176,6 +176,34 @@ class CalendarService: ObservableObject {
         return (successCount, failCount)
     }
     
+    // MARK: - Event Update
+    
+    /// Updates an existing calendar event by its identifier
+    func updateEvent(eventId: String, title: String?, notes: String?, url: URL?) -> Bool {
+        guard let event = eventStore.event(withIdentifier: eventId) else {
+            errorMessage = "Event not found"
+            return false
+        }
+        
+        // Update properties
+        if let title = title {
+            event.title = title
+        }
+        if let notes = notes {
+            event.notes = notes
+        }
+        // URL can be set to nil to clear it
+        event.url = url
+        
+        do {
+            try eventStore.save(event, span: .thisEvent)
+            return true
+        } catch {
+            errorMessage = "Failed to update event: \(error.localizedDescription)"
+            return false
+        }
+    }
+    
     // MARK: - Count Existing Sessions
     
     func countExistingSessions(
@@ -274,9 +302,8 @@ class CalendarService: ObservableObject {
         }
         
         // Set color
-        if let nsColor = NSColor(color) as? NSColor { // Cast purely to avoid ambiguity if needed, though NSColor(Color) works
-             newCalendar.cgColor = nsColor.cgColor
-        }
+        let nsColor = NSColor(color)
+        newCalendar.cgColor = nsColor.cgColor
         
         do {
             try eventStore.saveCalendar(newCalendar, commit: true)
@@ -403,3 +430,4 @@ class CalendarService: ObservableObject {
         return (deletedCount, failedCount)
     }
 }
+

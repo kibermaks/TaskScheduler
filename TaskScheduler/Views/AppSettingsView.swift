@@ -6,8 +6,7 @@ struct AppSettingsView: View {
     @AppStorage("hasSeenWelcome") var hasSeenWelcome = false
     @AppStorage("hasSeenPatternsGuide") var hasSeenPatternsGuide = false
     @AppStorage("hasSeenTasksGuide") var hasSeenTasksGuide = false
-    
-    @State private var showDevSettings = false
+    @AppStorage("showDevSettings") private var showDevSettings = false
     
     var body: some View {
         Form {

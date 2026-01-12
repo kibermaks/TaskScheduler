@@ -35,14 +35,21 @@ struct ContentView: View {
     
     var body: some View {
         Group {
-            if calendarService.authorizationStatus != .fullAccess {
-                // Show permission screen if not authorized
+            if !hasSeenWelcome {
+                // First: Show welcome guide
+                WelcomeScreen()
+                    .onDisappear {
+                        // After welcome is dismissed, check permissions
+                        calendarService.checkAuthorizationStatus()
+                    }
+            } else if calendarService.authorizationStatus != .fullAccess {
+                // Second: Show permission screen if not authorized
                 CalendarPermissionView()
             } else if !hasCompletedSetup {
-                // Show setup screen after permission is granted
+                // Third: Show setup screen after permission is granted
                 CalendarSetupView()
             } else {
-                // Show main app once everything is ready
+                // Finally: Show main app once everything is ready
                 ContentViewBody(
                     selectedDate: $selectedDate,
                     startTime: $startTime,
@@ -64,6 +71,9 @@ struct ContentView: View {
                     showingTasksGuide: $showingTasksGuide
                 )
             }
+        }
+        .onAppear {
+            calendarService.checkAuthorizationStatus()
         }
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
             // Check permission status when app becomes active
@@ -152,13 +162,6 @@ struct ContentViewBody: View {
         }
         .sheet(isPresented: $showingTasksGuide) {
             TasksGuide()
-        }
-        .onAppear {
-            // Only show welcome screen after setup is complete
-            if !hasSeenWelcome {
-                showingWelcome = true
-                hasSeenWelcome = true
-            }
         }
         .onReceive(NotificationCenter.default.publisher(for: Notification.Name("ShowWelcomeScreen"))) { _ in
             showingWelcome = true
