@@ -118,6 +118,7 @@ struct PatternsGuide: View {
         }
         .frame(width: 500, height: 600)
         .focusable()
+        .focusEffectDisabled()
         .onKeyPress(.space) { handleNext(); return .handled }
         .onKeyPress(.return) { handleNext(); return .handled }
         .onKeyPress(.escape) { handleClose(); return .handled }

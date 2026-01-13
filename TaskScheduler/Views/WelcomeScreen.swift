@@ -32,6 +32,11 @@ struct WelcomeScreen: View {
         )
     ]
     
+    // Computed property to determine if shown from menu
+    private var isShownFromMenu: Bool {
+        hasSeenWelcome
+    }
+    
     var body: some View {
         ZStack {
             // Background gradient
@@ -42,7 +47,7 @@ struct WelcomeScreen: View {
             )
             .ignoresSafeArea()
             
-            // Main content container with frosted glass effect
+            // Main content container
             VStack(spacing: 10) {
                 // Header
                 HStack {
@@ -127,7 +132,7 @@ struct WelcomeScreen: View {
                         Button {
                             handleNext()
                         } label: {
-                            Text(currentPage == pages.count - 1 ? "Start Planning" : "Next")
+                            Text(currentPage == pages.count - 1 ? (isShownFromMenu ? "Got it" : "Start Planning") : "Next")
                                 .font(.system(size: 16, weight: .bold))
                                 .foregroundColor(.white)
                                 .frame(width: currentPage > 0 ? 180 : 280)
@@ -144,27 +149,7 @@ struct WelcomeScreen: View {
                 }
                 .padding(.bottom, 40)
             }
-            .background(
-                RoundedRectangle(cornerRadius: 20)
-                    .fill(Color(hex: "1E293B").opacity(0.95))
-                    .shadow(color: .black.opacity(0.3), radius: 30, y: 10)
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 20)
-                    .stroke(
-                        LinearGradient(
-                            colors: [
-                                Color.white.opacity(0.2),
-                                Color.white.opacity(0.05)
-                            ],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        ),
-                        lineWidth: 1
-                    )
-            )
-            .padding(40)
-            .frame(width: 500, height: 750)
+            .modifier(ContainerStyleModifier(isShownFromMenu: isShownFromMenu))
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .focusable()
@@ -197,8 +182,16 @@ struct WelcomeScreen: View {
     }
     
     private func handleClose() {
-        hasSeenWelcome = true
-        // Don't call dismiss() - let ContentView handle the transition
+        // If hasSeenWelcome is already true, we're being shown from menu (as a sheet)
+        // In that case, we need to dismiss the sheet
+        // If hasSeenWelcome is false, we're in onboarding, so set the flag and let ContentView handle the transition
+        if hasSeenWelcome {
+            // Shown from menu - dismiss the sheet
+            dismiss()
+        } else {
+            // Onboarding - set flag and let ContentView handle transition
+            hasSeenWelcome = true
+        }
     }
     
     private func pageView(for page: WelcomePage) -> some View {
@@ -331,6 +324,43 @@ struct WelcomeScreen: View {
             Text(label)
                 .font(.system(size: 10, weight: .medium))
                 .foregroundColor(.white.opacity(0.6))
+        }
+    }
+}
+
+// MARK: - Container Style Modifier
+struct ContainerStyleModifier: ViewModifier {
+    let isShownFromMenu: Bool
+    
+    func body(content: Content) -> some View {
+        if isShownFromMenu {
+            // Simple style like PatternsGuide when shown from menu
+            content
+                .frame(width: 500, height: 750)
+        } else {
+            // Frosted glass style for onboarding
+            content
+                .background(
+                    RoundedRectangle(cornerRadius: 20)
+                        .fill(Color(hex: "1E293B").opacity(0.95))
+                        .shadow(color: .black.opacity(0.3), radius: 30, y: 10)
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 20)
+                        .stroke(
+                            LinearGradient(
+                                colors: [
+                                    Color.white.opacity(0.2),
+                                    Color.white.opacity(0.05)
+                                ],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            ),
+                            lineWidth: 1
+                        )
+                )
+                .padding(40)
+                .frame(width: 500, height: 750)
         }
     }
 }
