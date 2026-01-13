@@ -206,9 +206,6 @@ struct ContentViewBody: View {
             // Calendar events changed externally (from Calendar.app)
             if autoPreview { updateProjectedSchedule() }
         }
-        .onChange(of: autoPreview) { _, enabled in
-            if enabled { updateProjectedSchedule() }
-        }
         .modifier(SettingsChangeModifier(autoPreview: autoPreview, updatePreview: updateProjectedSchedule))
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
             let calendar = Calendar.current
@@ -514,7 +511,16 @@ struct HeaderView: View {
             Spacer()
             startTimeControls
             Spacer()
-            autoToggle
+            // Settings Link
+            SettingsLink {
+                Image(systemName: "gearshape.fill")
+                    .font(.system(size: 16))
+                    .foregroundColor(.white.opacity(0.4))
+                    .padding(8)
+                    .background(RoundedRectangle(cornerRadius: 8).fill(Color.white.opacity(0.1)))
+            }
+            .buttonStyle(.plain)
+            .help("App Settings")
         }
         .padding(.horizontal, 24)
         .padding(.vertical, 16)
@@ -602,45 +608,6 @@ struct HeaderView: View {
         return formatter.string(from: date)
     }
     
-    private var autoToggle: some View {
-        HStack(spacing: 16) {
-            // Refresh Mode Button
-            Button {
-                autoPreview.toggle()
-            } label: {
-                HStack(spacing: 6) {
-                    Image(systemName: autoPreview ? "eye.fill" : "eye.slash.fill")
-                    Text(autoPreview ? "Auto Refresh" : "Manual Refresh")
-                        .font(.system(size: 13, weight: .medium))
-                }
-                .padding(.horizontal, 12)
-                .padding(.vertical, 8)
-                .background(
-                    RoundedRectangle(cornerRadius: 8)
-                        .fill(autoPreview ? Color(hex: "3B82F6") : Color.white.opacity(0.1))
-                        .shadow(color: .black.opacity(autoPreview ? 0.3 : 0), radius: 2, x: 0, y: 1)
-                )
-                .overlay(
-                    RoundedRectangle(cornerRadius: 8)
-                        .stroke(Color.white.opacity(autoPreview ? 0.3 : 0.1), lineWidth: 1)
-                )
-                .foregroundColor(autoPreview ? .white : .white.opacity(0.6))
-            }
-            .buttonStyle(.plain)
-            .help(autoPreview ? "Auto: App updates schedule as you change settings." : "Manual: Click to trigger update or switch to Auto.")
-            
-            // Settings Link
-            SettingsLink {
-                Image(systemName: "gearshape.fill")
-                    .font(.system(size: 16))
-                    .foregroundColor(.white.opacity(0.4))
-                    .padding(8)
-                    .background(RoundedRectangle(cornerRadius: 8).fill(Color.white.opacity(0.1)))
-            }
-            .buttonStyle(.plain)
-            .help("App Settings")
-        }
-    }
 }
 
 // MARK: - Left Panel
@@ -954,16 +921,6 @@ struct RightPanel: View {
         let paleRed = primaryRed.opacity(0.4)
         
         return VStack(spacing: 12) {
-            if !autoPreview {
-                Button(action: updatePreview) {
-                    HStack { Image(systemName: "eye.fill"); Text("Preview Schedule") }
-                        .font(.system(size: 15, weight: .semibold)).frame(maxWidth: .infinity).padding(.vertical, 12)
-                        .background(Color(hex: "3B82F6")).foregroundColor(.white).cornerRadius(10)
-                }
-                .buttonStyle(.plain)
-                .help("Generate a preview of the schedule based on current settings")
-            }
-            
             Button(action: createPlanningSession) {
                 HStack { Image(systemName: "calendar.badge.clock"); Text("Create Just Planning") }
                     .font(.system(size: 15, weight: .semibold)).frame(maxWidth: .infinity).padding(.vertical, 12)
