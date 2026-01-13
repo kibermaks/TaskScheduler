@@ -19,6 +19,9 @@ struct TimelineView: View {
     @State private var editingTitle: String?
     @State private var editingNotes: String?
     @State private var editingURL: String?
+    @State private var originalTitle: String?
+    @State private var originalNotes: String?
+    @State private var originalURL: String?
     @FocusState private var focusedField: EditField?
     
     enum EditField {
@@ -553,11 +556,16 @@ extension TimelineView {
                     .onSubmit {
                         saveTitle(for: slot, newTitle: editingTitle)
                     }
+                    .onKeyPress(.escape) {
+                        cancelTitleEdit()
+                        return .handled
+                    }
                 } else {
                     Text(slot.title)
                         .font(.system(size: 16, weight: .semibold))
                         .foregroundColor(.white)
                         .onTapGesture {
+                            originalTitle = slot.title
                             editingTitle = slot.title
                             focusedField = .title
                         }
@@ -601,6 +609,10 @@ extension TimelineView {
                             .cornerRadius(4)
                             .frame(minHeight: 60, maxHeight: 100)
                             .focused($focusedField, equals: .notes)
+                            .onKeyPress(.escape) {
+                                cancelNotesEdit()
+                                return .handled
+                            }
                         }
                     } else if let notes = slot.notes, !notes.isEmpty {
                         VStack(alignment: .leading, spacing: 4) {
@@ -611,11 +623,13 @@ extension TimelineView {
                                 .foregroundColor(.white.opacity(0.8))
                         }
                         .onTapGesture {
+                            originalNotes = notes
                             editingNotes = notes
                             focusedField = .notes
                         }
                     } else {
                         Button {
+                            originalNotes = ""
                             editingNotes = ""
                             focusedField = .notes
                         } label: {
@@ -654,6 +668,10 @@ extension TimelineView {
                             .onSubmit {
                                 saveURL(for: slot, newURL: editingURL)
                             }
+                            .onKeyPress(.escape) {
+                                cancelURLEdit()
+                                return .handled
+                            }
                         }
                     } else if let url = slot.url {
                         VStack(alignment: .leading, spacing: 4) {
@@ -665,11 +683,13 @@ extension TimelineView {
                                 .lineLimit(1)
                         }
                         .onTapGesture {
+                            originalURL = url.absoluteString
                             editingURL = url.absoluteString
                             focusedField = .url
                         }
                     } else {
                         Button {
+                            originalURL = ""
                             editingURL = ""
                             focusedField = .url
                         } label: {
@@ -732,8 +752,17 @@ extension TimelineView {
     // MARK: - Inline Editing Helpers
     
     private func saveTitle(for slot: BusyTimeSlot, newTitle: String) {
+        // Validate title is not empty
         guard !newTitle.isEmpty else {
             editingTitle = nil
+            originalTitle = nil
+            return
+        }
+        
+        // Only save if actually changed
+        guard newTitle != originalTitle else {
+            editingTitle = nil
+            originalTitle = nil
             return
         }
         
@@ -747,30 +776,58 @@ extension TimelineView {
         if success {
             Task {
                 await calendarService.fetchEvents(for: selectedDate)
+                // Update the selected slot with fresh data
+                if let updatedSlot = calendarService.busySlots.first(where: { $0.id == slot.id }) {
+                    selectedBusySlot = updatedSlot
+                }
                 editingTitle = nil
+                originalTitle = nil
             }
+        } else {
+            // On failure, exit edit mode but keep the popup open
+            editingTitle = nil
+            originalTitle = nil
         }
     }
     
     private func saveNotes(for slot: BusyTimeSlot, newNotes: String) {
-        let notesToSave = newNotes.isEmpty ? nil : newNotes
+        // Normalize empty strings to nil for comparison
+        let normalizedNew = newNotes.isEmpty ? nil : newNotes
+        let normalizedOriginal = originalNotes?.isEmpty == true ? nil : originalNotes
+        
+        // Only save if actually changed
+        guard normalizedNew != normalizedOriginal else {
+            editingNotes = nil
+            originalNotes = nil
+            return
+        }
         
         let success = calendarService.updateEvent(
             eventId: slot.id,
             title: nil,
-            notes: notesToSave,
+            notes: normalizedNew,
             url: nil
         )
         
         if success {
             Task {
                 await calendarService.fetchEvents(for: selectedDate)
+                // Update the selected slot with fresh data
+                if let updatedSlot = calendarService.busySlots.first(where: { $0.id == slot.id }) {
+                    selectedBusySlot = updatedSlot
+                }
                 editingNotes = nil
+                originalNotes = nil
             }
+        } else {
+            // On failure, exit edit mode but keep the popup open
+            editingNotes = nil
+            originalNotes = nil
         }
     }
     
     private func saveURL(for slot: BusyTimeSlot, newURL: String) {
+        // Normalize and prepare URL
         let urlToSave: URL?
         if newURL.isEmpty {
             urlToSave = nil
@@ -783,6 +840,16 @@ extension TimelineView {
             urlToSave = URL(string: urlString)
         }
         
+        // Only save if actually changed
+        let originalURLString = originalURL?.isEmpty == true ? nil : originalURL
+        let newURLString = newURL.isEmpty ? nil : newURL.trimmingCharacters(in: .whitespaces)
+        
+        guard newURLString != originalURLString else {
+            editingURL = nil
+            originalURL = nil
+            return
+        }
+        
         let success = calendarService.updateEvent(
             eventId: slot.id,
             title: nil,
@@ -793,8 +860,17 @@ extension TimelineView {
         if success {
             Task {
                 await calendarService.fetchEvents(for: selectedDate)
+                // Update the selected slot with fresh data
+                if let updatedSlot = calendarService.busySlots.first(where: { $0.id == slot.id }) {
+                    selectedBusySlot = updatedSlot
+                }
                 editingURL = nil
+                originalURL = nil
             }
+        } else {
+            // On failure, exit edit mode but keep the popup open
+            editingURL = nil
+            originalURL = nil
         }
     }
     
@@ -802,6 +878,27 @@ extension TimelineView {
         editingTitle = nil
         editingNotes = nil
         editingURL = nil
+        originalTitle = nil
+        originalNotes = nil
+        originalURL = nil
+        focusedField = nil
+    }
+    
+    private func cancelTitleEdit() {
+        editingTitle = nil
+        originalTitle = nil
+        focusedField = nil
+    }
+    
+    private func cancelNotesEdit() {
+        editingNotes = nil
+        originalNotes = nil
+        focusedField = nil
+    }
+    
+    private func cancelURLEdit() {
+        editingURL = nil
+        originalURL = nil
         focusedField = nil
     }
 }

@@ -75,25 +75,6 @@ struct SettingsPanel: View {
         }
         .background(Color.white.opacity(0.03))
         .cornerRadius(12)
-        .onChange(of: schedulingEngine.pattern) { _, _ in
-            triggerPatternsGuide()
-        }
-        .onChange(of: schedulingEngine.workSessionsPerCycle) { _, _ in
-            triggerPatternsGuide()
-        }
-        .onChange(of: schedulingEngine.sideSessionsPerCycle) { _, _ in
-            triggerPatternsGuide()
-        }
-        .onChange(of: schedulingEngine.sideFirst) { _, _ in
-            triggerPatternsGuide()
-        }
-    }
-    
-    private func triggerPatternsGuide() {
-        if !hasSeenPatternsGuide {
-            showingPatternsGuide = true
-            hasSeenPatternsGuide = true
-        }
     }
     
     // MARK: - Timeline Visibility Section
@@ -431,56 +412,93 @@ struct SettingsPanel: View {
                 }
             }
             
-            HStack {
-                Text("Pattern:")
-                    .font(.system(size: 13))
-                    .foregroundColor(.white.opacity(0.7))
-                Spacer()
-                Picker("", selection: $schedulingEngine.pattern) {
-                    ForEach(SchedulePattern.allCases) { pattern in
-                        HStack {
-                            Image(systemName: pattern.icon)
-                            Text(pattern.rawValue)
+            if !hasSeenPatternsGuide {
+                // Reveal options button with frosted glass effect
+                Button {
+                    showingPatternsGuide = true
+                    hasSeenPatternsGuide = true
+                } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: "sparkles")
+                            .font(.system(size: 12, weight: .semibold))
+                        Text("Reveal options")
+                            .font(.system(size: 13, weight: .semibold))
+                    }
+                    .foregroundColor(Color(hex: "10B981"))
+                    .padding(.vertical, 10)
+                    .padding(.horizontal, 20)
+                    .frame(maxWidth: .infinity)
+                    .background(
+                        RoundedRectangle(cornerRadius: 8)
+                            .fill(Color.white.opacity(0.05))
+                            .background(
+                                RoundedRectangle(cornerRadius: 8)
+                                    .fill(.ultraThinMaterial)
+                                    .opacity(0.5)
+                            )
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 8)
+                                    .stroke(Color(hex: "10B981").opacity(0.3), lineWidth: 1)
+                            )
+                    )
+                }
+                .buttonStyle(.plain)
+                .padding(.vertical, 8)
+            } else {
+                // Pattern options (shown after guide is seen)
+                VStack(alignment: .leading, spacing: 12) {
+                    HStack {
+                        Text("Pattern:")
+                            .font(.system(size: 13))
+                            .foregroundColor(.white.opacity(0.7))
+                        Spacer()
+                        Picker("", selection: $schedulingEngine.pattern) {
+                            ForEach(SchedulePattern.allCases) { pattern in
+                                HStack {
+                                    Image(systemName: pattern.icon)
+                                    Text(pattern.rawValue)
+                                }
+                                .tag(pattern)
+                            }
                         }
-                        .tag(pattern)
+                        .pickerStyle(.menu)
+                        .frame(width: 200)
+                    }
+                    
+                    Text(schedulingEngine.pattern.description)
+                        .font(.system(size: 11))
+                        .foregroundColor(.white.opacity(0.5))
+                    
+                    if [.alternating, .alternatingReverse, .customRatio].contains(schedulingEngine.pattern) {
+                        HStack {
+                            Text("Work per cycle:")
+                                .font(.system(size: 13))
+                                .foregroundColor(.white.opacity(0.7))
+                            
+                            Spacer()
+                            
+                            NumericInputField(value: $schedulingEngine.workSessionsPerCycle, range: 1...5)
+                        }
+                    }
+                    
+                    if schedulingEngine.pattern == .customRatio {
+                        HStack {
+                            Text("Side per cycle:")
+                                .font(.system(size: 13))
+                                .foregroundColor(.white.opacity(0.7))
+                            
+                            Spacer()
+                            
+                            NumericInputField(value: $schedulingEngine.sideSessionsPerCycle, range: 1...5)
+                        }
+                        
+                        Toggle("Side First", isOn: $schedulingEngine.sideFirst)
+                            .font(.system(size: 13))
+                            .foregroundColor(.white.opacity(0.7))
+                            .toggleStyle(.switch)
+                            .tint(Color(hex: "3B82F6"))
                     }
                 }
-                .pickerStyle(.menu)
-                .frame(width: 200)
-            }
-            
-            Text(schedulingEngine.pattern.description)
-                .font(.system(size: 11))
-                .foregroundColor(.white.opacity(0.5))
-            
-            if [.alternating, .alternatingReverse, .customRatio].contains(schedulingEngine.pattern) {
-                HStack {
-                    Text("Work per cycle:")
-                        .font(.system(size: 13))
-                        .foregroundColor(.white.opacity(0.7))
-                    
-                    Spacer()
-                    
-                    NumericInputField(value: $schedulingEngine.workSessionsPerCycle, range: 1...5)
-                }
-            }
-            
-            if schedulingEngine.pattern == .customRatio {
-                HStack {
-                    Text("Side per cycle:")
-                        .font(.system(size: 13))
-                        .foregroundColor(.white.opacity(0.7))
-                    
-                    Spacer()
-                    
-                    NumericInputField(value: $schedulingEngine.sideSessionsPerCycle, range: 1...5)
-                }
-                
-                Toggle("Side First", isOn: $schedulingEngine.sideFirst)
-                    .font(.system(size: 13))
-                    .foregroundColor(.white.opacity(0.7))
-                    .toggleStyle(.switch)
-                    .tint(Color(hex: "3B82F6"))
             }
         }
     }

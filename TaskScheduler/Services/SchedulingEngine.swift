@@ -556,12 +556,24 @@ class SchedulingEngine: ObservableObject {
             }
             
             // Found a slot
+            let calendar: String
+            switch type {
+            case .work:
+                calendar = workCalendarName
+            case .side:
+                calendar = sideCalendarName
+            case .deep:
+                calendar = deepSessionConfig.calendarName
+            case .planning:
+                calendar = workCalendarName // Planning uses work calendar
+            }
+            
             return ScheduledSession(
                 type: type,
                 title: type == .planning ? "Planning" : type.rawValue + " Session",
                 startTime: currentTime,
                 endTime: potentialEnd,
-                calendarName: workCalendarName,
+                calendarName: calendar,
                 notes: type == .work ? "#work" : (type == .side ? "#side" : (type == .planning ? "#plan" : "#deep"))
             )
         }

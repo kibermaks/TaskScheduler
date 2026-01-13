@@ -270,8 +270,16 @@ struct CalendarSetupView: View {
                 
                 Menu {
                     ForEach(calendarService.calendarNames(), id: \.self) { name in
-                        Button(name) {
+                        Button {
                             selectedCalendar.wrappedValue = name
+                        } label: {
+                            HStack(spacing: 10) {
+                                Circle()
+                                    .fill(calendarColor(for: name))
+                                    .frame(width: 12, height: 12)
+                                Text(name)
+                                    .foregroundColor(.primary)
+                            }
                         }
                     }
                 } label: {
@@ -305,7 +313,12 @@ struct CalendarSetupView: View {
     }
     
     private func menuLabelView(selectedCalendar: String, color: Color) -> some View {
-        HStack {
+        HStack(spacing: 10) {
+            if !selectedCalendar.isEmpty {
+                Circle()
+                    .fill(calendarColor(for: selectedCalendar))
+                    .frame(width: 12, height: 12)
+            }
             Text(selectedCalendar.isEmpty ? "Select a calendar..." : selectedCalendar)
                 .foregroundColor(selectedCalendar.isEmpty ? .white.opacity(0.5) : .white)
                 .font(.system(size: 14, weight: .medium))
@@ -325,6 +338,14 @@ struct CalendarSetupView: View {
                         .stroke(color.opacity(0.5), lineWidth: 2)
                 )
         )
+    }
+    
+    private func calendarColor(for name: String) -> Color {
+        guard let calendar = calendarService.getCalendar(named: name),
+              let cgColor = calendar.cgColor else {
+            return Color.gray
+        }
+        return Color(cgColor: cgColor)
     }
     
     private func loadAvailableCalendars() {
@@ -406,11 +427,18 @@ struct CalendarSetupView: View {
         
         isCompleting = true
         
-        // Save to scheduling engine (these will trigger saveState() via didSet)
+        // Initialize presets with the selected calendars (this is the key step!)
+        PresetStorage.shared.initializePresets(
+            workCalendar: selectedWorkCalendar,
+            sideCalendar: selectedSideCalendar,
+            deepCalendar: selectedDeepCalendar
+        )
+        
+        // Save to scheduling engine for backward compatibility
         schedulingEngine.workCalendarName = selectedWorkCalendar
         schedulingEngine.sideCalendarName = selectedSideCalendar
         
-        // Update deep session config (need to create a new instance to trigger didSet)
+        // Update deep session config
         var deepConfig = schedulingEngine.deepSessionConfig
         deepConfig.calendarName = selectedDeepCalendar
         schedulingEngine.deepSessionConfig = deepConfig

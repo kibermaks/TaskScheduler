@@ -92,6 +92,14 @@ struct AppSettingsView: View {
                         .font(.caption)
                         .foregroundColor(.secondary)
                     
+                    Button(role: .destructive, action: resetPresets) {
+                        Label("Reset Presets", systemImage: "trash.fill")
+                    }
+                    
+                    Text("This will erase all saved presets. Re-run Calendar Setup to recreate default presets with correct calendars.")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                    
                     Divider()
                     
                     Button(role: .destructive, action: resetCalendarPermissions) {
@@ -121,6 +129,13 @@ struct AppSettingsView: View {
         UserDefaults.standard.set(false, forKey: "TaskScheduler.HasCompletedSetup")
         // Post notification to trigger refresh in ContentView
         NotificationCenter.default.post(name: Notification.Name("ResetCalendarSetup"), object: nil)
+    }
+    
+    private func resetPresets() {
+        UserDefaults.standard.removeObject(forKey: "TaskScheduler.Presets")
+        UserDefaults.standard.removeObject(forKey: "TaskScheduler.LastActivePresetID")
+        // Post notification to reload presets
+        NotificationCenter.default.post(name: Notification.Name("PresetsReset"), object: nil)
     }
     
     private func resetCalendarPermissions() {

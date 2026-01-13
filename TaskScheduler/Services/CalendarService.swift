@@ -91,7 +91,7 @@ class CalendarService: ObservableObject {
     }
     
     func calendarNames() -> [String] {
-        return availableCalendars.map { $0.title }
+        return availableCalendars.map { $0.title }.sorted()
     }
     
     // MARK: - Event Fetching

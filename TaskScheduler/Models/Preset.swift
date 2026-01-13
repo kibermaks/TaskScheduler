@@ -218,6 +218,77 @@ struct Preset: Identifiable, Codable, Equatable {
         .weekend,
         .lightDay
     ]
+    
+    // MARK: - Create Initial Presets with Custom Calendars
+    /// Creates the initial set of presets with the user's selected calendar names from setup
+    static func createInitialPresets(
+        workCalendar: String,
+        sideCalendar: String,
+        deepCalendar: String
+    ) -> [Preset] {
+        let workMapping = CalendarMapping(
+            workCalendarName: workCalendar,
+            sideCalendarName: sideCalendar
+        )
+        
+        let deepConfig = DeepSessionConfig(
+            enabled: false,
+            sessionCount: 1,
+            injectAfterEvery: 3,
+            name: "Deep Session",
+            duration: 15,
+            calendarName: deepCalendar
+        )
+        
+        return [
+            Preset(
+                name: "Standard Workday",
+                icon: "briefcase.fill",
+                workSessionCount: 5,
+                sideSessionCount: 2,
+                pattern: .alternating,
+                deepSessionConfig: deepConfig,
+                calendarMapping: workMapping
+            ),
+            Preset(
+                name: "Focus Day",
+                icon: "brain.head.profile",
+                workSessionCount: 7,
+                sideSessionCount: 1,
+                workSessionDuration: 50,
+                restDuration: 10,
+                pattern: .allWorkFirst,
+                deepSessionConfig: deepConfig,
+                calendarMapping: workMapping
+            ),
+            Preset(
+                name: "Weekend",
+                icon: "sun.max.fill",
+                workSessionCount: 2,
+                sideSessionCount: 4,
+                workSessionName: "Weekend Work",
+                sideSessionName: "Weekend Side",
+                workSessionDuration: 30,
+                sideSessionDuration: 45,
+                schedulePlanning: false,
+                pattern: .allSideFirst,
+                deepSessionConfig: deepConfig,
+                calendarMapping: workMapping,
+                defaultStartHour: 10
+            ),
+            Preset(
+                name: "Light Day",
+                icon: "leaf.fill",
+                workSessionCount: 3,
+                sideSessionCount: 2,
+                workSessionDuration: 30,
+                restDuration: 30,
+                pattern: .alternating,
+                deepSessionConfig: deepConfig,
+                calendarMapping: workMapping
+            )
+        ]
+    }
 }
 
 // MARK: - Preset Storage Manager
@@ -234,8 +305,28 @@ class PresetStorage {
            !presets.isEmpty {
             return presets
         }
-        // If empty, return the initial defaults
-        return Preset.initialPresets
+        // Return empty - presets should be created after calendar setup
+        return []
+    }
+    
+    /// Check if presets have been initialized (saved to storage)
+    func hasInitializedPresets() -> Bool {
+        if let data = UserDefaults.standard.data(forKey: presetsKey),
+           let presets = try? JSONDecoder().decode([Preset].self, from: data),
+           !presets.isEmpty {
+            return true
+        }
+        return false
+    }
+    
+    /// Initialize presets with calendar names from setup
+    func initializePresets(workCalendar: String, sideCalendar: String, deepCalendar: String) {
+        let presets = Preset.createInitialPresets(
+            workCalendar: workCalendar,
+            sideCalendar: sideCalendar,
+            deepCalendar: deepCalendar
+        )
+        savePresets(presets)
     }
     
     func savePresets(_ presets: [Preset]) {
