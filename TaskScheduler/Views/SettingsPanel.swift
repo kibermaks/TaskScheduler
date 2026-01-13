@@ -285,12 +285,11 @@ struct SettingsPanel: View {
                 
                 Spacer()
                 
-                Picker("", selection: calendar) {
-                    ForEach(calendarService.calendarNames(), id: \.self) { name in
-                        Text(name).tag(name)
-                    }
-                }
-                .pickerStyle(.menu)
+                CalendarPickerCompact(
+                    selectedCalendar: calendar,
+                    calendars: calendarService.calendarInfoList(),
+                    accentColor: iconColor
+                )
                 .frame(width: 150)
             }
         }
@@ -368,22 +367,21 @@ struct SettingsPanel: View {
                      NumericInputField(value: $schedulingEngine.deepSessionConfig.duration, range: 5...120, step: 5, unit: "min")
                  }
                  
-                 HStack {
-                     Text("Calendar:")
-                         .font(.system(size: 13))
-                         .foregroundColor(.white.opacity(0.7))
-                     Spacer()
-                     Picker("", selection: $schedulingEngine.deepSessionConfig.calendarName) {
-                         ForEach(calendarService.calendarNames(), id: \.self) { name in
-                             Text(name).tag(name)
-                         }
-                     }
-                     .pickerStyle(.menu)
-                     .frame(width: 150)
-                 }
-             }
-        }
-    }
+                HStack {
+                    Text("Calendar:")
+                        .font(.system(size: 13))
+                        .foregroundColor(.white.opacity(0.7))
+                    Spacer()
+                    CalendarPickerCompact(
+                        selectedCalendar: $schedulingEngine.deepSessionConfig.calendarName,
+                        calendars: calendarService.calendarInfoList(),
+                        accentColor: Color(hex: "10B981")
+                    )
+                    .frame(width: 150)
+                }
+            }
+       }
+   }
     
     // MARK: - Pattern Section
     

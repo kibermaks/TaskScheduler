@@ -268,28 +268,11 @@ struct CalendarSetupView: View {
                     .textCase(.uppercase)
                     .tracking(0.5)
                 
-                Menu {
-                    ForEach(calendarService.calendarNames(), id: \.self) { name in
-                        Button {
-                            selectedCalendar.wrappedValue = name
-                        } label: {
-                            HStack(spacing: 10) {
-                                Circle()
-                                    .fill(calendarColor(for: name))
-                                    .frame(width: 12, height: 12)
-                                Text(name)
-                                    .foregroundColor(.primary)
-                            }
-                        }
-                    }
-                } label: {
-                    menuLabelView(
-                        selectedCalendar: selectedCalendar.wrappedValue,
-                        color: color
-                    )
-                }
-                .buttonStyle(.plain)
-                .focusable(false)
+                CalendarPickerPopover(
+                    selectedCalendar: selectedCalendar,
+                    calendars: calendarService.calendarInfoList(),
+                    accentColor: color
+                )
             }
         }
         .padding(26)
@@ -310,42 +293,6 @@ struct CalendarSetupView: View {
                 .shadow(color: color.opacity(0.15), radius: 12, y: 6)
         )
         .padding(.horizontal, 32)
-    }
-    
-    private func menuLabelView(selectedCalendar: String, color: Color) -> some View {
-        HStack(spacing: 10) {
-            if !selectedCalendar.isEmpty {
-                Circle()
-                    .fill(calendarColor(for: selectedCalendar))
-                    .frame(width: 12, height: 12)
-            }
-            Text(selectedCalendar.isEmpty ? "Select a calendar..." : selectedCalendar)
-                .foregroundColor(selectedCalendar.isEmpty ? .white.opacity(0.5) : .white)
-                .font(.system(size: 14, weight: .medium))
-            Spacer()
-            Image(systemName: "chevron.up.chevron.down")
-                .font(.system(size: 12, weight: .semibold))
-                .foregroundColor(.white.opacity(0.6))
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.horizontal, 16)
-        .padding(.vertical, 12)
-        .background(
-            RoundedRectangle(cornerRadius: 10)
-                .fill(Color(hex: "0F172A").opacity(0.6))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 10)
-                        .stroke(color.opacity(0.5), lineWidth: 2)
-                )
-        )
-    }
-    
-    private func calendarColor(for name: String) -> Color {
-        guard let calendar = calendarService.getCalendar(named: name),
-              let cgColor = calendar.cgColor else {
-            return Color.gray
-        }
-        return Color(cgColor: cgColor)
     }
     
     private func loadAvailableCalendars() {
