@@ -94,6 +94,34 @@ class CalendarService: ObservableObject {
         return availableCalendars.map { $0.title }.sorted()
     }
     
+    struct CalendarInfo: Identifiable {
+        let id: String
+        let name: String
+        let color: Color
+        
+        init(name: String, color: Color) {
+            self.id = name
+            self.name = name
+            self.color = color
+        }
+    }
+    
+    func calendarInfoList() -> [CalendarInfo] {
+        return availableCalendars
+            .sorted { $0.title < $1.title }
+            .map { calendar in
+                let color: Color
+                if let cgColor = calendar.cgColor {
+                    // Convert CGColor -> NSColor -> SwiftUI Color for reliable conversion
+                    let nsColor = NSColor(cgColor: cgColor) ?? NSColor.gray
+                    color = Color(nsColor: nsColor)
+                } else {
+                    color = Color.gray
+                }
+                return CalendarInfo(name: calendar.title, color: color)
+            }
+    }
+    
     // MARK: - Event Fetching
     
     func fetchEvents(for date: Date) async {
