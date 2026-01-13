@@ -11,28 +11,53 @@ BUILD_DIR="./build_output"
 # Team ID found in project.pbxproj
 TEAM_ID="252H5L8A2H"
 
-# Function to get current marketing version
+# Function to get current marketing version directly from project file
 get_version() {
-    # Try agvtool first
-    local ver=$(agvtool what-marketing-version -terse1 2>/dev/null || true)
-    
-    # If empty, try grep from project file (fallback)
-    if [ -z "$ver" ]; then
-        ver=$(grep "MARKETING_VERSION =" "$PROJECT/project.pbxproj" | head -n 1 | sed 's/.*= //;s/;//' | tr -d '[:space:]')
-    fi
-    
-    echo "$ver"
+    grep "MARKETING_VERSION =" "$PROJECT/project.pbxproj" | head -n 1 | sed 's/.*= //;s/;//' | tr -d '[:space:]'
 }
 
-# Determine increment type
+# Function to set marketing version directly in project file
+set_version() {
+    local new_ver="$1"
+    # Update all MARKETING_VERSION entries in project.pbxproj
+    sed -i '' "s/MARKETING_VERSION = [0-9.]*;/MARKETING_VERSION = $new_ver;/g" "$PROJECT/project.pbxproj"
+}
+
+# Function to get current build number from project file
+get_build_number() {
+    grep "CURRENT_PROJECT_VERSION =" "$PROJECT/project.pbxproj" | head -n 1 | sed 's/.*= //;s/;//' | tr -d '[:space:]'
+}
+
+# Function to set build number directly in project file
+set_build_number() {
+    local new_build="$1"
+    sed -i '' "s/CURRENT_PROJECT_VERSION = [0-9]*;/CURRENT_PROJECT_VERSION = $new_build;/g" "$PROJECT/project.pbxproj"
+}
+
+# Determine increment type or forced version
 INCREMENT_TYPE="patch"
+FORCED_VERSION=""
+
 if [[ "$1" == "major" ]]; then
     INCREMENT_TYPE="major"
 elif [[ "$1" == "minor" ]]; then
     INCREMENT_TYPE="minor"
+elif [[ "$1" == "version" && -n "$2" ]]; then
+    # Validate version format (e.g., 1.4, 2.0, 10.12)
+    if [[ "$2" =~ ^[0-9]+\.[0-9]+$ ]]; then
+        INCREMENT_TYPE="forced"
+        FORCED_VERSION="$2"
+    else
+        echo "❌ Invalid version format. Use: ./build_app.sh version X.Y (e.g., version 1.4)"
+        exit 1
+    fi
 fi
 
-echo "📋 Preparing to build ($INCREMENT_TYPE increment)..."
+if [ "$INCREMENT_TYPE" == "forced" ]; then
+    echo "📋 Preparing to build (forcing version $FORCED_VERSION)..."
+else
+    echo "📋 Preparing to build ($INCREMENT_TYPE increment)..."
+fi
 
 # 0. Clean Build Directory
 if [ -d "$BUILD_DIR" ]; then
@@ -56,7 +81,12 @@ minor="${parts[1]:-0}"
 NEW_VERSION="$CURRENT_VERSION"
 VERSION_CHANGED=false
 
-if [ "$INCREMENT_TYPE" == "major" ]; then
+if [ "$INCREMENT_TYPE" == "forced" ]; then
+    NEW_VERSION="$FORCED_VERSION"
+    if [ "$NEW_VERSION" != "$CURRENT_VERSION" ]; then
+        VERSION_CHANGED=true
+    fi
+elif [ "$INCREMENT_TYPE" == "major" ]; then
     major=$((major + 1))
     minor=0
     NEW_VERSION="$major.$minor"
@@ -74,18 +104,17 @@ fi
 if [ "$VERSION_CHANGED" = true ]; then
     echo "   New Version:     $NEW_VERSION"
     echo "🔧 Updating Project Version..."
-    xcrun agvtool new-marketing-version "$NEW_VERSION" > /dev/null
+    set_version "$NEW_VERSION"
+    echo "   ✓ Updated MARKETING_VERSION in project.pbxproj"
 else
     echo "   Version remains: $NEW_VERSION"
 fi
 
 # 4. Increment Build Number (Project Version)
 echo "🔧 Incrementing Build Number..."
-# agvtool next-version handles the increment of CURRENT_PROJECT_VERSION
-xcrun agvtool next-version -all > /dev/null
-
-# Capture the new build number
-NEW_BUILD_NUMBER=$(agvtool what-version -terse)
+CURRENT_BUILD=$(get_build_number)
+NEW_BUILD_NUMBER=$((CURRENT_BUILD + 1))
+set_build_number "$NEW_BUILD_NUMBER"
 echo "   New Build Number: $NEW_BUILD_NUMBER"
 
 # 5. Build
