@@ -207,21 +207,29 @@ class CalendarService: ObservableObject {
     // MARK: - Event Update
     
     /// Updates an existing calendar event by its identifier
-    func updateEvent(eventId: String, title: String?, notes: String?, url: URL?) -> Bool {
+    /// - Parameters:
+    ///   - eventId: The event identifier
+    ///   - title: New title (nil = don't change)
+    ///   - notes: New notes (nil = don't change)
+    ///   - url: New URL (only used when updateURL is true)
+    ///   - updateURL: If true, update the URL field (can set to nil to clear)
+    func updateEvent(eventId: String, title: String?, notes: String?, url: URL?, updateURL: Bool = false) -> Bool {
         guard let event = eventStore.event(withIdentifier: eventId) else {
             errorMessage = "Event not found"
             return false
         }
         
-        // Update properties
+        // Update properties only if provided
         if let title = title {
             event.title = title
         }
         if let notes = notes {
             event.notes = notes
         }
-        // URL can be set to nil to clear it
-        event.url = url
+        // Only update URL when explicitly requested
+        if updateURL {
+            event.url = url
+        }
         
         do {
             try eventStore.save(event, span: .thisEvent)
@@ -271,22 +279,15 @@ class CalendarService: ObservableObject {
             }
             
             let notes = (event.notes ?? "").lowercased()
-            let calName = event.calendar?.title ?? ""
             
+            // Only count events that have explicit hashtags in their notes
+            // Events without tags are not counted as aware sessions
             if notes.contains("#work") {
                 workCount += 1
             } else if notes.contains("#side") {
                 sideCount += 1
             } else if notes.contains("#deep") {
                 deepCount += 1
-            } else {
-                if calName == workCalendar {
-                    workCount += 1
-                } else if calName == sideCalendar {
-                    sideCount += 1
-                } else if let deep = deepConfig, deep.enabled, calName == deep.calendarName {
-                    deepCount += 1
-                }
             }
         }
         
