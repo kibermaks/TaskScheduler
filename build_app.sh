@@ -167,10 +167,12 @@ if [ -n "$APP_PATH" ]; then
         DURATION_STR="${BUILD_SECONDS}s"
     fi
     
+    CURRENT_TIME=$(date +"%Y-%m-%d %H:%M:%S")
+
     echo "🎉 Done! version $NEW_VERSION (build $NEW_BUILD_NUMBER) is ready in this folder."
-    echo "⏱️  Build completed in $DURATION_STR"
+    echo "⏱️ [$CURRENT_TIME] Build completed in $DURATION_STR"
     open "./$APP_NAME"
 else
-    echo "❌ Build failed. Could not find .app."
+    echo "❌ [$CURRENT_TIME] Build failed. Could not find .app."
     exit 1
 fi
