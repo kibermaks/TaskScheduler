@@ -320,6 +320,7 @@ class SchedulingEngine: ObservableObject {
             
             if let conflictEnd = conflict {
                 if !planningNeeded && !isDeep {
+                    // Try swapping work <-> side when one doesn't fit
                     if let alt = tryAlternativeSession(
                         currentTime: currentTime,
                         conflictEnd: conflictEnd,
@@ -343,6 +344,37 @@ class SchedulingEngine: ObservableObject {
                             projectedSideCount += 1
                         }
                         regularSessionsScheduled += 1
+                        let appliedRest = alt.type == .side ? sideRestDuration : restDuration
+                        currentTime = roundToNextInterval(alt.endTime.addingTimeInterval(TimeInterval(appliedRest * 60)))
+                        continue
+                    }
+                } else if isDeep {
+                    // Deep session can't fit - try to fill the gap with work/side instead
+                    // The deep session will be rescheduled after we have more regular sessions
+                    if let alt = tryFillGapWithRegularSession(
+                        currentTime: currentTime,
+                        workCount: workCount,
+                        sideCount: sideCount,
+                        busySlots: busySlots,
+                        buffer: bufferDuration,
+                        endOfDay: endOfDay,
+                        workTitles: workTitles,
+                        sideTitles: sideTitles,
+                        projectedWorkCount: projectedWorkCount,
+                        projectedSideCount: projectedSideCount,
+                        sessionIndex: sessionIndex,
+                        sessionOrder: sessionOrder
+                    ) {
+                        sessions.append(alt)
+                        if alt.type == .work {
+                            workCount += 1
+                            projectedWorkCount += 1
+                        } else {
+                            sideCount += 1
+                            projectedSideCount += 1
+                        }
+                        regularSessionsScheduled += 1
+                        sessionIndex += 1
                         let appliedRest = alt.type == .side ? sideRestDuration : restDuration
                         currentTime = roundToNextInterval(alt.endTime.addingTimeInterval(TimeInterval(appliedRest * 60)))
                         continue
@@ -477,6 +509,88 @@ class SchedulingEngine: ObservableObject {
                 calendarName: alternativeCalendar,
                 notes: alternativeType == .work ? "#work" : "#side"
             )
+        }
+        
+        return nil
+    }
+    
+    // MARK: - Try Fill Gap With Regular Session (when Deep can't fit)
+    
+    /// When a deep session can't fit due to a conflict, try to fill the gap with work/side sessions
+    private func tryFillGapWithRegularSession(
+        currentTime: Date,
+        workCount: Int,
+        sideCount: Int,
+        busySlots: [BusyTimeSlot],
+        buffer: TimeInterval,
+        endOfDay: Date,
+        workTitles: [String],
+        sideTitles: [String],
+        projectedWorkCount: Int,
+        projectedSideCount: Int,
+        sessionIndex: Int,
+        sessionOrder: [SessionType]
+    ) -> ScheduledSession? {
+        // Check if we still need work or side sessions
+        let needWork = workCount < workSessions
+        let needSide = sideCount < sideSessions
+        
+        if !needWork && !needSide {
+            return nil
+        }
+        
+        // Determine preferred order based on pattern
+        var sessionsToTry: [(SessionType, Int, String, String)] = []
+        
+        // Check what the next session in order would be
+        if sessionIndex < sessionOrder.count {
+            let preferredType = sessionOrder[sessionIndex]
+            if preferredType == .work && needWork {
+                let title = (useWorkTasks && projectedWorkCount < workTitles.count) ? workTitles[projectedWorkCount] : workSessionName
+                sessionsToTry.append((.work, workSessionDuration, workCalendarName, title))
+            } else if preferredType == .side && needSide {
+                let title = (useSideTasks && projectedSideCount < sideTitles.count) ? sideTitles[projectedSideCount] : sideSessionName
+                sessionsToTry.append((.side, sideSessionDuration, sideCalendarName, title))
+            }
+        }
+        
+        // Add alternatives if we still need them
+        if needWork && !sessionsToTry.contains(where: { $0.0 == .work }) {
+            let title = (useWorkTasks && projectedWorkCount < workTitles.count) ? workTitles[projectedWorkCount] : workSessionName
+            sessionsToTry.append((.work, workSessionDuration, workCalendarName, title))
+        }
+        if needSide && !sessionsToTry.contains(where: { $0.0 == .side }) {
+            let title = (useSideTasks && projectedSideCount < sideTitles.count) ? sideTitles[projectedSideCount] : sideSessionName
+            sessionsToTry.append((.side, sideSessionDuration, sideCalendarName, title))
+        }
+        
+        // Try each session type
+        for (sessionType, duration, calendarName, title) in sessionsToTry {
+            let potentialEnd = currentTime.addingTimeInterval(TimeInterval(duration * 60))
+            
+            // Check if fits before day end
+            if potentialEnd > endOfDay {
+                continue
+            }
+            
+            // Check for conflicts
+            let conflict = findConflict(
+                start: currentTime,
+                end: potentialEnd,
+                busySlots: busySlots,
+                buffer: buffer
+            )
+            
+            if conflict == nil {
+                return ScheduledSession(
+                    type: sessionType,
+                    title: title,
+                    startTime: currentTime,
+                    endTime: potentialEnd,
+                    calendarName: calendarName,
+                    notes: sessionType == .work ? "#work" : "#side"
+                )
+            }
         }
         
         return nil
