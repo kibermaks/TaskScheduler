@@ -16,12 +16,16 @@ struct TimelineView: View {
     @State private var selectedBusySlot: BusyTimeSlot?
     
     // Inline Editing State (only for BusyTimeSlot)
-    @State private var editingTitle: String?
-    @State private var editingNotes: String?
-    @State private var editingURL: String?
-    @State private var originalTitle: String?
-    @State private var originalNotes: String?
-    @State private var originalURL: String?
+    @State private var isEditingTitle = false
+    @State private var isEditingNotes = false
+    @State private var isEditingURL = false
+    @State private var editingTitle: String = ""
+    @State private var editingNotes: String = ""
+    @State private var editingURL: String = ""
+    @State private var originalTitle: String = ""
+    @State private var originalNotes: String = ""
+    @State private var originalURL: String = ""
+    @State private var isCanceling = false
     @FocusState private var focusedField: EditField?
     
     enum EditField {
@@ -365,7 +369,8 @@ extension TimelineView {
                 Text(slot.title)
                     .font(.system(size: 12, weight: .medium))
                     .foregroundColor(.white)
-                    .lineLimit(1)
+                    .lineLimit(nil)
+                    .fixedSize(horizontal: false, vertical: true)
                 
                 if height > 25 {
                     Text(timeRangeString(start: slot.startTime, end: slot.endTime))
@@ -373,11 +378,20 @@ extension TimelineView {
                         .foregroundColor(.white.opacity(0.7))
                 }
                 
+                if let url = slot.url, height > 40 {
+                    Text(url.absoluteString)
+                        .font(.system(size: 9))
+                        .foregroundColor(Color(hex: "3B82F6"))
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                }
+                
                 if let notes = slot.notes, !notes.isEmpty, height > 45 {
                     Text(notes)
                         .font(.system(size: 9))
                         .foregroundColor(.white.opacity(0.8))
-                        .lineLimit(1)
+                        .lineLimit(nil)
+                        .fixedSize(horizontal: false, vertical: false)
                 }
             }
             .padding(4)
@@ -426,18 +440,21 @@ extension TimelineView {
                         .font(.system(size: 10))
                     Text(session.title)
                         .font(.system(size: 11, weight: .medium))
-                        .lineLimit(1)
+                        .lineLimit(2)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
                 .foregroundColor(.white)
                 .padding(3)
             } else {
                 VStack(alignment: .leading, spacing: 2) {
-                    HStack(spacing: 3) {
+                    HStack(alignment: .top, spacing: 3) {
                         Image(systemName: session.type.icon)
                             .font(.system(size: 11))
+                            .padding(.top, 1)
                         Text(session.title)
                             .font(.system(size: 12, weight: .semibold))
-                            .lineLimit(1)
+                            .lineLimit(nil)
+                            .fixedSize(horizontal: false, vertical: true)
                     }
                     .foregroundColor(.white)
                     
@@ -544,29 +561,29 @@ extension TimelineView {
                     .foregroundColor(slot.calendarColor)
                 
                 // Inline editable title
-                if let editingTitle = editingTitle {
-                    TextField("Event title", text: Binding(
-                        get: { editingTitle },
-                        set: { self.editingTitle = $0 }
-                    ))
-                    .textFieldStyle(.plain)
-                    .font(.system(size: 16, weight: .semibold))
-                    .foregroundColor(.white)
-                    .focused($focusedField, equals: .title)
-                    .onSubmit {
-                        saveTitle(for: slot, newTitle: editingTitle)
-                    }
-                    .onKeyPress(.escape) {
-                        cancelTitleEdit()
-                        return .handled
-                    }
+                if isEditingTitle {
+                    TextField("Event title", text: $editingTitle)
+                        .textFieldStyle(.plain)
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundColor(.white)
+                        .focused($focusedField, equals: .title)
+                        .onSubmit {
+                            saveTitle(for: slot)
+                        }
+                        .onKeyPress(.escape) {
+                            cancelTitleEdit()
+                            return .handled
+                        }
                 } else {
                     Text(slot.title)
                         .font(.system(size: 16, weight: .semibold))
                         .foregroundColor(.white)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .contentShape(Rectangle())
                         .onTapGesture {
                             originalTitle = slot.title
                             editingTitle = slot.title
+                            isEditingTitle = true
                             focusedField = .title
                         }
                 }
@@ -586,33 +603,53 @@ extension TimelineView {
             Divider().background(Color.white.opacity(0.1))
             
             VStack(alignment: .leading, spacing: 10) {
-                Label(timeRangeString(start: slot.startTime, end: slot.endTime), systemImage: "clock")
-                Label(slot.calendarName, systemImage: "tray")
+                HStack(spacing: 8) {
+                    Image(systemName: "clock")
+                        .frame(width: 16)
+                    Text(timeRangeString(start: slot.startTime, end: slot.endTime))
+                }
+                .help("To change time, use Calendar app")
+                
+                HStack(spacing: 8) {
+                    Image(systemName: "tray")
+                        .frame(width: 16)
+                    Text(slot.calendarName)
+                }
+                .help("To change calendar, use Calendar app")
                 
                 // Notes section with inline editing
                 VStack(alignment: .leading, spacing: 4) {
                     Divider().background(Color.white.opacity(0.1))
                     
-                    if let editingNotes = editingNotes {
+                    if isEditingNotes {
                         VStack(alignment: .leading, spacing: 4) {
                             Text("Notes:")
                                 .font(.system(size: 12, weight: .bold))
                                 .foregroundColor(.white.opacity(0.8))
-                            TextEditor(text: Binding(
-                                get: { editingNotes },
-                                set: { self.editingNotes = $0 }
-                            ))
-                            .font(.system(size: 12))
-                            .foregroundColor(.white)
-                            .scrollContentBackground(.hidden)
-                            .background(Color.white.opacity(0.05))
-                            .cornerRadius(4)
-                            .frame(minHeight: 60, maxHeight: 100)
-                            .focused($focusedField, equals: .notes)
-                            .onKeyPress(.escape) {
-                                cancelNotesEdit()
-                                return .handled
-                            }
+                            TextEditor(text: $editingNotes)
+                                .font(.system(size: 12))
+                                .foregroundColor(.white)
+                                .scrollContentBackground(.hidden)
+                                .background(Color.white.opacity(0.05))
+                                .cornerRadius(4)
+                                .frame(minHeight: 60, maxHeight: 100)
+                                .focused($focusedField, equals: .notes)
+                                .onKeyPress(.escape) {
+                                    cancelNotesEdit()
+                                    return .handled
+                                }
+                                .onKeyPress(phases: .down) { press in
+                                    // ENTER without modifiers = save
+                                    if press.key == .return && press.modifiers.isEmpty {
+                                        saveNotes(for: slot)
+                                        return .handled
+                                    }
+                                    // SHIFT+ENTER = insert newline (let through)
+                                    if press.key == .return && press.modifiers.contains(.shift) {
+                                        return .ignored
+                                    }
+                                    return .ignored
+                                }
                         }
                     } else if let notes = slot.notes, !notes.isEmpty {
                         VStack(alignment: .leading, spacing: 4) {
@@ -622,26 +659,30 @@ extension TimelineView {
                                 .font(.system(size: 12))
                                 .foregroundColor(.white.opacity(0.8))
                         }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .contentShape(Rectangle())
                         .onTapGesture {
                             originalNotes = notes
                             editingNotes = notes
+                            isEditingNotes = true
                             focusedField = .notes
                         }
                     } else {
-                        Button {
+                        HStack(spacing: 4) {
+                            Image(systemName: "plus.circle")
+                                .font(.system(size: 11))
+                            Text("Add note")
+                                .font(.system(size: 12))
+                        }
+                        .foregroundColor(.white.opacity(0.5))
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .contentShape(Rectangle())
+                        .onTapGesture {
                             originalNotes = ""
                             editingNotes = ""
+                            isEditingNotes = true
                             focusedField = .notes
-                        } label: {
-                            HStack(spacing: 4) {
-                                Image(systemName: "plus.circle")
-                                    .font(.system(size: 11))
-                                Text("Add note")
-                                    .font(.system(size: 12))
-                            }
-                            .foregroundColor(.white.opacity(0.5))
                         }
-                        .buttonStyle(.plain)
                     }
                 }
                 
@@ -649,29 +690,26 @@ extension TimelineView {
                 VStack(alignment: .leading, spacing: 4) {
                     Divider().background(Color.white.opacity(0.1))
                     
-                    if let editingURL = editingURL {
+                    if isEditingURL {
                         VStack(alignment: .leading, spacing: 4) {
                             Text("URL:")
                                 .font(.system(size: 12, weight: .bold))
                                 .foregroundColor(.white.opacity(0.8))
-                            TextField("https://example.com", text: Binding(
-                                get: { editingURL },
-                                set: { self.editingURL = $0 }
-                            ))
-                            .textFieldStyle(.plain)
-                            .font(.system(size: 11))
-                            .foregroundColor(.white.opacity(0.8))
-                            .padding(6)
-                            .background(Color.white.opacity(0.05))
-                            .cornerRadius(4)
-                            .focused($focusedField, equals: .url)
-                            .onSubmit {
-                                saveURL(for: slot, newURL: editingURL)
-                            }
-                            .onKeyPress(.escape) {
-                                cancelURLEdit()
-                                return .handled
-                            }
+                            TextField("https://example.com", text: $editingURL)
+                                .textFieldStyle(.plain)
+                                .font(.system(size: 11))
+                                .foregroundColor(.white.opacity(0.8))
+                                .padding(6)
+                                .background(Color.white.opacity(0.05))
+                                .cornerRadius(4)
+                                .focused($focusedField, equals: .url)
+                                .onSubmit {
+                                    saveURL(for: slot)
+                                }
+                                .onKeyPress(.escape) {
+                                    cancelURLEdit()
+                                    return .handled
+                                }
                         }
                     } else if let url = slot.url {
                         VStack(alignment: .leading, spacing: 4) {
@@ -682,26 +720,30 @@ extension TimelineView {
                                 .foregroundColor(Color(hex: "3B82F6"))
                                 .lineLimit(1)
                         }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .contentShape(Rectangle())
                         .onTapGesture {
                             originalURL = url.absoluteString
                             editingURL = url.absoluteString
+                            isEditingURL = true
                             focusedField = .url
                         }
                     } else {
-                        Button {
+                        HStack(spacing: 4) {
+                            Image(systemName: "plus.circle")
+                                .font(.system(size: 11))
+                            Text("Add URL")
+                                .font(.system(size: 12))
+                        }
+                        .foregroundColor(.white.opacity(0.5))
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .contentShape(Rectangle())
+                        .onTapGesture {
                             originalURL = ""
                             editingURL = ""
+                            isEditingURL = true
                             focusedField = .url
-                        } label: {
-                            HStack(spacing: 4) {
-                                Image(systemName: "plus.circle")
-                                    .font(.system(size: 11))
-                                Text("Add URL")
-                                    .font(.system(size: 12))
-                            }
-                            .foregroundColor(.white.opacity(0.5))
                         }
-                        .buttonStyle(.plain)
                     }
                 }
             }
@@ -709,15 +751,18 @@ extension TimelineView {
             .foregroundColor(.white.opacity(0.8))
         }
         .onChange(of: focusedField) { oldValue, newValue in
+            // Don't auto-save if we're canceling
+            guard !isCanceling else { return }
+            
             // Auto-save when focus leaves a field
-            if oldValue == .title && newValue != .title, let title = editingTitle {
-                saveTitle(for: slot, newTitle: title)
+            if oldValue == .title && newValue != .title && isEditingTitle {
+                saveTitle(for: slot)
             }
-            if oldValue == .notes && newValue != .notes, let notes = editingNotes {
-                saveNotes(for: slot, newNotes: notes)
+            if oldValue == .notes && newValue != .notes && isEditingNotes {
+                saveNotes(for: slot)
             }
-            if oldValue == .url && newValue != .url, let urlString = editingURL {
-                saveURL(for: slot, newURL: urlString)
+            if oldValue == .url && newValue != .url && isEditingURL {
+                saveURL(for: slot)
             }
         }
     }
@@ -751,24 +796,26 @@ extension TimelineView {
     
     // MARK: - Inline Editing Helpers
     
-    private func saveTitle(for slot: BusyTimeSlot, newTitle: String) {
+    private func saveTitle(for slot: BusyTimeSlot) {
         // Validate title is not empty
-        guard !newTitle.isEmpty else {
-            editingTitle = nil
-            originalTitle = nil
+        guard !editingTitle.isEmpty else {
+            isEditingTitle = false
+            editingTitle = ""
+            originalTitle = ""
             return
         }
         
         // Only save if actually changed
-        guard newTitle != originalTitle else {
-            editingTitle = nil
-            originalTitle = nil
+        guard editingTitle != originalTitle else {
+            isEditingTitle = false
+            editingTitle = ""
+            originalTitle = ""
             return
         }
         
         let success = calendarService.updateEvent(
             eventId: slot.id,
-            title: newTitle,
+            title: editingTitle,
             notes: nil,
             url: nil
         )
@@ -780,25 +827,28 @@ extension TimelineView {
                 if let updatedSlot = calendarService.busySlots.first(where: { $0.id == slot.id }) {
                     selectedBusySlot = updatedSlot
                 }
-                editingTitle = nil
-                originalTitle = nil
+                isEditingTitle = false
+                editingTitle = ""
+                originalTitle = ""
             }
         } else {
             // On failure, exit edit mode but keep the popup open
-            editingTitle = nil
-            originalTitle = nil
+            isEditingTitle = false
+            editingTitle = ""
+            originalTitle = ""
         }
     }
     
-    private func saveNotes(for slot: BusyTimeSlot, newNotes: String) {
+    private func saveNotes(for slot: BusyTimeSlot) {
         // Normalize empty strings to nil for comparison
-        let normalizedNew = newNotes.isEmpty ? nil : newNotes
-        let normalizedOriginal = originalNotes?.isEmpty == true ? nil : originalNotes
+        let normalizedNew = editingNotes.isEmpty ? nil : editingNotes
+        let normalizedOriginal = originalNotes.isEmpty ? nil : originalNotes
         
         // Only save if actually changed
         guard normalizedNew != normalizedOriginal else {
-            editingNotes = nil
-            originalNotes = nil
+            isEditingNotes = false
+            editingNotes = ""
+            originalNotes = ""
             return
         }
         
@@ -816,37 +866,45 @@ extension TimelineView {
                 if let updatedSlot = calendarService.busySlots.first(where: { $0.id == slot.id }) {
                     selectedBusySlot = updatedSlot
                 }
-                editingNotes = nil
-                originalNotes = nil
+                isEditingNotes = false
+                editingNotes = ""
+                originalNotes = ""
             }
         } else {
             // On failure, exit edit mode but keep the popup open
-            editingNotes = nil
-            originalNotes = nil
+            isEditingNotes = false
+            editingNotes = ""
+            originalNotes = ""
         }
     }
     
-    private func saveURL(for slot: BusyTimeSlot, newURL: String) {
+    private func saveURL(for slot: BusyTimeSlot) {
         // Normalize and prepare URL
         let urlToSave: URL?
-        if newURL.isEmpty {
+        if editingURL.isEmpty {
             urlToSave = nil
         } else {
             // Try to create URL, add https:// if no scheme
-            var urlString = newURL.trimmingCharacters(in: .whitespaces)
+            var urlString = editingURL.trimmingCharacters(in: .whitespaces)
             if !urlString.hasPrefix("http://") && !urlString.hasPrefix("https://") {
                 urlString = "https://" + urlString
             }
-            urlToSave = URL(string: urlString)
+            // URL encode the string to handle spaces and special characters
+            if let encoded = urlString.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) {
+                urlToSave = URL(string: encoded)
+            } else {
+                urlToSave = URL(string: urlString)
+            }
         }
         
         // Only save if actually changed
-        let originalURLString = originalURL?.isEmpty == true ? nil : originalURL
-        let newURLString = newURL.isEmpty ? nil : newURL.trimmingCharacters(in: .whitespaces)
+        let originalURLString = originalURL.isEmpty ? nil : originalURL
+        let newURLString = editingURL.isEmpty ? nil : editingURL.trimmingCharacters(in: .whitespaces)
         
         guard newURLString != originalURLString else {
-            editingURL = nil
-            originalURL = nil
+            isEditingURL = false
+            editingURL = ""
+            originalURL = ""
             return
         }
         
@@ -854,7 +912,8 @@ extension TimelineView {
             eventId: slot.id,
             title: nil,
             notes: nil,
-            url: urlToSave
+            url: urlToSave,
+            updateURL: true
         )
         
         if success {
@@ -864,42 +923,57 @@ extension TimelineView {
                 if let updatedSlot = calendarService.busySlots.first(where: { $0.id == slot.id }) {
                     selectedBusySlot = updatedSlot
                 }
-                editingURL = nil
-                originalURL = nil
+                isEditingURL = false
+                editingURL = ""
+                originalURL = ""
             }
         } else {
             // On failure, exit edit mode but keep the popup open
-            editingURL = nil
-            originalURL = nil
+            isEditingURL = false
+            editingURL = ""
+            originalURL = ""
         }
     }
     
     private func resetEditingState() {
-        editingTitle = nil
-        editingNotes = nil
-        editingURL = nil
-        originalTitle = nil
-        originalNotes = nil
-        originalURL = nil
+        isEditingTitle = false
+        isEditingNotes = false
+        isEditingURL = false
+        editingTitle = ""
+        editingNotes = ""
+        editingURL = ""
+        originalTitle = ""
+        originalNotes = ""
+        originalURL = ""
+        isCanceling = false
         focusedField = nil
     }
     
     private func cancelTitleEdit() {
-        editingTitle = nil
-        originalTitle = nil
+        isCanceling = true
+        isEditingTitle = false
+        editingTitle = ""
+        originalTitle = ""
         focusedField = nil
+        isCanceling = false
     }
     
     private func cancelNotesEdit() {
-        editingNotes = nil
-        originalNotes = nil
+        isCanceling = true
+        isEditingNotes = false
+        editingNotes = ""
+        originalNotes = ""
         focusedField = nil
+        isCanceling = false
     }
     
     private func cancelURLEdit() {
-        editingURL = nil
-        originalURL = nil
+        isCanceling = true
+        isEditingURL = false
+        editingURL = ""
+        originalURL = ""
         focusedField = nil
+        isCanceling = false
     }
 }
 
