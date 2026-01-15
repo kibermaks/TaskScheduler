@@ -1,0 +1,63 @@
+# Changelog
+
+All notable changes to Task Scheduler will be documented in this file.
+
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
+and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [1.3] - 2026-01-15
+
+### Added
+
+- Initial open-source release
+- MIT License
+- Automated build and release workflow
+- DMG installer for easy distribution
+
+## [1.2] - 2026-01-10
+
+### Added
+
+- Smart scheduling engine that fits work and side sessions around existing calendar events
+- Dynamic scheduling patterns (Alternating, All Work First, All Side First, Custom Ratio)
+- Preset management system for saving and applying different configurations
+- Interactive timeline visualization with side-by-side view of existing and projected sessions
+- macOS Calendar integration via EventKit
+- Customizable session types: Work, Side, Planning, and Deep Work
+- Awareness of existing tasks via hashtag system (#work, #side, #deep, #plan)
+- Beautiful dark-themed glassmorphic UI
+- Calendar permission handling
+- Welcome screen for first-time users
+- Settings panel with numeric keyboard input
+
+### Technical Details
+
+- Built with SwiftUI for macOS
+- Modular architecture with clear separation of concerns
+- UserDefaults-based persistence for presets and settings
+- EventKit integration for calendar access
+
+---
+
+## Version History Notes
+
+### Version Format
+
+- **Major.Minor (Build)**
+  - Major: Breaking changes or significant feature additions
+  - Minor: New features, improvements, or notable fixes
+  - Build: Incremental build number (auto-incremented)
+
+### How to Update This Changelog
+
+When preparing a new release:
+
+1. Move items from `[Unreleased]` to a new version section
+2. Add the release date in `YYYY-MM-DD` format
+3. Organize changes under these categories:
+   - **Added**: New features
+   - **Changed**: Changes to existing functionality
+   - **Deprecated**: Soon-to-be removed features
+   - **Removed**: Removed features
+   - **Fixed**: Bug fixes
+   - **Security**: Security improvements

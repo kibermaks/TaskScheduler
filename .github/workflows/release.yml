@@ -1,0 +1,193 @@
+name: Build and Release
+
+on:
+  push:
+    tags:
+      - 'v*.*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version tag (e.g., v1.0)'
+        required: true
+        type: string
+
+jobs:
+  build-and-release:
+    runs-on: macos-14
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      
+      - name: Setup Xcode
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: '15.4'
+      
+      - name: Extract version from tag
+        id: version
+        run: |
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            VERSION="${{ github.event.inputs.version }}"
+          else
+            VERSION="${GITHUB_REF#refs/tags/}"
+          fi
+          VERSION_NUMBER="${VERSION#v}"
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "version_number=$VERSION_NUMBER" >> $GITHUB_OUTPUT
+          echo "Building version: $VERSION_NUMBER"
+      
+      - name: Update version in project
+        run: |
+          VERSION="${{ steps.version.outputs.version_number }}"
+          sed -i '' "s/MARKETING_VERSION = [0-9.]*;/MARKETING_VERSION = $VERSION;/g" TaskScheduler.xcodeproj/project.pbxproj
+          echo "Updated project version to $VERSION"
+      
+      - name: Build app
+        run: |
+          SCHEME="TaskScheduler"
+          PROJECT="TaskScheduler.xcodeproj"
+          BUILD_DIR="./build_output"
+          
+          CURRENT_BUILD=$(grep "CURRENT_PROJECT_VERSION =" "$PROJECT/project.pbxproj" | head -n 1 | sed 's/.*= //;s/;//' | tr -d '[:space:]')
+          NEW_BUILD_NUMBER=$((CURRENT_BUILD + 1))
+          sed -i '' "s/CURRENT_PROJECT_VERSION = [0-9]*;/CURRENT_PROJECT_VERSION = $NEW_BUILD_NUMBER;/g" "$PROJECT/project.pbxproj"
+          
+          echo "Building version ${{ steps.version.outputs.version_number }} (build $NEW_BUILD_NUMBER)"
+          
+          xcodebuild -project "$PROJECT" \
+                     -scheme "$SCHEME" \
+                     -configuration Release \
+                     -destination 'platform=macOS,arch=arm64' \
+                     clean build \
+                     CODE_SIGN_IDENTITY="-" \
+                     CODE_SIGNING_REQUIRED="NO" \
+                     CODE_SIGNING_ALLOWED="NO" \
+                     CONFIGURATION_BUILD_DIR="$BUILD_DIR" \
+                     MARKETING_VERSION="${{ steps.version.outputs.version_number }}" \
+                     CURRENT_PROJECT_VERSION="$NEW_BUILD_NUMBER" \
+                     | xcpretty || true
+          
+          APP_PATH=$(find "$BUILD_DIR" -maxdepth 1 -name "*.app" | head -n 1)
+          if [ -z "$APP_PATH" ]; then
+            echo "Build failed - no .app found"
+            exit 1
+          fi
+          
+          APP_NAME=$(basename "$APP_PATH")
+          echo "Built: $APP_NAME"
+          echo "app_path=$APP_PATH" >> $GITHUB_ENV
+          echo "app_name=$APP_NAME" >> $GITHUB_ENV
+      
+      - name: Create DMG
+        run: |
+          APP_FILE="${{ env.app_name }}"
+          BUILD_DIR="./build_output"
+          DMG_DIR="./dmg_output"
+          VERSION="${{ steps.version.outputs.version_number }}"
+          VOLUME_NAME="Task Scheduler Installer"
+          DMG_FILENAME="TaskScheduler-v$VERSION.dmg"
+          
+          mkdir -p "$DMG_DIR"
+          TEMP_DMG_FOLDER="$DMG_DIR/temp_dmg"
+          mkdir -p "$TEMP_DMG_FOLDER"
+          
+          cp -R "$BUILD_DIR/$APP_FILE" "$TEMP_DMG_FOLDER/$APP_FILE"
+          ln -s /Applications "$TEMP_DMG_FOLDER/Applications"
+          cat > "$TEMP_DMG_FOLDER/README.txt" << 'EOF'
+          Task Scheduler - Installation Instructions
+          ===========================================
+          
+          To install Task Scheduler:
+          
+          1. Drag "TaskScheduler.app" to the "Applications" folder
+          2. Open from Applications or Spotlight
+          3. Grant Calendar permissions when prompted
+          4. Start scheduling your productive day!
+          
+          Requirements:
+          - macOS 13.0 or later
+          - Calendar access (requested on first launch)
+          
+          For more information, visit:
+          https://github.com/${{ github.repository }}
+          
+          ---
+          Task Scheduler is open source software released under the MIT License.
+          EOF
+          
+          DMG_PATH="$DMG_DIR/$DMG_FILENAME"
+          TEMP_DMG="$DMG_DIR/temp.dmg"
+          
+          hdiutil create -volname "$VOLUME_NAME" \
+              -srcfolder "$TEMP_DMG_FOLDER" \
+              -ov \
+              -format UDZO \
+              -imagekey zlib-level=9 \
+              "$DMG_PATH"
+          
+          rm -rf "$TEMP_DMG_FOLDER"
+          echo "DMG created: $DMG_PATH"
+          echo "dmg_path=$DMG_PATH" >> $GITHUB_ENV
+          echo "dmg_filename=$DMG_FILENAME" >> $GITHUB_ENV
+      
+      - name: Create ZIP archive
+        run: |
+          BUILD_DIR="./build_output"
+          APP_NAME="${{ env.app_name }}"
+          VERSION="${{ steps.version.outputs.version_number }}"
+          ZIP_FILENAME="TaskScheduler-v$VERSION.zip"
+          
+          cd "$BUILD_DIR"
+          zip -r "../$ZIP_FILENAME" "$APP_NAME" -q
+          cd ..
+          
+          echo "ZIP created: $ZIP_FILENAME"
+          echo "zip_filename=$ZIP_FILENAME" >> $GITHUB_ENV
+      
+      - name: Generate release notes
+        id: changelog
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          
+          if [ -f "CHANGELOG.md" ]; then
+            CHANGELOG=$(sed -n "/## \[${{ steps.version.outputs.version_number }}\]/,/## \[/p" CHANGELOG.md | sed '$d')
+            
+            if [ -z "$CHANGELOG" ]; then
+              CHANGELOG=$(sed -n "/## \[Unreleased\]/,/## \[/p" CHANGELOG.md | sed '$d')
+            fi
+            
+            if [ -z "$CHANGELOG" ]; then
+              CHANGELOG="Release $VERSION\n\nSee CHANGELOG.md for full details."
+            fi
+          else
+            CHANGELOG="Release $VERSION"
+          fi
+          
+          echo -e "$CHANGELOG" > release_notes.md
+          echo "changelog_generated=true" >> $GITHUB_OUTPUT
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ steps.version.outputs.version }}
+          name: Task Scheduler ${{ steps.version.outputs.version }}
+          body_path: release_notes.md
+          files: |
+            ${{ env.dmg_path }}
+            ${{ env.zip_filename }}
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: TaskScheduler-${{ steps.version.outputs.version_number }}
+          path: |
+            ${{ env.dmg_path }}
+            ${{ env.zip_filename }}
+          retention-days: 90

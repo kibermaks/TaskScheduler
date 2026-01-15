@@ -4,22 +4,42 @@
 
 ### Activation
 
-**4-click** on the "Task Scheduler" title in the header to toggle dev settings on/off.
+**4-click** on the "Settings" title in the header of App Settings to toggle dev settings on/off.
 
 When enabled:
 
-- Version number turns **green** in the header
 - Developer Settings section appears at the bottom of the Settings panel
 - State persists across app launches (stored in UserDefaults)
 
 ### Features
 
+#### Reset All Dirty Triggers
+
+- Button: "Reset All Dirty Triggers"
+- Function: Clears `hasSeenWelcome`, `hasSeenPatternsGuide`, and `hasSeenTasksGuide`
+- Use Case: Re-run the welcome experience and in-app guides from scratch
+- Effect: All onboarding popovers will appear again the next time their triggers fire
+
 #### Reset Calendar Setup
 
 - Button: "Reset Calendar Setup"
-- Function: Clears the setup completion flag
+- Function: Clears the setup completion flag and sends the `ResetCalendarSetup` notification
 - Use Case: Test the calendar permission and setup flow multiple times
-- Effect: Next time you launch/refresh, you'll see the CalendarSetupView again
+- Effect: CalendarSetupView appears immediately so you can walk through the entire flow again
+
+#### Reset Presets
+
+- Button: "Reset Presets"
+- Function: Removes `TaskScheduler.Presets` and `TaskScheduler.LastActivePresetID` from UserDefaults and broadcasts `PresetsReset`
+- Use Case: Validate preset creation logic and ensure calendar assignments are reapplied correctly
+- Effect: All saved presets are removed. Relaunch calendar setup (or create new presets manually) to restore defaults
+
+#### Reset Calendar Permissions
+
+- Button: "Reset Calendar Permissions"
+- Function: Executes `tccutil reset Calendar com.kibermaks.TaskScheduler` and terminates the app
+- Use Case: Force macOS to prompt for Calendar access again without digging through System Settings
+- Effect: App quits immediately after issuing the reset; on next launch macOS will prompt for Calendar permissions
 
 ## Testing Calendar Permission & Setup Flow
 
@@ -68,11 +88,6 @@ Using Dev Settings:
 com.kibermaks.TaskScheduler
 ```
 
-## Current Version
-
-- Marketing Version: 1.1
-- Build Number: 79
-
 ## UserDefaults Keys
 
 ### Setup & Permissions
@@ -90,37 +105,6 @@ com.kibermaks.TaskScheduler
 - `hasSeenWelcome` - Boolean
 - `hasSeenPatternsGuide` - Boolean
 - `hasSeenTasksGuide` - Boolean
-
-## Implementation Details
-
-### Files Modified
-
-1. **ContentView.swift**
-   - Added `@AppStorage("showDevSettings")`
-   - Added 4-click gesture on app title
-   - Version number changes color when dev mode active
-   - Listeners for ResetCalendarSetup notification
-
-2. **SettingsPanel.swift**
-   - New dev settings section (conditionally shown)
-   - Reset Calendar Setup button
-   - Posts ResetCalendarSetup notification
-
-3. **LeftPanel.swift**
-   - Passes showDevSettings binding through to SettingsPanel
-
-### Files Created
-
-1. **CalendarPermissionView.swift**
-   - Beautiful onboarding for calendar access
-   - Explains why permissions are needed
-   - 3-step guide for setup process
-
-2. **CalendarSetupView.swift**
-   - One-time calendar assignment form
-   - Visual cards for each session type
-   - Validation before completion
-   - Saves to SchedulingEngine
 
 ## Notification Events
 
