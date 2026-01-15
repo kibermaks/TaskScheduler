@@ -89,7 +89,7 @@ See [Building from Source](#-building-from-source) section below.
 
 The project follows a modular architecture with clear separation of concerns:
 
-```
+```code
 TaskScheduler/
 ├── Models/
 │   ├── Session.swift
@@ -182,6 +182,7 @@ See [Agents.md](Agents.md) for detailed instructions.
 - Xcode 15.0 or later
 - macOS 13.0 or later
 - Git
+- Apple Developer Team ID (update the `TEAM_ID="252H5L8A2H"` placeholder in `build_app.sh` and `TaskScheduler.xcodeproj/project.pbxproj` to your own Team ID before running the build scripts)
 
 ### Clone and Build
 
@@ -204,6 +205,8 @@ The project includes several convenience scripts:
 #### `./build_app.sh [major|minor|patch|version X.Y]`
 
 Builds a Release version of the app with version management.
+
+> ⚠️ Before running, update the `TEAM_ID="252H5L8A2H"` placeholder in both `build_app.sh` and `TaskScheduler.xcodeproj/project.pbxproj` so the script can sign with your Apple Developer account.
 
 ```bash
 # Increment build number only (default)

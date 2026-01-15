@@ -568,6 +568,12 @@ struct HeaderView: View {
         }
     }
     
+    // Approach: Use FocusState to programmatically focus the DatePicker's TextField after clicking Button.
+    // Note: SwiftUI does not (as of 2024) expose direct focus for DatePicker, but a workaround is available
+    // by overlaying an invisible TextField bound to a FocusState, and programmatically focusing it to open the DatePicker popover.
+
+    @FocusState private var datePickerFocused: Bool
+
     private var startTimeControls: some View {
         HStack(spacing: 8) {
             Text("Start:").foregroundColor(.white.opacity(0.7))
@@ -578,16 +584,39 @@ struct HeaderView: View {
             .pickerStyle(.segmented)
             .frame(width: 100)
             
-            if !useNowTime {
-                DatePicker("", selection: $startTime, displayedComponents: .hourAndMinute)
-                    .labelsHidden()
-                    .frame(width: 80)
-            } else {
-                Text(formatNowTime())
-                    .font(.system(size: 14, weight: .medium, design: .monospaced))
-                    .foregroundColor(Color(hex: "3B82F6"))
-                    .padding(.horizontal, 8)
+            ZStack {
+                if !useNowTime {
+                    // Standard DatePicker shown when useNowTime == false
+                    // Overlay a TextField (hidden) to steal focus if needed
+                    DatePicker("", selection: $startTime, displayedComponents: .hourAndMinute)
+                        .labelsHidden()
+                        .frame(width: 85)
+                        // Try to overlay an invisible TextField (macOS only hack)
+                        .overlay(
+                            TextField("", text: .constant(""))
+                                .frame(width: 0, height: 0)
+                                .opacity(0)
+                                .focused($datePickerFocused)
+                        )
+                } else {
+                    Button(action: {
+                        useNowTime = false
+                        // Defer focus to the next runloop to ensure DatePicker appears and is focusable
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                            datePickerFocused = true
+                        }
+                    }) {
+                        Text(formatNowTime())
+                            .font(.system(size: 14, weight: .medium, design: .monospaced))
+                            .foregroundColor(Color(hex: "3B82F6"))
+                            .padding(.horizontal, 8)
+                            .frame(width: 80, alignment: .leading)
+                    }
+                    .buttonStyle(.plain)
+                    .help("Click to set a custom start time")
+                }
             }
+            .frame(width: 100)
         }
     }
     
