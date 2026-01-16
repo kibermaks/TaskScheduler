@@ -25,7 +25,7 @@ struct DeepSessionConfig: Codable, Equatable {
         sessionCount: 1,
         injectAfterEvery: 3,
         name: "Deep Session",
-        duration: 15,
+        duration: 100, // 2.5x of standard 40 min work duration
         calendarName: "Work"
     )
 }
@@ -77,8 +77,8 @@ struct Preset: Identifiable, Codable, Equatable {
         sideSessionName: String = "Side Session",
         workSessionDuration: Int = 40,
         sideSessionDuration: Int = 30,
-        planningDuration: Int = 15,
-        restDuration: Int = 20,
+        planningDuration: Int = 10,
+        restDuration: Int = 10,
         sideRestDuration: Int? = nil,
         deepRestDuration: Int? = nil,
         schedulePlanning: Bool = true,
@@ -102,8 +102,9 @@ struct Preset: Identifiable, Codable, Equatable {
         self.planningDuration = planningDuration
         self.restDuration = restDuration
         
-        self.sideRestDuration = sideRestDuration ?? max(5, Int(Double(restDuration) * 0.75))
-        self.deepRestDuration = deepRestDuration ?? restDuration
+        // Calculate derived durations based on work and rest
+        self.sideRestDuration = sideRestDuration ?? Self.calculateSideRest(from: restDuration)
+        self.deepRestDuration = deepRestDuration ?? Self.calculateDeepRest(from: restDuration)
         
         self.schedulePlanning = schedulePlanning
         self.pattern = pattern
@@ -113,9 +114,64 @@ struct Preset: Identifiable, Codable, Equatable {
         self.deepSessionConfig = deepSessionConfig
         self.calendarMapping = calendarMapping
         self.defaultStartHour = defaultStartHour
-        self.schedulePlanning = schedulePlanning
-        self.pattern = pattern
-        self.workSessionsPerCycle = workSessionsPerCycle
+    }
+    
+    // MARK: - Session Count Calculation Helpers
+    
+    /// Calculates work sessions for standard presets (1x basic)
+    static func calculateStandardWorkSessions(from basicSessions: Int) -> Int {
+        return basicSessions
+    }
+    
+    /// Calculates work sessions for focus day (1.25x basic, rounded down)
+    static func calculateFocusWorkSessions(from basicSessions: Int) -> Int {
+        return Int(floor(Double(basicSessions) * 1.25))
+    }
+    
+    /// Calculates side sessions for standard presets (0.5x work sessions, rounded down)
+    static func calculateStandardSideSessions(from workSessions: Int) -> Int {
+        return Int(floor(Double(workSessions) * 0.5))
+    }
+    
+    /// Calculates side sessions for focus day (0.35x work sessions, rounded down)
+    static func calculateFocusSideSessions(from workSessions: Int) -> Int {
+        return Int(floor(Double(workSessions) * 0.35))
+    }
+    
+    /// Calculates work sessions for light day (0.5x standard work, rounded up)
+    static func calculateLightWorkSessions(from standardWorkSessions: Int) -> Int {
+        return Int(ceil(Double(standardWorkSessions) * 0.5))
+    }
+    
+    /// Calculates side sessions for light day (0.5x standard side, rounded up)
+    static func calculateLightSideSessions(from standardSideSessions: Int) -> Int {
+        return Int(ceil(Double(standardSideSessions) * 0.5))
+    }
+    
+    // MARK: - Duration Calculation Helpers
+    
+    /// Calculates side session duration: 3/4 of work duration, rounded up to nearest 5 mins
+    static func calculateSideDuration(from workDuration: Int) -> Int {
+        let raw = Double(workDuration) * 0.75
+        return Int(ceil(raw / 5.0) * 5.0)
+    }
+    
+    /// Calculates deep session duration: 2.5x of work duration, rounded up to nearest 5 mins
+    static func calculateDeepDuration(from workDuration: Int) -> Int {
+        let raw = Double(workDuration) * 2.5
+        return Int(ceil(raw / 5.0) * 5.0)
+    }
+    
+    /// Calculates side rest duration: 3/4 of work rest, rounded up to nearest 5 mins
+    static func calculateSideRest(from restDuration: Int) -> Int {
+        let raw = Double(restDuration) * 0.75
+        return max(5, Int(ceil(raw / 5.0) * 5.0))
+    }
+    
+    /// Calculates deep rest duration: 2.5x of work rest, rounded up to nearest 5 mins
+    static func calculateDeepRest(from restDuration: Int) -> Int {
+        let raw = Double(restDuration) * 2.5
+        return Int(ceil(raw / 5.0) * 5.0)
     }
     
     enum CodingKeys: String, CodingKey {
@@ -154,11 +210,18 @@ struct Preset: Identifiable, Codable, Equatable {
     }
     
     // MARK: - Default Presets
+    private static let basicSessions = 5
+    private static let workDuration = 40
+    private static let restDuration = 10
+    
     static let defaultWorkday = Preset(
-        name: "Standard Workday",
+        name: "Standard Day",
         icon: "briefcase.fill",
-        workSessionCount: 5,
-        sideSessionCount: 2,
+        workSessionCount: calculateStandardWorkSessions(from: basicSessions),
+        sideSessionCount: calculateStandardSideSessions(from: calculateStandardWorkSessions(from: basicSessions)),
+        workSessionDuration: workDuration,
+        sideSessionDuration: calculateSideDuration(from: workDuration),
+        restDuration: restDuration,
         pattern: .alternating,
         calendarMapping: CalendarMapping(
             workCalendarName: "Work",
@@ -169,10 +232,34 @@ struct Preset: Identifiable, Codable, Equatable {
     static let focusDay = Preset(
         name: "Focus Day",
         icon: "brain.head.profile",
-        workSessionCount: 7,
-        sideSessionCount: 1,
-        workSessionDuration: 50,
-        restDuration: 10,
+        workSessionCount: calculateFocusWorkSessions(from: basicSessions),
+        sideSessionCount: calculateFocusSideSessions(from: calculateFocusWorkSessions(from: basicSessions)),
+        workSessionDuration: workDuration,
+        sideSessionDuration: calculateSideDuration(from: workDuration),
+        restDuration: restDuration,
+        pattern: .alternating,
+        deepSessionConfig: DeepSessionConfig(
+            enabled: true,
+            sessionCount: 1,
+            injectAfterEvery: 3,
+            name: "Deep Session",
+            duration: calculateDeepDuration(from: workDuration),
+            calendarName: "Work"
+        ),
+        calendarMapping: CalendarMapping(
+            workCalendarName: "Work",
+            sideCalendarName: "Side Tasks"
+        )
+    )
+    
+    static let allWorkFirst = Preset(
+        name: "All Work First",
+        icon: "arrow.right.circle.fill",
+        workSessionCount: calculateStandardWorkSessions(from: basicSessions),
+        sideSessionCount: calculateStandardSideSessions(from: calculateStandardWorkSessions(from: basicSessions)),
+        workSessionDuration: workDuration,
+        sideSessionDuration: calculateSideDuration(from: workDuration),
+        restDuration: restDuration,
         pattern: .allWorkFirst,
         calendarMapping: CalendarMapping(
             workCalendarName: "Work",
@@ -183,17 +270,26 @@ struct Preset: Identifiable, Codable, Equatable {
     static let weekend = Preset(
         name: "Weekend",
         icon: "sun.max.fill",
-        workSessionCount: 2,
-        sideSessionCount: 4,
+        workSessionCount: 0,
+        sideSessionCount: basicSessions,
         workSessionName: "Weekend Work",
         sideSessionName: "Weekend Side",
-        workSessionDuration: 30,
-        sideSessionDuration: 45,
+        workSessionDuration: workDuration,
+        sideSessionDuration: calculateSideDuration(from: workDuration),
+        restDuration: restDuration,
         schedulePlanning: false,
         pattern: .allSideFirst,
+        deepSessionConfig: DeepSessionConfig(
+            enabled: true,
+            sessionCount: 1,
+            injectAfterEvery: 3,
+            name: "Deep Session",
+            duration: calculateDeepDuration(from: workDuration),
+            calendarName: "Work"
+        ),
         calendarMapping: CalendarMapping(
-            workCalendarName: "Weekend Work",
-            sideCalendarName: "Weekend Side"
+            workCalendarName: "Work",
+            sideCalendarName: "Side Tasks"
         ),
         defaultStartHour: 10
     )
@@ -201,10 +297,11 @@ struct Preset: Identifiable, Codable, Equatable {
     static let lightDay = Preset(
         name: "Light Day",
         icon: "leaf.fill",
-        workSessionCount: 3,
-        sideSessionCount: 2,
-        workSessionDuration: 30,
-        restDuration: 30,
+        workSessionCount: calculateLightWorkSessions(from: calculateStandardWorkSessions(from: basicSessions)),
+        sideSessionCount: calculateLightSideSessions(from: calculateStandardSideSessions(from: calculateStandardWorkSessions(from: basicSessions))),
+        workSessionDuration: workDuration,
+        sideSessionDuration: calculateSideDuration(from: workDuration),
+        restDuration: restDuration,
         pattern: .alternating,
         calendarMapping: CalendarMapping(
             workCalendarName: "Work",
@@ -213,8 +310,9 @@ struct Preset: Identifiable, Codable, Equatable {
     )
     
     static let initialPresets: [Preset] = [
-        .defaultWorkday,
         .focusDay,
+        .defaultWorkday,
+        .allWorkFirst,
         .weekend,
         .lightDay
     ]
@@ -224,67 +322,117 @@ struct Preset: Identifiable, Codable, Equatable {
     static func createInitialPresets(
         workCalendar: String,
         sideCalendar: String,
-        deepCalendar: String
+        deepCalendar: String,
+        workDuration: Int = 40,
+        restDuration: Int = 10,
+        basicSessions: Int = 5
     ) -> [Preset] {
         let workMapping = CalendarMapping(
             workCalendarName: workCalendar,
             sideCalendarName: sideCalendar
         )
         
-        let deepConfig = DeepSessionConfig(
+        // Calculate session counts
+        let standardWork = calculateStandardWorkSessions(from: basicSessions)
+        let standardSide = calculateStandardSideSessions(from: standardWork)
+        let focusWork = calculateFocusWorkSessions(from: basicSessions)
+        let focusSide = calculateFocusSideSessions(from: focusWork)
+        let lightWork = calculateLightWorkSessions(from: standardWork)
+        let lightSide = calculateLightSideSessions(from: standardSide)
+        
+        // Deep config disabled by default
+        let deepConfigDisabled = DeepSessionConfig(
             enabled: false,
             sessionCount: 1,
             injectAfterEvery: 3,
             name: "Deep Session",
-            duration: 15,
+            duration: calculateDeepDuration(from: workDuration),
+            calendarName: deepCalendar
+        )
+        
+        // Deep config enabled for Focus Day preset
+        let deepConfigEnabled = DeepSessionConfig(
+            enabled: true,
+            sessionCount: 1,
+            injectAfterEvery: 3,
+            name: "Deep Session",
+            duration: calculateDeepDuration(from: workDuration),
+            calendarName: deepCalendar
+        )
+
+        // Deep config enabled for Focus Day preset
+        let deepConfigWeekend = DeepSessionConfig(
+            enabled: true,
+            sessionCount: 1,
+            injectAfterEvery: 2,
+            name: "Weekend Deep",
+            duration: calculateDeepDuration(from: workDuration),
             calendarName: deepCalendar
         )
         
         return [
             Preset(
-                name: "Standard Workday",
-                icon: "briefcase.fill",
-                workSessionCount: 5,
-                sideSessionCount: 2,
+                name: "Focus Day",
+                icon: "brain.head.profile",
+                workSessionCount: focusWork,
+                sideSessionCount: focusSide,
+                workSessionDuration: workDuration,
+                sideSessionDuration: calculateSideDuration(from: workDuration),
+                restDuration: restDuration,
                 pattern: .alternating,
-                deepSessionConfig: deepConfig,
+                deepSessionConfig: deepConfigEnabled,
                 calendarMapping: workMapping
             ),
             Preset(
-                name: "Focus Day",
-                icon: "brain.head.profile",
-                workSessionCount: 7,
-                sideSessionCount: 1,
-                workSessionDuration: 50,
-                restDuration: 10,
+                name: "Standard Day",
+                icon: "briefcase.fill",
+                workSessionCount: standardWork,
+                sideSessionCount: standardSide,
+                workSessionDuration: workDuration,
+                sideSessionDuration: calculateSideDuration(from: workDuration),
+                restDuration: restDuration,
+                pattern: .alternating,
+                deepSessionConfig: deepConfigDisabled,
+                calendarMapping: workMapping
+            ),
+            Preset(
+                name: "All Work First",
+                icon: "arrow.right.circle.fill",
+                workSessionCount: standardWork,
+                sideSessionCount: standardSide,
+                workSessionDuration: workDuration,
+                sideSessionDuration: calculateSideDuration(from: workDuration),
+                restDuration: restDuration,
                 pattern: .allWorkFirst,
-                deepSessionConfig: deepConfig,
+                deepSessionConfig: deepConfigDisabled,
                 calendarMapping: workMapping
             ),
             Preset(
                 name: "Weekend",
                 icon: "sun.max.fill",
-                workSessionCount: 2,
-                sideSessionCount: 4,
+                workSessionCount: 0,
+                sideSessionCount: basicSessions,
                 workSessionName: "Weekend Work",
                 sideSessionName: "Weekend Side",
-                workSessionDuration: 30,
-                sideSessionDuration: 45,
+                workSessionDuration: workDuration,
+                sideSessionDuration: calculateSideDuration(from: workDuration),
+                restDuration: restDuration,
                 schedulePlanning: false,
-                pattern: .allSideFirst,
-                deepSessionConfig: deepConfig,
+                pattern: .alternatingReverse,
+                deepSessionConfig: deepConfigWeekend,
                 calendarMapping: workMapping,
                 defaultStartHour: 10
             ),
             Preset(
                 name: "Light Day",
                 icon: "leaf.fill",
-                workSessionCount: 3,
-                sideSessionCount: 2,
-                workSessionDuration: 30,
-                restDuration: 30,
+                workSessionCount: lightWork,
+                sideSessionCount: lightSide,
+                workSessionDuration: workDuration,
+                sideSessionDuration: calculateSideDuration(from: workDuration),
+                restDuration: restDuration,
                 pattern: .alternating,
-                deepSessionConfig: deepConfig,
+                deepSessionConfig: deepConfigDisabled,
                 calendarMapping: workMapping
             )
         ]
@@ -320,11 +468,21 @@ class PresetStorage {
     }
     
     /// Initialize presets with calendar names from setup
-    func initializePresets(workCalendar: String, sideCalendar: String, deepCalendar: String) {
+    func initializePresets(
+        workCalendar: String,
+        sideCalendar: String,
+        deepCalendar: String,
+        workDuration: Int = 40,
+        restDuration: Int = 10,
+        basicSessions: Int = 5
+    ) {
         let presets = Preset.createInitialPresets(
             workCalendar: workCalendar,
             sideCalendar: sideCalendar,
-            deepCalendar: deepCalendar
+            deepCalendar: deepCalendar,
+            workDuration: workDuration,
+            restDuration: restDuration,
+            basicSessions: basicSessions
         )
         savePresets(presets)
     }
