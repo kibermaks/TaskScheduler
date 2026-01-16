@@ -7,6 +7,9 @@ struct CalendarSetupView: View {
     @State private var selectedWorkCalendar: String = ""
     @State private var selectedSideCalendar: String = ""
     @State private var selectedDeepCalendar: String = ""
+    @State private var workDuration: Int = 40
+    @State private var restDuration: Int = 10
+    @State private var basicSessions: Int = 5
     @State private var showError = false
     @State private var errorMessage = ""
     @State private var isCompleting = false
@@ -31,104 +34,108 @@ struct CalendarSetupView: View {
                 // Header
                 HStack(alignment: .top) {
                     VStack(alignment: .leading, spacing: 4) {
-                        Text("Calendar Setup")
+                        Text("Quick Setup")
                             .font(.system(size: 28, weight: .bold, design: .rounded))
                             .foregroundColor(.white)
-                        Text("Choose which calendars to use for each session type")
+                        Text("Configure your sessions and calendars")
                             .font(.system(size: 14))
                             .foregroundColor(.white.opacity(0.6))
                     }
                     
                     Spacer()
                     
-                    // Reload button
-                    Button {
-                        reloadCalendars()
-                    } label: {
-                        HStack(spacing: 6) {
-                            Image(systemName: isReloading ? "arrow.clockwise" : "arrow.clockwise")
-                                .font(.system(size: 13, weight: .semibold))
-                                .rotationEffect(.degrees(isReloading ? 360 : 0))
-                                .animation(isReloading ? .linear(duration: 1).repeatForever(autoreverses: false) : .default, value: isReloading)
-                            Text("Reload")
-                                .font(.system(size: 13, weight: .semibold))
-                        }
-                        .foregroundColor(.white)
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 8)
-                        .background(Color.white.opacity(0.15))
-                        .cornerRadius(8)
+                    // Info badge
+                    HStack(spacing: 6) {
+                        Image(systemName: "info.circle.fill")
+                            .font(.system(size: 12))
+                        Text("All settings can be changed later")
+                            .font(.system(size: 12, weight: .medium))
                     }
-                    .buttonStyle(.plain)
-                    .focusable(false)
-                    .disabled(isReloading)
+                    .foregroundColor(Color(hex: "60A5FA"))
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
+                    .background(Color(hex: "3B82F6").opacity(0.15))
+                    .cornerRadius(8)
                 }
                 .padding(.horizontal, 32)
                 .padding(.top, 32)
-                .padding(.bottom, 16)
-                
-                // Info note at top
-                HStack(alignment: .top, spacing: 12) {
-                    Image(systemName: "info.circle.fill")
-                        .font(.system(size: 18))
-                        .foregroundColor(Color(hex: "60A5FA"))
-                    
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("Don't worry, you can always change these settings later in the app.")
-                            .font(.system(size: 13, weight: .medium))
-                            .foregroundColor(.white.opacity(0.9))
-                            .fixedSize(horizontal: false, vertical: true)
-                        Text("If you need to create new calendars, use the Reload button after adding them in Calendar.app.")
-                            .font(.system(size: 12))
-                            .foregroundColor(.white.opacity(0.7))
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                }
-                .padding(16)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(
-                    RoundedRectangle(cornerRadius: 12)
-                        .fill(Color(hex: "3B82F6").opacity(0.15))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 12)
-                                .stroke(Color(hex: "60A5FA").opacity(0.4), lineWidth: 1.5)
-                        )
-                )
-                .padding(.horizontal, 32)
-                .padding(.bottom, 24)
+                .padding(.bottom, 20)
                 
                 // Content
                 ScrollView {
-                    VStack(spacing: 24) {
-                        // Work Sessions
-                        calendarSelectionCard(
-                            title: "Work Sessions",
-                            icon: "briefcase.fill",
-                            color: Color(hex: "8B5CF6"),
-                            description: "Primary focus blocks for important tasks",
-                            tag: "#work",
-                            selectedCalendar: $selectedWorkCalendar
-                        )
+                    VStack(spacing: 28) {
+                        // SECTION 1: Session Defaults
+                        sessionConfigurationCard()
                         
-                        // Side Sessions
-                        calendarSelectionCard(
-                            title: "Side Sessions",
-                            icon: "star.fill",
-                            color: Color(hex: "3B82F6"),
-                            description: "Life admin, emails, and quick errands",
-                            tag: "#side",
-                            selectedCalendar: $selectedSideCalendar
-                        )
-                        
-                        // Deep Sessions
-                        calendarSelectionCard(
-                            title: "Deep Work Sessions",
-                            icon: "bolt.circle.fill",
-                            color: Color(hex: "10B981"),
-                            description: "Rare, high-intensity focus blocks",
-                            tag: "#deep",
-                            selectedCalendar: $selectedDeepCalendar
-                        )
+                        // SECTION 2: Calendar Selection
+                        VStack(alignment: .leading, spacing: 16) {
+                            // Section header with reload button
+                            HStack {
+                                Text("Calendars")
+                                    .font(.system(size: 16, weight: .bold))
+                                    .foregroundColor(.white.opacity(0.9))
+                                
+                                Text("Where sessions will be created")
+                                    .font(.system(size: 13))
+                                    .foregroundColor(.white.opacity(0.5))
+                                
+                                Spacer()
+                                
+                                // Reload button
+                                Button {
+                                    reloadCalendars()
+                                } label: {
+                                    HStack(spacing: 5) {
+                                        Image(systemName: "arrow.clockwise")
+                                            .font(.system(size: 11, weight: .semibold))
+                                            .rotationEffect(.degrees(isReloading ? 360 : 0))
+                                            .animation(isReloading ? .linear(duration: 1).repeatForever(autoreverses: false) : .default, value: isReloading)
+                                        Text("Reload")
+                                            .font(.system(size: 11, weight: .semibold))
+                                    }
+                                    .foregroundColor(.white.opacity(0.7))
+                                    .padding(.horizontal, 10)
+                                    .padding(.vertical, 6)
+                                    .background(Color.white.opacity(0.1))
+                                    .cornerRadius(6)
+                                }
+                                .buttonStyle(.plain)
+                                .focusable(false)
+                                .disabled(isReloading)
+                                .help("Reload after adding new calendars in Calendar.app")
+                            }
+                            .padding(.horizontal, 32)
+                            
+                            // Calendar cards
+                            VStack(spacing: 16) {
+                                calendarSelectionCard(
+                                    title: "Work Sessions",
+                                    icon: "briefcase.fill",
+                                    color: Color(hex: "8B5CF6"),
+                                    description: "Primary focus blocks for important tasks",
+                                    tag: "#work",
+                                    selectedCalendar: $selectedWorkCalendar
+                                )
+                                
+                                calendarSelectionCard(
+                                    title: "Side Sessions",
+                                    icon: "star.fill",
+                                    color: Color(hex: "3B82F6"),
+                                    description: "Life admin, emails, and quick errands",
+                                    tag: "#side",
+                                    selectedCalendar: $selectedSideCalendar
+                                )
+                                
+                                calendarSelectionCard(
+                                    title: "Deep Work Sessions",
+                                    icon: "bolt.circle.fill",
+                                    color: Color(hex: "10B981"),
+                                    description: "Rare, high-intensity focus blocks",
+                                    tag: "#deep",
+                                    selectedCalendar: $selectedDeepCalendar
+                                )
+                            }
+                        }
                     }
                     .padding(.bottom, 32)
                 }
@@ -212,6 +219,81 @@ struct CalendarSetupView: View {
         .onAppear {
             calendarService.loadCalendars()
             loadAvailableCalendars()
+        }
+    }
+    
+    private func sessionConfigurationCard() -> some View {
+        VStack(alignment: .leading, spacing: 16) {
+            // Section header
+            HStack {
+                Text("Session Defaults")
+                    .font(.system(size: 16, weight: .bold))
+                    .foregroundColor(.white.opacity(0.9))
+                
+                Text("How your day is structured")
+                    .font(.system(size: 13))
+                    .foregroundColor(.white.opacity(0.5))
+                
+                Spacer()
+            }
+            .padding(.horizontal, 32)
+            
+            // Inputs card
+            HStack(alignment: .top, spacing: 32) {
+                // Work Sessions
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Sessions")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundColor(.white.opacity(0.7))
+                    
+                    NumericInputField(
+                        value: $basicSessions,
+                        range: 2...12,
+                        step: 1,
+                        unit: "/day"
+                    )
+                }
+                
+                // Work Duration
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Duration")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundColor(.white.opacity(0.7))
+                    
+                    NumericInputField(
+                        value: $workDuration,
+                        range: 15...120,
+                        step: 5,
+                        unit: "min"
+                    )
+                }
+                
+                // Rest Duration
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Rest")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundColor(.white.opacity(0.7))
+                    
+                    NumericInputField(
+                        value: $restDuration,
+                        range: 5...30,
+                        step: 5,
+                        unit: "min"
+                    )
+                }
+                
+                Spacer()
+            }
+            .padding(20)
+            .background(
+                RoundedRectangle(cornerRadius: 14)
+                    .fill(Color.white.opacity(0.05))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 14)
+                            .stroke(Color.white.opacity(0.1), lineWidth: 1)
+                    )
+            )
+            .padding(.horizontal, 32)
         }
     }
     
@@ -374,11 +456,14 @@ struct CalendarSetupView: View {
         
         isCompleting = true
         
-        // Initialize presets with the selected calendars (this is the key step!)
+        // Initialize presets with the selected calendars and configuration (this is the key step!)
         PresetStorage.shared.initializePresets(
             workCalendar: selectedWorkCalendar,
             sideCalendar: selectedSideCalendar,
-            deepCalendar: selectedDeepCalendar
+            deepCalendar: selectedDeepCalendar,
+            workDuration: workDuration,
+            restDuration: restDuration,
+            basicSessions: basicSessions
         )
         
         // Save to scheduling engine for backward compatibility

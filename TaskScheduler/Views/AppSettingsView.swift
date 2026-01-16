@@ -8,6 +8,8 @@ struct AppSettingsView: View {
     @AppStorage("hasSeenTasksGuide") var hasSeenTasksGuide = false
     @AppStorage("showDevSettings") private var showDevSettings = false
     
+    @State private var showingResetPresetsConfirmation = false
+    
     var body: some View {
         Form {
             Section {
@@ -24,7 +26,7 @@ struct AppSettingsView: View {
                              }
                          }
                      
-                     Text("v\(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "1.0")")
+                     Text("v\(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "1.0") (\(Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "-"))")
                          .font(.caption)
                          .foregroundColor(.secondary)
                  }
@@ -74,6 +76,16 @@ struct AppSettingsView: View {
                     .foregroundColor(.secondary)
             }
             
+            Section("Preset Management") {
+                Button(role: .destructive, action: { showingResetPresetsConfirmation = true }) {
+                    Label("Reset Presets", systemImage: "arrow.counterclockwise")
+                }
+                
+                Text("This will erase all saved presets and launch Calendar Setup.")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+            
             if showDevSettings {
                 Section("Developer Settings 🛠️") {
                     Button(action: {
@@ -92,14 +104,6 @@ struct AppSettingsView: View {
                         .font(.caption)
                         .foregroundColor(.secondary)
                     
-                    Button(role: .destructive, action: resetPresets) {
-                        Label("Reset Presets", systemImage: "trash.fill")
-                    }
-                    
-                    Text("This will erase all saved presets. Re-run Calendar Setup to recreate default presets with correct calendars.")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                    
                     Divider()
                     
                     Button(role: .destructive, action: resetCalendarPermissions) {
@@ -115,6 +119,14 @@ struct AppSettingsView: View {
         .formStyle(.grouped)
         .frame(width: 550, height: 640)
         .navigationTitle("Settings")
+        .alert("Reset Presets?", isPresented: $showingResetPresetsConfirmation) {
+            Button("Cancel", role: .cancel) { }
+            Button("Reset", role: .destructive) {
+                resetPresets()
+            }
+        } message: {
+            Text("This will permanently delete all saved presets and launch Calendar Setup to recreate them.")
+        }
         .onAppear {
             if let window = NSApp.windows.first(where: { $0.title == "Settings" }) {
                 window.standardWindowButton(.miniaturizeButton)?.isHidden = true
@@ -134,8 +146,15 @@ struct AppSettingsView: View {
     private func resetPresets() {
         UserDefaults.standard.removeObject(forKey: "TaskScheduler.Presets")
         UserDefaults.standard.removeObject(forKey: "TaskScheduler.LastActivePresetID")
-        // Post notification to reload presets
+        // Launch Calendar Setup to recreate presets
+        UserDefaults.standard.set(false, forKey: "TaskScheduler.HasCompletedSetup")
+        // Post notifications
         NotificationCenter.default.post(name: Notification.Name("PresetsReset"), object: nil)
+        NotificationCenter.default.post(name: Notification.Name("ResetCalendarSetup"), object: nil)
+        // Close settings window
+        if let window = NSApp.windows.first(where: { $0.title == "Settings" }) {
+            window.close()
+        }
     }
     
     private func resetCalendarPermissions() {

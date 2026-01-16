@@ -42,6 +42,38 @@ struct CalendarPermissionView: View {
                         .padding(.horizontal, 40)
                         .lineSpacing(4)
                         .fixedSize(horizontal: false, vertical: true)
+                    
+                    // Privacy badges
+                    HStack(spacing: 12) {
+                        privacyBadge(icon: "shield.checkered", text: "Privacy in Core")
+                        privacyBadge(icon: "lock.icloud.fill", text: "Local Only")
+                        privacyBadge(icon: "hand.raised.fill", text: "No Auto Changes")
+                    }
+                    .padding(.top, 8)
+                }
+                
+                // Privacy note
+                if !wasExplicitlyDenied {
+                    HStack(alignment: .top, spacing: 12) {
+                        Image(systemName: "checkmark.shield.fill")
+                            .font(.system(size: 16))
+                            .foregroundColor(Color(hex: "10B981"))
+                        
+                        Text("The app never modifies your calendar without an explicit button click. All operations require your confirmation.")
+                            .font(.system(size: 13, weight: .medium))
+                            .foregroundColor(.white.opacity(0.8))
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    .padding(16)
+                    .background(
+                        RoundedRectangle(cornerRadius: 12)
+                            .fill(Color(hex: "10B981").opacity(0.1))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 12)
+                                    .stroke(Color(hex: "10B981").opacity(0.3), lineWidth: 1.5)
+                            )
+                    )
+                    .padding(.horizontal, 40)
                 }
                 
                 // Show different content based on permission status
@@ -165,6 +197,28 @@ struct CalendarPermissionView: View {
             .frame(width: 600, height: 700)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+    
+    private func privacyBadge(icon: String, text: String) -> some View {
+        HStack(spacing: 6) {
+            Image(systemName: icon)
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundColor(Color(hex: "10B981"))
+            
+            Text(text)
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundColor(.white.opacity(0.9))
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 6)
+        .background(
+            RoundedRectangle(cornerRadius: 8)
+                .fill(Color.white.opacity(0.08))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 8)
+                        .stroke(Color(hex: "10B981").opacity(0.3), lineWidth: 1)
+                )
+        )
     }
     
     private func permissionStep(icon: String, title: String, description: String) -> some View {
