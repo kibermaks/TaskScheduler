@@ -6,6 +6,7 @@ struct AppSettingsView: View {
     @AppStorage("hasSeenWelcome") var hasSeenWelcome = false
     @AppStorage("hasSeenPatternsGuide") var hasSeenPatternsGuide = false
     @AppStorage("hasSeenTasksGuide") var hasSeenTasksGuide = false
+    @AppStorage("timelineIntroBarDismissed") var timelineIntroBarDismissed = false
     @AppStorage("showDevSettings") private var showDevSettings = false
     
     @State private var showingResetPresetsConfirmation = false
@@ -92,6 +93,7 @@ struct AppSettingsView: View {
                         hasSeenWelcome = false
                         hasSeenPatternsGuide = false
                         hasSeenTasksGuide = false
+                        timelineIntroBarDismissed = false
                     }) {
                         Label("Reset All Dirty Triggers", systemImage: "arrow.counterclockwise")
                     }
@@ -146,6 +148,8 @@ struct AppSettingsView: View {
     private func resetPresets() {
         UserDefaults.standard.removeObject(forKey: "TaskScheduler.Presets")
         UserDefaults.standard.removeObject(forKey: "TaskScheduler.LastActivePresetID")
+        // Reset UI hints
+        timelineIntroBarDismissed = false
         // Launch Calendar Setup to recreate presets
         UserDefaults.standard.set(false, forKey: "TaskScheduler.HasCompletedSetup")
         // Post notifications

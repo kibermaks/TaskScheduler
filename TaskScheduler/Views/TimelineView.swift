@@ -38,6 +38,9 @@ struct TimelineView: View {
     @State private var containerWidth: CGFloat = 0
     @State private var showingLegendPopover = false
     
+    // Timeline intro bar dismissal
+    @AppStorage("timelineIntroBarDismissed") private var introBarDismissed = false
+    
     private var isNarrow: Bool {
         // Use a reasonable threshold for narrow width
         containerWidth < 600
@@ -57,6 +60,9 @@ struct TimelineView: View {
             ZStack {
                 VStack(alignment: .leading, spacing: 12) {
                     headerView
+                    if !introBarDismissed {
+                        timelineLegendBar
+                    }
                     timelineScrollView
                 }
                 
@@ -93,6 +99,56 @@ struct TimelineView: View {
             
             legendView
         }
+    }
+    
+    private var timelineLegendBar: some View {
+        HStack(spacing: 8) {
+            HStack(spacing: 0) {
+                // Left half label
+                HStack {
+                    Image(systemName: "calendar")
+                        .font(.system(size: 11))
+                    Text("Existing Events")
+                        .font(.system(size: 12, weight: .medium))
+                }
+                .foregroundColor(.white.opacity(0.5))
+                .frame(maxWidth: .infinity)
+                
+                // Center divider
+                Rectangle()
+                    .fill(Color.white.opacity(0.2))
+                    .frame(width: 1, height: 20)
+                
+                // Right half label
+                HStack {
+                    Text("Projected Tasks")
+                        .font(.system(size: 12, weight: .medium))
+                    Image(systemName: "sparkles")
+                        .font(.system(size: 11))
+                }
+                .foregroundColor(.white.opacity(0.5))
+                .frame(maxWidth: .infinity)
+            }
+            .padding(.leading, timeColumnWidth + 8)
+            
+            // Dismiss button
+            Button {
+                withAnimation(.easeOut(duration: 0.2)) {
+                    introBarDismissed = true
+                }
+            } label: {
+                Image(systemName: "xmark")
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundColor(.white.opacity(0.4))
+                    .padding(6)
+            }
+            .buttonStyle(.plain)
+            .help("Dismiss this hint")
+        }
+        .padding(.vertical, 8)
+        .padding(.horizontal, 8)
+        .background(Color.white.opacity(0.05))
+        .cornerRadius(6)
     }
     
     private var timelineScrollView: some View {
