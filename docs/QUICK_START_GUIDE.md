@@ -2,8 +2,6 @@
 
 A cheat sheet for common development tasks with Task Scheduler.
 
-> ⚠️ **Code signing**: Set your own Apple Developer Team ID in `build_app.sh` (replace `TEAM_ID="252H5L8A2H"`) and `TaskScheduler.xcodeproj/project.pbxproj` before running the build or release scripts—`./build_app.sh` uses that constant to sign the app.
-
 ## 🚀 Common Commands
 
 ### Development
@@ -62,7 +60,7 @@ git tag -l
 
 ## 🏗️ Project Structure
 
-```
+```code
 TaskScheduler/
 ├── TaskScheduler/              # Main source code
 │   ├── Models/                 # Data models

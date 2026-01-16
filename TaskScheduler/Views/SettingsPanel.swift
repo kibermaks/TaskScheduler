@@ -169,13 +169,18 @@ struct SettingsPanel: View {
                 }
             }
             
-            Toggle(isOn: $schedulingEngine.schedulePlanning) {
+            HStack {
                 Text("Schedule planning session")
                     .font(.system(size: 13))
                     .foregroundColor(.white.opacity(0.8))
+                
+                Spacer()
+                
+                Toggle("", isOn: $schedulingEngine.schedulePlanning)
+                    .labelsHidden()
+                    .toggleStyle(.switch)
+                    .tint(Color(hex: "EF4444"))
             }
-            .toggleStyle(.switch)
-            .tint(Color(hex: "EF4444"))
             
             if schedulingEngine.schedulePlanning {
                 HStack {
@@ -337,13 +342,13 @@ struct SettingsPanel: View {
                      NumericInputField(value: $schedulingEngine.deepSessionConfig.sessionCount, range: 1...10)
                  }
                  
-                 HStack {
-                     Text("Inject after:")
-                         .font(.system(size: 13))
-                         .foregroundColor(.white.opacity(0.7))
-                     Spacer()
-                     NumericInputField(value: $schedulingEngine.deepSessionConfig.injectAfterEvery, range: 1...10, unit: "sessions")
-                 }
+                HStack {
+                    Text("Inject after:")
+                        .font(.system(size: 13))
+                        .foregroundColor(.white.opacity(0.7))
+                    Spacer()
+                    NumericInputField(value: $schedulingEngine.deepSessionConfig.injectAfterEvery, range: 1...10, unit: "slots")
+                }
  
                  HStack {
                      Text("Name:")
