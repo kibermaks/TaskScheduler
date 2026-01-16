@@ -426,9 +426,20 @@ struct ContentViewBody: View {
         // Passing nil for sessionNames means "delete all events on these calendars"
         let result: (deleted: Int, failed: Int)
         if deletePastSessions {
-            result = calendarService.deleteSessionEvents(for: selectedDate, sessionNames: nil, fromCalendars: calendars)
+            result = calendarService.deleteSessionEvents(
+                for: selectedDate,
+                sessionNames: nil,
+                fromCalendars: calendars,
+                requireSessionTag: true
+            )
         } else {
-            result = calendarService.deleteFutureSessionEvents(for: selectedDate, after: Date(), sessionNames: nil, fromCalendars: calendars)
+            result = calendarService.deleteFutureSessionEvents(
+                for: selectedDate,
+                after: Date(),
+                sessionNames: nil,
+                fromCalendars: calendars,
+                requireSessionTag: true
+            )
         }
         
         schedulingEngine.schedulingMessage = result.deleted > 0 ? "Deleted \(result.deleted) events" : "No events found to delete"

@@ -8,6 +8,7 @@ import AppKit
 class CalendarService: ObservableObject {
     private let eventStore = EKEventStore()
     private var notificationObserver: NSObjectProtocol?
+    private let recognizedSessionTags = ["#work", "#side", "#deep", "#plan"]
     
     @Published var authorizationStatus: EKAuthorizationStatus = .notDetermined
     @Published var availableCalendars: [EKCalendar] = []
@@ -92,6 +93,11 @@ class CalendarService: ObservableObject {
     
     func calendarNames() -> [String] {
         return availableCalendars.map { $0.title }.sorted()
+    }
+
+    private func eventContainsSessionTag(_ event: EKEvent) -> Bool {
+        guard let notes = event.notes?.lowercased() else { return false }
+        return recognizedSessionTags.contains(where: { notes.contains($0) })
     }
     
     struct CalendarInfo: Identifiable {
@@ -385,7 +391,12 @@ class CalendarService: ObservableObject {
     }
     
     /// Deletes specific events or all events from specified calendars
-    func deleteSessionEvents(for date: Date, sessionNames: [String]? = nil, fromCalendars calendarNames: [String]) -> (deleted: Int, failed: Int) {
+    func deleteSessionEvents(
+        for date: Date,
+        sessionNames: [String]? = nil,
+        fromCalendars calendarNames: [String],
+        requireSessionTag: Bool = false
+    ) -> (deleted: Int, failed: Int) {
         let calendar = Calendar.current
         let startOfDay = calendar.startOfDay(for: date)
         guard let endOfDay = calendar.date(byAdding: .day, value: 1, to: startOfDay) else {
@@ -402,11 +413,14 @@ class CalendarService: ObservableObject {
         let events = eventStore.events(matching: predicate)
         
         let sessionsToDelete = events.filter { event in
-            guard let title = event.title else { return false }
-            if let names = sessionNames, !names.isEmpty {
-                return names.contains(title)
+            if requireSessionTag && !eventContainsSessionTag(event) {
+                return false
             }
-            return true
+            guard let names = sessionNames, !names.isEmpty else {
+                return true
+            }
+            guard let title = event.title else { return false }
+            return names.contains(title)
         }
         
         var deletedCount = 0
@@ -425,7 +439,13 @@ class CalendarService: ObservableObject {
     }
     
     /// Deletes specific future events or all future events from specified calendars
-    func deleteFutureSessionEvents(for date: Date, after cutoffTime: Date, sessionNames: [String]? = nil, fromCalendars calendarNames: [String]) -> (deleted: Int, failed: Int) {
+    func deleteFutureSessionEvents(
+        for date: Date,
+        after cutoffTime: Date,
+        sessionNames: [String]? = nil,
+        fromCalendars calendarNames: [String],
+        requireSessionTag: Bool = false
+    ) -> (deleted: Int, failed: Int) {
         let calendar = Calendar.current
         let startOfDay = calendar.startOfDay(for: date)
         guard let endOfDay = calendar.date(byAdding: .day, value: 1, to: startOfDay) else {
@@ -443,11 +463,14 @@ class CalendarService: ObservableObject {
         
         let sessionsToDelete = events.filter { event in
             guard event.startDate >= cutoffTime else { return false }
-            
-            if let names = sessionNames, !names.isEmpty, let title = event.title {
-                return names.contains(title)
+            if requireSessionTag && !eventContainsSessionTag(event) {
+                return false
             }
-            return true
+            guard let names = sessionNames, !names.isEmpty else {
+                return true
+            }
+            guard let title = event.title else { return false }
+            return names.contains(title)
         }
         
         var deletedCount = 0
