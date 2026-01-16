@@ -40,6 +40,7 @@ struct TimelineView: View {
     
     // Timeline intro bar dismissal
     @AppStorage("timelineIntroBarDismissed") private var introBarDismissed = false
+    @State private var showNod = false
     
     private var isNarrow: Bool {
         // Use a reasonable threshold for narrow width
@@ -102,17 +103,24 @@ struct TimelineView: View {
     }
     
     private var timelineLegendBar: some View {
-        HStack(spacing: 8) {
+        let iconSize: CGFloat = isNarrow ? 11 : 14
+        let textSize: CGFloat = isNarrow ? 11 : 14
+        
+        return HStack(spacing: 8) {
             HStack(spacing: 0) {
                 // Left half label
                 HStack {
+                    Image(systemName: "arrow.turn.left.down")
+                        .font(.system(size: iconSize))
                     Image(systemName: "calendar")
-                        .font(.system(size: 11))
+                        .font(.system(size: iconSize))
                     Text("Existing Events")
-                        .font(.system(size: 12, weight: .medium))
+                        .font(.system(size: textSize, weight: .medium))
                 }
                 .foregroundColor(.white.opacity(0.5))
                 .frame(maxWidth: .infinity)
+                .contentShape(Rectangle())
+                .help("Events from your selected calendars appear on the left side")
                 
                 // Center divider
                 Rectangle()
@@ -121,13 +129,17 @@ struct TimelineView: View {
                 
                 // Right half label
                 HStack {
-                    Text("Projected Tasks")
-                        .font(.system(size: 12, weight: .medium))
                     Image(systemName: "sparkles")
-                        .font(.system(size: 11))
+                        .font(.system(size: iconSize))
+                    Text("Projected Tasks")
+                        .font(.system(size: textSize, weight: .medium))
+                    Image(systemName: "arrow.turn.right.down")
+                        .font(.system(size: iconSize))
                 }
                 .foregroundColor(.white.opacity(0.5))
                 .frame(maxWidth: .infinity)
+                .contentShape(Rectangle())
+                .help("Smartly scheduled tasks appear on the right side, ready to be added to your calendars")
             }
             .padding(.leading, timeColumnWidth + 8)
             
@@ -138,7 +150,7 @@ struct TimelineView: View {
                 }
             } label: {
                 Image(systemName: "xmark")
-                    .font(.system(size: 10, weight: .medium))
+                    .font(.system(size: 12, weight: .medium))
                     .foregroundColor(.white.opacity(0.4))
                     .padding(6)
             }
@@ -147,7 +159,19 @@ struct TimelineView: View {
         }
         .padding(.vertical, 8)
         .padding(.horizontal, 8)
-        .background(Color.white.opacity(0.05))
+        .background(Color.blue.opacity(0.12))
+        .offset(y: showNod ? -8 : 0)
+        .animation(
+            .interpolatingSpring(stiffness: 200, damping: 12)
+                .delay(0.15),
+            value: showNod
+        )
+        .onAppear {
+            showNod = true
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+                showNod = false
+            }
+        }
         .cornerRadius(6)
     }
     
@@ -472,7 +496,7 @@ extension TimelineView {
         let yPos = calculateYPosition(for: session.startTime)
         let height = calculateHeight(from: session.startTime, to: session.endTime)
         let blockHeight = max(height, 20)
-        let blockWidth = (containerWidth / 2) - 16
+        let blockWidth = (containerWidth / 2) - 24  // Extra space for scrollbar
         let xOffset = containerWidth / 2 + 8
         let isCompact = height < 40
         

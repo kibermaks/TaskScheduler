@@ -55,24 +55,24 @@ struct AppSettingsView: View {
             
             Section("Timeline Visibility") {
                 Toggle("Hide night hours", isOn: $schedulingEngine.hideNightHours)
+
                 
-                HStack {
-                    Text("Morning Edge:")
-                    Spacer()
-                    NumericInputField(value: $schedulingEngine.dayStartHour, range: 0...12, unit: "h")
+                LabeledContent("Morning Edge:") {
+                    HStack {
+                        NumericInputField(value: $schedulingEngine.dayStartHour, range: 0...12, step: 1, unit: "h")
+                    }
                 }
+                .padding(.leading, 10)
                 .disabled(!schedulingEngine.hideNightHours)
                 
-                HStack {
-                    Text("Night Edge:")
-                    Spacer()
-                    NumericInputField(value: $schedulingEngine.dayEndHour, range: 13...24, unit: "h")
+                LabeledContent("Night Edge:") {
+                    HStack {
+                        NumericInputField(value: $schedulingEngine.dayEndHour, range: 13...24, step: 1, unit: "h")
+                    }
                 }
+                .padding(.leading, 10)
                 .disabled(!schedulingEngine.hideNightHours)
-            }
-            
-            Section {
-                Text("These settings control the visible range of the timeline when 'Hide Night Hours' is enabled.")
+                Text("Adjust which hours are visible on the timeline. When enabled, you can set the visible range for morning and night edges.")
                     .font(.caption)
                     .foregroundColor(.secondary)
             }

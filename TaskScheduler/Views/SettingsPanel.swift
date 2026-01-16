@@ -369,7 +369,7 @@ struct SettingsPanel: View {
                          .font(.system(size: 13))
                          .foregroundColor(.white.opacity(0.7))
                      Spacer()
-                     NumericInputField(value: $schedulingEngine.deepSessionConfig.duration, range: 5...120, step: 5, unit: "min")
+                     NumericInputField(value: $schedulingEngine.deepSessionConfig.duration, range: 5...180, step: 5, unit: "min")
                  }
                  
                 HStack {
