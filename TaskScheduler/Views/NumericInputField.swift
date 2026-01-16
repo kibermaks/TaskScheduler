@@ -10,20 +10,43 @@ struct NumericInputField: View {
     @FocusState private var isFocused: Bool
     
     var body: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: 6) {
+            // Decrement button
+            Button {
+                if value - step >= range.lowerBound {
+                    value -= step
+                }
+            } label: {
+                Image(systemName: "minus")
+                    .font(.system(size: 10, weight: .bold))
+                    .foregroundColor(.white.opacity(value <= range.lowerBound ? 0.3 : 0.8))
+                    .frame(width: 20, height: 20)
+                    .background(Color.white.opacity(0.1))
+                    .cornerRadius(4)
+            }
+            .buttonStyle(.plain)
+            .disabled(value <= range.lowerBound)
+            
+            // Text field
             TextField("", text: $textValue)
                 .textFieldStyle(.plain)
                 .multilineTextAlignment(.center)
-                .font(.system(size: 13, weight: .medium, design: .monospaced))
+                .font(.system(size: 14, weight: .bold, design: .monospaced))
+                .foregroundColor(.white)
                 .focused($isFocused)
                 .onSubmit {
                     validateAndSet()
                 }
-                .frame(width: 44, height: 22)
-                .background(Color.white.opacity(0.08))
-                .cornerRadius(6)
+                .frame(width: 36, height: 24)
+                .background(
+                    RoundedRectangle(cornerRadius: 6)
+                        .fill(Color.white.opacity(isFocused ? 0.2 : 0.15))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 6)
+                                .stroke(Color.white.opacity(isFocused ? 0.4 : 0), lineWidth: 1)
+                        )
+                )
                 .onChange(of: textValue) { _, newValue in
-                    // Allow intermediate empty state but only update binding on valid parse
                     if let intValue = Int(newValue.filter { "0123456789".contains($0) }) {
                         if range.contains(intValue) {
                             value = intValue
@@ -36,17 +59,28 @@ struct NumericInputField: View {
                     }
                 }
             
+            // Increment button
+            Button {
+                if value + step <= range.upperBound {
+                    value += step
+                }
+            } label: {
+                Image(systemName: "plus")
+                    .font(.system(size: 10, weight: .bold))
+                    .foregroundColor(.white.opacity(value >= range.upperBound ? 0.3 : 0.8))
+                    .frame(width: 20, height: 20)
+                    .background(Color.white.opacity(0.1))
+                    .cornerRadius(4)
+            }
+            .buttonStyle(.plain)
+            .disabled(value >= range.upperBound)
+            
             if !unit.isEmpty {
                 Text(unit)
-                    .font(.system(size: 11))
-                    .foregroundColor(.white.opacity(0.4))
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundColor(.white.opacity(0.5))
             }
-            
-            Stepper("", value: $value, in: range, step: step)
-                .labelsHidden()
-                .controlSize(.small)
         }
-        .frame(height: 28)
         .onAppear {
             textValue = "\(value)"
         }
