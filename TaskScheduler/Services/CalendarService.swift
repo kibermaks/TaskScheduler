@@ -122,6 +122,12 @@ class CalendarService: ObservableObject {
             }
     }
     
+    /// Returns every calendar that supports event entities (read-only + editable).
+    private func allEventCalendars() -> [EKCalendar]? {
+        let calendars = eventStore.calendars(for: .event)
+        return calendars.isEmpty ? nil : calendars
+    }
+    
     // MARK: - Event Fetching
     
     func fetchEvents(for date: Date) async {
@@ -134,7 +140,7 @@ class CalendarService: ObservableObject {
         let startOfDay = calendar.startOfDay(for: date)
         guard let endOfDay = calendar.date(byAdding: .day, value: 1, to: startOfDay) else { return }
         
-        let predicate = eventStore.predicateForEvents(withStart: startOfDay, end: endOfDay, calendars: nil)
+        let predicate = eventStore.predicateForEvents(withStart: startOfDay, end: endOfDay, calendars: allEventCalendars())
         let events = eventStore.events(matching: predicate)
         
         // Filter out all-day events (duration >= 23 hours)
@@ -301,7 +307,7 @@ class CalendarService: ObservableObject {
         let startOfDay = calendar.startOfDay(for: date)
         guard let endOfDay = calendar.date(byAdding: .day, value: 1, to: startOfDay) else { return false }
         
-        let predicate = eventStore.predicateForEvents(withStart: startOfDay, end: endOfDay, calendars: nil)
+        let predicate = eventStore.predicateForEvents(withStart: startOfDay, end: endOfDay, calendars: allEventCalendars())
         let events = eventStore.events(matching: predicate)
         
         return events.contains { 
@@ -459,4 +465,3 @@ class CalendarService: ObservableObject {
         return (deletedCount, failedCount)
     }
 }
-
