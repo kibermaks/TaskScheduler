@@ -29,18 +29,60 @@ Task Scheduler is a native macOS application built with SwiftUI that helps you p
 - **🎯 Hashtag System**: Track existing sessions with hashtags (#work, #side, #deep, #plan)
 - **🌙 Beautiful UI**: Dark-themed glassmorphic design with intuitive controls
 
-## 📸 Screenshots
+## 🛡 Gatekeeper & First Launch
+
+Task Scheduler ships outside the Mac App Store, so Gatekeeper may warn you the first time you open it. Use **System Settings → Privacy & Security → Open Anyway** (or right-click the app in Finder and choose **Open**) to continue; power users can also drop the quarantine flag below.
 
 <p align="center">
-Main Screen  
+  <img src="docs/assets/Gate%20Keeper.png" alt="macOS warning that Task Scheduler is from an unidentified developer" width="420" />
+</p>
+
+<p align="center">
+  <img src="docs/assets/Gatekeeper%20-%20Security%20Pass.png" alt="Allow Task Scheduler to open within Privacy & Security settings" width="420" />
+</p>
+
+```bash
+xattr -d com.apple.quarantine /Applications/Task\ Scheduler.app
+```
+
+## 🖼 Visual Walkthrough
+
+### Welcome Guide
+
+<p align="center">
+  <img src="docs/assets/WelcomeGuide.gif" alt="Welcome guide onboarding flow" width="430" />
+</p>
+
+### Command Center
+
+Timeline, projections, and controls share a single glass panel so you can see inputs and outputs together.
+
+<p align="center">
   <img src="docs/assets/Main%20Screen.png" alt="Task Scheduler timeline and settings" width="900" />
 </p>
+
+### Dynamic Scheduling
+
+Sessions flow around existing events instantly as you tweak durations or presets.
+
 <p align="center">
-Smart Planning Demo
-  <video src="docs/assets/smart-planning.mp4" width="900" autoplay loop muted playsinline controls>
-    Your browser does not support the video tag. Download the demo here:
-    <a href="docs/assets/smart-planning.mp4">Smart Planning demo</a>.
-  </video>
+  <img src="docs/assets/DynamicNature.gif" alt="Animated view showing sessions adapting on the timeline" width="900" />
+</p>
+
+### Preset Library
+
+Workday, Focus, Weekend, or any custom preset stays one click away.
+
+<p align="center">
+  <img src="docs/assets/Presets.png" alt="Preset manager UI and quick switching controls" width="900" />
+</p>
+
+### Availability Insights
+
+Summary cards highlight real events, projected work, and when you are supposed to be free.
+
+<p align="center">
+  <img src="docs/assets/Projected%20+%20Availability%20Cards.png" alt="Projected sessions and availability cards" width="900" />
 </p>
 
 ## 🚀 Installation
@@ -57,33 +99,27 @@ Smart Planning Demo
 
 See [Building from Source](#-building-from-source) section below.
 
+> **Heads-up:** macOS may warn about unidentified developers the first time you open the app. Follow the steps in [Gatekeeper & First Launch](#-gatekeeper--first-launch) if that happens.
+
 ## 🎯 Quick Start
 
-1. **First Launch**: Grant Calendar access when prompted
-2. **Select Calendars**: Choose which calendars to read events from and write sessions to
-3. **Configure Sessions**: Set the number and duration of work and side sessions
-4. **Choose Pattern**: Select how sessions should be distributed
-5. **Preview**: Review the timeline to see where sessions will be scheduled
-6. **Schedule**: Click "Schedule Sessions" to add them to your calendar
+1. Launch the app, grant Calendar access, and pick calendars.
+2. Enter target counts/durations for Work, Side, Deep, and Planning.
+3. Pick a pattern or preset and review the timeline.
+4. Press **Schedule Sessions** when the layout looks right.
+
+## 🔒 Privacy & Local Processing
+
+- **Local Only**: Scheduling logic, presets, and state live entirely on your Mac—no accounts, telemetry, or remote services.
+- **Privacy Respected**: Calendar access is limited to the calendars you explicitly pick, and the data never leaves the device.
+- **User Confirmation**: As called out in the Calendar Setup/Permission views, the app never modifies your calendars without an explicit button click; every add/remove requires your confirmation.
 
 ## 💡 Usage Tips
 
-- **Hashtag System**: The app identifies existing sessions by parsing event notes:
-  - `#work` - Work Sessions
-  - `#side` - Side Sessions (life admin, errands)
-  - `#deep` - Deep Work Sessions (high-intensity focus)
-  - `#plan` - Planning Sessions
-  
-- **Visual Language**:
-  - **Solid borders** = Real calendar events
-  - **Dashed borders** = Projected/preview sessions
-  
-- **Presets**: Save different configurations for different types of days:
-  - Workday (8 work + 3 side sessions)
-  - Focus Day (6 deep work + 2 side sessions)
-  - Weekend (4 side sessions only)
-
-- **Awareness Mode**: Enable "Aware of existing tasks" to account for already-scheduled sessions when calculating totals
+- **Hashtags**: Add `#work`, `#side`, `#deep`, or `#plan` to event notes so existing sessions are detected automatically.
+- **Visual Language**: Solid borders mark real events; dashed borders are projections.
+- **Presets**: Save Workday, Focus, Weekend, or any custom mix for instant reuse.
+- **Awareness Mode**: Toggle “Aware of existing tasks” when you want counts to respect what’s already booked.
 
 ## 🏗 Architecture & Key Elements
 
@@ -273,6 +309,7 @@ open TaskScheduler.xcodeproj
 
 - [Architecture & Key Elements](#-architecture--key-elements)
 - [Contributing Guidelines](CONTRIBUTING.md)
+- [Code Signing Setup](CODE_SIGNING.md) - **Secure signing for public repos**
 - [Agent Knowledge Base](Agents.md) - **READ THIS FIRST** before making changes
 - [Changelog](CHANGELOG.md)
 
