@@ -1,7 +1,10 @@
 import SwiftUI
+import EventKit
+import AppKit
 
 struct AppSettingsView: View {
     @EnvironmentObject var schedulingEngine: SchedulingEngine
+    @EnvironmentObject var calendarService: CalendarService
     
     @AppStorage("hasSeenWelcome") var hasSeenWelcome = false
     @AppStorage("hasSeenPatternsGuide") var hasSeenPatternsGuide = false
@@ -51,6 +54,48 @@ struct AppSettingsView: View {
                         .foregroundColor(.secondary)
                 }
                 .padding(.top, 4)
+            }
+            
+            Section("Calendar Filters") {
+                if calendarService.authorizationStatus != .fullAccess {
+                    Text("Grant calendar access to manage which calendars contribute busy events.")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                } else {
+                    let calendars = calendarService.availableCalendars.sorted { $0.title < $1.title }
+                    if calendars.isEmpty {
+                        Text("No editable calendars available. Create or add calendars in the macOS Calendar app.")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    } else {   
+                        Text("Unchecked calendars are ignored when fetching busy slots and counting existing sessions.")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                            .padding(.top, 4)
+                        ForEach(calendars, id: \.calendarIdentifier) { calendar in
+                            Toggle(isOn: Binding(
+                                get: { !calendarService.isCalendarExcluded(identifier: calendar.calendarIdentifier) },
+                                set: { included in
+                                    calendarService.setCalendar(calendar, included: included)
+                                }
+                            )) {
+                                HStack(spacing: 10) {
+                                    Circle()
+                                        .fill(color(for: calendar))
+                                        .frame(width: 12, height: 12)
+                                    
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text(calendar.title)
+                                            .font(.body)
+                                        Text(calendar.source.title)
+                                            .font(.caption)
+                                            .foregroundColor(.secondary)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
             }
             
             Section("Timeline Visibility") {
@@ -121,6 +166,7 @@ struct AppSettingsView: View {
         .formStyle(.grouped)
         .frame(width: 550, height: 640)
         .navigationTitle("Settings")
+        .preferredColorScheme(.dark)
         .alert("Reset Presets?", isPresented: $showingResetPresetsConfirmation) {
             Button("Cancel", role: .cancel) { }
             Button("Reset", role: .destructive) {
@@ -181,4 +227,15 @@ struct AppSettingsView: View {
 #Preview {
     AppSettingsView()
         .environmentObject(SchedulingEngine())
+        .environmentObject(CalendarService())
+}
+
+extension AppSettingsView {
+    private func color(for calendar: EKCalendar) -> Color {
+        if let cgColor = calendar.cgColor,
+           let nsColor = NSColor(cgColor: cgColor) {
+            return Color(nsColor: nsColor)
+        }
+        return .gray
+    }
 }

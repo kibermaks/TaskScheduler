@@ -6,6 +6,7 @@ import AppKit
 // MARK: - Calendar Service
 /// Manages all interactions with macOS Calendar via EventKit
 class CalendarService: ObservableObject {
+    private static let excludedCalendarsDefaultsKey = "TaskScheduler.ExcludedCalendars"
     private let eventStore = EKEventStore()
     private var notificationObserver: NSObjectProtocol?
     private let recognizedSessionTags = ["#work", "#side", "#deep", "#plan"]
@@ -16,11 +17,15 @@ class CalendarService: ObservableObject {
     @Published var isLoading = false
     @Published var errorMessage: String?
     @Published var lastRefresh: Date = Date()
+    @Published var excludedCalendarIDs: Set<String> = []
     
     // Store the current date for auto-refresh
     private var currentFetchDate: Date?
     
     init() {
+        excludedCalendarIDs = Set(
+            UserDefaults.standard.stringArray(forKey: Self.excludedCalendarsDefaultsKey) ?? []
+        )
         checkAuthorizationStatus()
         setupNotificationObserver()
     }
@@ -82,9 +87,11 @@ class CalendarService: ObservableObject {
     // MARK: - Calendar Loading
     
     func loadCalendars() {
-        availableCalendars = eventStore.calendars(for: .event).filter { calendar in
-            calendar.type != .birthday && calendar.allowsContentModifications
+        let eventCalendars = eventStore.calendars(for: .event).filter { calendar in
+            calendar.type != .birthday
         }
+        availableCalendars = eventCalendars.filter { $0.allowsContentModifications }
+        pruneExcludedCalendars(using: eventCalendars)
     }
     
     func getCalendar(named name: String) -> EKCalendar? {
@@ -105,33 +112,83 @@ class CalendarService: ObservableObject {
         let name: String
         let color: Color
         
-        init(name: String, color: Color) {
-            self.id = name
-            self.name = name
-            self.color = color
+        init(calendar: EKCalendar) {
+            self.id = calendar.calendarIdentifier
+            self.name = calendar.title
+            if let cgColor = calendar.cgColor,
+               let nsColor = NSColor(cgColor: cgColor) {
+                self.color = Color(nsColor: nsColor)
+            } else {
+                self.color = Color.gray
+            }
         }
     }
     
     func calendarInfoList() -> [CalendarInfo] {
         return availableCalendars
             .sorted { $0.title < $1.title }
-            .map { calendar in
-                let color: Color
-                if let cgColor = calendar.cgColor {
-                    // Convert CGColor -> NSColor -> SwiftUI Color for reliable conversion
-                    let nsColor = NSColor(cgColor: cgColor) ?? NSColor.gray
-                    color = Color(nsColor: nsColor)
-                } else {
-                    color = Color.gray
-                }
-                return CalendarInfo(name: calendar.title, color: color)
-            }
+            .map { CalendarInfo(calendar: $0) }
     }
     
     /// Returns every calendar that supports event entities (read-only + editable).
-    private func allEventCalendars() -> [EKCalendar]? {
-        let calendars = eventStore.calendars(for: .event)
-        return calendars.isEmpty ? nil : calendars
+    private func includedEventCalendars() -> [EKCalendar] {
+        return eventStore.calendars(for: .event)
+            .filter { $0.type != .birthday }
+            .filter { isCalendarIncluded($0) }
+    }
+    
+    private func isCalendarIncluded(_ calendar: EKCalendar) -> Bool {
+        return !excludedCalendarIDs.contains(calendar.calendarIdentifier)
+    }
+    
+    func isCalendarExcluded(identifier: String) -> Bool {
+        return excludedCalendarIDs.contains(identifier)
+    }
+    
+    func setCalendar(_ calendar: EKCalendar, included: Bool) {
+        let identifier = calendar.calendarIdentifier
+        var changed = false
+        
+        if included {
+            if excludedCalendarIDs.contains(identifier) {
+                excludedCalendarIDs.remove(identifier)
+                changed = true
+            }
+        } else {
+            if !excludedCalendarIDs.contains(identifier) {
+                excludedCalendarIDs.insert(identifier)
+                changed = true
+            }
+        }
+        
+        if changed {
+            persistExcludedCalendars()
+            refreshCurrentEvents()
+        }
+    }
+    
+    private func persistExcludedCalendars() {
+        UserDefaults.standard.set(
+            Array(excludedCalendarIDs),
+            forKey: Self.excludedCalendarsDefaultsKey
+        )
+    }
+    
+    private func pruneExcludedCalendars(using calendars: [EKCalendar]) {
+        let validIDs = Set(calendars.map { $0.calendarIdentifier })
+        let filtered = excludedCalendarIDs.filter { validIDs.contains($0) }
+        if filtered.count != excludedCalendarIDs.count {
+            excludedCalendarIDs = Set(filtered)
+            persistExcludedCalendars()
+        }
+    }
+    
+    private func refreshCurrentEvents() {
+        guard let date = currentFetchDate else { return }
+        Task { [weak self] in
+            guard let self else { return }
+            await self.fetchEvents(for: date)
+        }
     }
     
     // MARK: - Event Fetching
@@ -146,7 +203,17 @@ class CalendarService: ObservableObject {
         let startOfDay = calendar.startOfDay(for: date)
         guard let endOfDay = calendar.date(byAdding: .day, value: 1, to: startOfDay) else { return }
         
-        let predicate = eventStore.predicateForEvents(withStart: startOfDay, end: endOfDay, calendars: allEventCalendars())
+        let calendars = includedEventCalendars()
+        if calendars.isEmpty {
+            await MainActor.run {
+                self.busySlots = []
+                self.isLoading = false
+                self.lastRefresh = Date()
+            }
+            return
+        }
+        
+        let predicate = eventStore.predicateForEvents(withStart: startOfDay, end: endOfDay, calendars: calendars)
         let events = eventStore.events(matching: predicate)
         
         // Filter out all-day events (duration >= 23 hours)
@@ -272,6 +339,7 @@ class CalendarService: ObservableObject {
         }
         let uniqueNames = Array(Set(calendarsToFetch))
         let calendars = availableCalendars.filter { uniqueNames.contains($0.title) }
+            .filter { isCalendarIncluded($0) }
         
         if calendars.isEmpty { return (0, 0, 0, []) }
         
@@ -313,7 +381,10 @@ class CalendarService: ObservableObject {
         let startOfDay = calendar.startOfDay(for: date)
         guard let endOfDay = calendar.date(byAdding: .day, value: 1, to: startOfDay) else { return false }
         
-        let predicate = eventStore.predicateForEvents(withStart: startOfDay, end: endOfDay, calendars: allEventCalendars())
+        let calendars = includedEventCalendars()
+        if calendars.isEmpty { return false }
+        
+        let predicate = eventStore.predicateForEvents(withStart: startOfDay, end: endOfDay, calendars: calendars)
         let events = eventStore.events(matching: predicate)
         
         return events.contains { 

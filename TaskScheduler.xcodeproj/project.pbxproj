@@ -30,6 +30,7 @@
 		017 /* CalendarPermissionView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 117 /* CalendarPermissionView.swift */; };
 		018 /* CalendarSetupView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 118 /* CalendarSetupView.swift */; };
 		019 /* CalendarPickerPopover.swift in Sources */ = {isa = PBXBuildFile; fileRef = 119 /* CalendarPickerPopover.swift */; };
+		020 /* UpdateService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 120 /* UpdateService.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -58,6 +59,7 @@
 		117 /* CalendarPermissionView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalendarPermissionView.swift; sourceTree = "<group>"; };
 		118 /* CalendarSetupView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalendarSetupView.swift; sourceTree = "<group>"; };
 		119 /* CalendarPickerPopover.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalendarPickerPopover.swift; sourceTree = "<group>"; };
+		120 /* UpdateService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UpdateService.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -138,6 +140,7 @@
 				106 /* CalendarService.swift */,
 				107 /* SchedulingEngine.swift */,
 				108 /* AvailabilityCalculator.swift */,
+				120 /* UpdateService.swift */,
 			);
 			path = Services;
 			sourceTree = "<group>";
@@ -233,6 +236,7 @@
 				017 /* CalendarPermissionView.swift in Sources */,
 				018 /* CalendarSetupView.swift in Sources */,
 				019 /* CalendarPickerPopover.swift in Sources */,
+				020 /* UpdateService.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -370,7 +374,7 @@
 				CODE_SIGN_ENTITLEMENTS = TaskScheduler/TaskScheduler.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 231;
+				CURRENT_PROJECT_VERSION = 235;
 				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_ASSET_PATHS = "";
 				ENABLE_APP_SANDBOX = NO;
@@ -389,7 +393,7 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MARKETING_VERSION = 1.4;
+				MARKETING_VERSION = 1.5;
 				PRODUCT_BUNDLE_IDENTIFIER = com.kibermaks.TaskScheduler;
 				PRODUCT_NAME = "Task Scheduler";
 				SWIFT_EMIT_LOC_STRINGS = YES;
@@ -407,7 +411,7 @@
 				CODE_SIGN_ENTITLEMENTS = TaskScheduler/TaskScheduler.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 231;
+				CURRENT_PROJECT_VERSION = 235;
 				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_ASSET_PATHS = "";
 				ENABLE_APP_SANDBOX = NO;
@@ -426,7 +430,7 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MARKETING_VERSION = 1.4;
+				MARKETING_VERSION = 1.5;
 				PRODUCT_BUNDLE_IDENTIFIER = com.kibermaks.TaskScheduler;
 				PRODUCT_NAME = "Task Scheduler";
 				SWIFT_EMIT_LOC_STRINGS = YES;
