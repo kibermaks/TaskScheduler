@@ -5,6 +5,7 @@ import AppKit
 struct ContentView: View {
     @EnvironmentObject var calendarService: CalendarService
     @EnvironmentObject var schedulingEngine: SchedulingEngine
+    @EnvironmentObject var updateService: UpdateService
     
     @State private var selectedDate = Date()
     @State private var startTime = Date()
@@ -26,6 +27,7 @@ struct ContentView: View {
     @State private var showingPatternsGuide = false
     @State private var showingTasksGuide = false
     @State private var showingCalendarSetup = false
+    @State private var updateAlert: UpdateService.UpdateAlert?
     
     enum DateSelection: String, CaseIterable {
         case today = "Today"
@@ -90,6 +92,10 @@ struct ContentView: View {
             // Reset setup for testing
             hasCompletedSetup = false
         }
+        .onReceive(updateService.$pendingAlert) { alert in
+            updateAlert = alert
+        }
+        .alert(item: $updateAlert, content: buildUpdateAlert)
     }
 }
 
@@ -447,6 +453,45 @@ struct ContentViewBody: View {
         Task {
             await calendarService.fetchEvents(for: selectedDate)
             if autoPreview { updateProjectedSchedule() }
+        }
+    }
+}
+
+private extension ContentView {
+    func buildUpdateAlert(_ payload: UpdateService.UpdateAlert) -> Alert {
+        switch payload.kind {
+        case .updateAvailable(let info):
+            let message = [
+                "Task Scheduler \(info.version) is available.",
+                "",
+                info.releaseNotes.isEmpty ? "Visit the release page for full details." : info.releaseNotes
+            ].joined(separator: "\n")
+            return Alert(
+                title: Text("Update Available"),
+                message: Text(message),
+                primaryButton: .default(Text("Install Update")) {
+                    updateService.installLatestUpdate(info)
+                },
+                secondaryButton: .cancel(Text("Later")) {
+                    updateService.dismissAlert()
+                }
+            )
+        case .upToDate(let version):
+            return Alert(
+                title: Text("You're Up to Date"),
+                message: Text("You're already running version \(version)."),
+                dismissButton: .default(Text("OK")) {
+                    updateService.dismissAlert()
+                }
+            )
+        case .failure(let message):
+            return Alert(
+                title: Text("Update Check Failed"),
+                message: Text(message),
+                dismissButton: .default(Text("OK")) {
+                    updateService.dismissAlert()
+                }
+            )
         }
     }
 }

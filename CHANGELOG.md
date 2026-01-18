@@ -5,6 +5,21 @@ All notable changes to Task Scheduler will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.5] - 2026-01-18
+
+### Added
+
+- Calendar Filters section in App Settings that lets you uncheck calendars you do not want Task Scheduler to consider
+- Automatic update checks against GitHub releases plus a “Check for Updates…” menu entry
+
+### Changed
+
+- Calendar fetching, busy slot detection, and existing session awareness now ignore events from calendars that you turn off in settings
+
+### Fixed
+
+- Forced consistent Dark theme for the app
+
 ## [1.4] - 2026-01-16
 
 ### Added
