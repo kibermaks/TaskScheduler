@@ -1,4 +1,5 @@
 import SwiftUI
+import Combine
 
 struct TimelineView: View {
     let selectedDate: Date
@@ -9,6 +10,7 @@ struct TimelineView: View {
     
     private let hourHeight: CGFloat = 90 // Zoomed in from 60
     private let timeColumnWidth: CGFloat = 55
+    private let currentTimeTimer = Timer.publish(every: 30, on: .main, in: .common).autoconnect()
     
     
     // Detail Sheet State
@@ -41,6 +43,7 @@ struct TimelineView: View {
     // Timeline intro bar dismissal
     @AppStorage("timelineIntroBarDismissed") private var introBarDismissed = false
     @State private var showNod = false
+    @State private var currentTime = Date()
     
     private var isNarrow: Bool {
         // Use a reasonable threshold for narrow width
@@ -77,6 +80,9 @@ struct TimelineView: View {
             }
             .onChange(of: geo.size.width) { _, newWidth in
                 containerWidth = newWidth
+            }
+            .onReceive(currentTimeTimer) { date in
+                currentTime = date
             }
         }
     }
@@ -198,7 +204,7 @@ struct TimelineView: View {
                 hourGridLines
                 
                 if Calendar.current.isDateInToday(selectedDate) {
-                    currentTimeIndicator(width: geometry.size.width)
+                    currentTimeIndicator(currentTime: currentTime, width: geometry.size.width)
                 }
                 
                 // Existing events - left half
@@ -408,19 +414,21 @@ extension TimelineView {
     
     
     
-    private func currentTimeIndicator(width: CGFloat) -> some View {
-        let yPos = calculateYPosition(for: Date())
+    private func currentTimeIndicator(currentTime: Date, width: CGFloat) -> some View {
+        let yPos = calculateYPosition(for: currentTime)
         
-        return HStack(spacing: 0) {
+        return ZStack(alignment: .topLeading) {
             Circle()
                 .fill(Color.red)
                 .frame(width: 10, height: 10)
+                .position(x: 5, y: yPos)
             
-            Rectangle()
-                .fill(Color.red)
-                .frame(width: width - 10, height: 2)
+            Path { path in
+                path.move(to: CGPoint(x: 10, y: yPos))
+                path.addLine(to: CGPoint(x: width, y: yPos))
+            }
+            .stroke(Color.red, lineWidth: 2)
         }
-        .offset(x: 0, y: yPos)
     }
     
     // ... (rest of file)
