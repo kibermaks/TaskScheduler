@@ -1,5 +1,19 @@
 import Foundation
 
+// MARK: - Preset Schema Version
+/// Tracks the schema version of presets for migration purposes
+/// Increment this when adding new required fields or making breaking changes
+enum PresetSchemaVersion: Int, Codable, Comparable {
+    case v1 = 1  // Initial version (before flexibleSideScheduling)
+    case v2 = 2  // Added flexibleSideScheduling field
+    
+    static let current: PresetSchemaVersion = .v2
+    
+    static func < (lhs: PresetSchemaVersion, rhs: PresetSchemaVersion) -> Bool {
+        return lhs.rawValue < rhs.rawValue
+    }
+}
+
 // MARK: - Calendar Mapping for Presets
 struct CalendarMapping: Codable, Equatable {
     var workCalendarName: String
@@ -63,9 +77,13 @@ struct Preset: Identifiable, Codable, Equatable {
     var schedulePlanning: Bool
     var pattern: SchedulePattern
     var workSessionsPerCycle: Int
+    var flexibleSideScheduling: Bool
     
     // Default start hour for future days
     var defaultStartHour: Int
+    
+    // Schema version for migration tracking
+    var schemaVersion: PresetSchemaVersion
     
     init(
         id: UUID = UUID(),
@@ -84,11 +102,13 @@ struct Preset: Identifiable, Codable, Equatable {
         schedulePlanning: Bool = true,
         pattern: SchedulePattern = .alternating,
         workSessionsPerCycle: Int = 2,
-        sideSessionsPerCycle: Int = 1,
+        sideSessionsPerCycle: Int = 2,
         sideFirst: Bool = false,
         deepSessionConfig: DeepSessionConfig = .default,
+        flexibleSideScheduling: Bool = true,
         calendarMapping: CalendarMapping = .default,
-        defaultStartHour: Int = 8
+        defaultStartHour: Int = 8,
+        schemaVersion: PresetSchemaVersion = .current
     ) {
         self.id = id
         self.name = name
@@ -112,8 +132,10 @@ struct Preset: Identifiable, Codable, Equatable {
         self.sideSessionsPerCycle = sideSessionsPerCycle
         self.sideFirst = sideFirst
         self.deepSessionConfig = deepSessionConfig
+        self.flexibleSideScheduling = flexibleSideScheduling
         self.calendarMapping = calendarMapping
         self.defaultStartHour = defaultStartHour
+        self.schemaVersion = schemaVersion
     }
     
     // MARK: - Session Count Calculation Helpers
@@ -181,7 +203,8 @@ struct Preset: Identifiable, Codable, Equatable {
         case workSessionDuration, sideSessionDuration
         case planningDuration, restDuration, sideRestDuration, deepRestDuration
         case schedulePlanning, pattern, workSessionsPerCycle, sideSessionsPerCycle, sideFirst
-        case deepSessionConfig, calendarMapping, defaultStartHour
+        case deepSessionConfig, flexibleSideScheduling, calendarMapping, defaultStartHour
+        case schemaVersion
     }
     
     init(from decoder: Decoder) throws {
@@ -205,8 +228,11 @@ struct Preset: Identifiable, Codable, Equatable {
         sideSessionsPerCycle = try container.decodeIfPresent(Int.self, forKey: .sideSessionsPerCycle) ?? 1
         sideFirst = try container.decodeIfPresent(Bool.self, forKey: .sideFirst) ?? false
         deepSessionConfig = try container.decode(DeepSessionConfig.self, forKey: .deepSessionConfig)
+        flexibleSideScheduling = try container.decodeIfPresent(Bool.self, forKey: .flexibleSideScheduling) ?? true
         calendarMapping = try container.decode(CalendarMapping.self, forKey: .calendarMapping)
         defaultStartHour = try container.decodeIfPresent(Int.self, forKey: .defaultStartHour) ?? 8
+        // If version is missing, assume v1 (old preset)
+        schemaVersion = try container.decodeIfPresent(PresetSchemaVersion.self, forKey: .schemaVersion) ?? .v1
     }
     
     // MARK: - Default Presets
@@ -439,6 +465,31 @@ struct Preset: Identifiable, Codable, Equatable {
     }
 }
 
+// MARK: - Preset Migration
+extension Preset {
+    /// Migrates a preset from an older schema version to the current version
+    mutating func migrateToCurrentVersion() {
+        while schemaVersion < PresetSchemaVersion.current {
+            migrateToNextVersion()
+        }
+    }
+    
+    /// Migrates preset to the next version
+    private mutating func migrateToNextVersion() {
+        switch schemaVersion {
+        case .v1:
+            // Migration from v1 to v2: Add flexibleSideScheduling with default value
+            // flexibleSideScheduling already has a default value in decoder (true),
+            // but we ensure it's explicitly set here for migration clarity
+            flexibleSideScheduling = true // Default to enabled for migrated presets
+            schemaVersion = .v2
+        case .v2:
+            // Already at latest version
+            break
+        }
+    }
+}
+
 // MARK: - Preset Storage Manager
 class PresetStorage {
     static let shared = PresetStorage()
@@ -449,8 +500,23 @@ class PresetStorage {
     
     func loadPresets() -> [Preset] {
         if let data = UserDefaults.standard.data(forKey: presetsKey),
-           let presets = try? JSONDecoder().decode([Preset].self, from: data),
+           var presets = try? JSONDecoder().decode([Preset].self, from: data),
            !presets.isEmpty {
+            // Migrate presets to current version if needed
+            var needsSave = false
+            for index in presets.indices {
+                let oldVersion = presets[index].schemaVersion
+                presets[index].migrateToCurrentVersion()
+                if presets[index].schemaVersion != oldVersion {
+                    needsSave = true
+                }
+            }
+            
+            // Save migrated presets if any were updated
+            if needsSave {
+                savePresets(presets)
+            }
+            
             return presets
         }
         // Return empty - presets should be created after calendar setup
@@ -488,7 +554,13 @@ class PresetStorage {
     }
     
     func savePresets(_ presets: [Preset]) {
-        guard let data = try? JSONEncoder().encode(presets) else { return }
+        // Ensure all presets are at current version before saving
+        var presetsToSave = presets
+        for index in presetsToSave.indices {
+            presetsToSave[index].schemaVersion = PresetSchemaVersion.current
+        }
+        
+        guard let data = try? JSONEncoder().encode(presetsToSave) else { return }
         UserDefaults.standard.set(data, forKey: presetsKey)
     }
     

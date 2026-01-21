@@ -525,6 +525,7 @@ struct SettingsChangeModifier: ViewModifier {
             .onChange(of: engine.workSessionsPerCycle) { _, _ in trigger() }
             .onChange(of: engine.sideSessionsPerCycle) { _, _ in trigger() }
             .onChange(of: engine.sideFirst) { _, _ in trigger() }
+            .onChange(of: engine.flexibleSideScheduling) { _, _ in trigger() }
             .onChange(of: engine.awareExistingTasks) { _, _ in trigger() }
             .onChange(of: engine.sideRestDuration) { _, _ in trigger() }
             .onChange(of: engine.deepRestDuration) { _, _ in trigger() }

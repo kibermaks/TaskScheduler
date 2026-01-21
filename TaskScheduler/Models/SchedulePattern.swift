@@ -6,6 +6,7 @@ enum SchedulePattern: String, Codable, CaseIterable, Identifiable {
     case alternatingReverse = "Alternating Reverse"
     case allWorkFirst = "All Work First"
     case allSideFirst = "All Side First"
+    case sidesFirstAndLast = "Sides First & Last"
     case customRatio = "Custom Ratio"
     
     var id: String { rawValue }
@@ -22,6 +23,8 @@ enum SchedulePattern: String, Codable, CaseIterable, Identifiable {
             return "Schedules all Side sessions first, then Work sessions"
         case .customRatio:
             return "Custom pattern with configurable Work:Side ratio"
+        case .sidesFirstAndLast:
+            return "Sides at the beginning and end, with all Work sessions in between"
         }
     }
     
@@ -32,6 +35,7 @@ enum SchedulePattern: String, Codable, CaseIterable, Identifiable {
         case .allWorkFirst: return "arrow.right.to.line"
         case .allSideFirst: return "arrow.left.to.line"
         case .customRatio: return "slider.horizontal.3"
+        case .sidesFirstAndLast: return "arrow.left.and.right"
         }
     }
 }
@@ -163,6 +167,24 @@ struct SessionOrderGenerator {
                     remainingWork -= 1
                 }
             }
+            
+        case .sidesFirstAndLast:
+            // Sides First & Last: Put up to sideSessionsPerCycle at the beginning,
+            // then all work sessions, then remaining side sessions
+            var remainingWork = workSessions
+            var remainingSide = sideSessions
+            
+            // Add initial side sessions (up to sideSessionsPerCycle)
+            let initialSides = min(sideSessionsPerCycle, remainingSide)
+            order.append(contentsOf: Array(repeating: .side, count: initialSides))
+            remainingSide -= initialSides
+            
+            // Add all work sessions
+            order.append(contentsOf: Array(repeating: .work, count: remainingWork))
+            remainingWork = 0
+            
+            // Add remaining side sessions
+            order.append(contentsOf: Array(repeating: .side, count: remainingSide))
         }
         
         return order

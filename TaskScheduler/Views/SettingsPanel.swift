@@ -567,7 +567,7 @@ struct SettingsPanel: View {
                         }
                     }
                     
-                    if schedulingEngine.pattern == .customRatio {
+                    if [.customRatio, .sidesFirstAndLast].contains(schedulingEngine.pattern) {
                         HStack {
                             Text("Side per cycle:")
                                 .font(.system(size: 13))
@@ -577,13 +577,36 @@ struct SettingsPanel: View {
                             
                             NumericInputField(value: $schedulingEngine.sideSessionsPerCycle, range: 1...5)
                         }
-                        
+                    }
+                    
+                    if schedulingEngine.pattern == .customRatio {
                         Toggle("Side First", isOn: $schedulingEngine.sideFirst)
                             .font(.system(size: 13))
                             .foregroundColor(.white.opacity(0.7))
                             .toggleStyle(.switch)
                             .tint(Color(hex: "3B82F6"))
                     }
+                    
+                    // Flexible Side Scheduling setting
+                    Divider().background(Color.white.opacity(0.05))
+                    
+                    HStack {
+                        Text("Flexible Side Scheduling")
+                            .font(.system(size: 13))
+                            .foregroundColor(.white.opacity(0.7))
+                        
+                        Spacer()
+                        
+                        Toggle("", isOn: $schedulingEngine.flexibleSideScheduling)
+                            .labelsHidden()
+                            .toggleStyle(.switch)
+                            .tint(Color(hex: "3B82F6"))
+                    }
+                    
+                    Text("Try to fit side sessions into smaller time gaps when work sessions don't fit")
+                        .font(.system(size: 11))
+                        .foregroundColor(.white.opacity(0.5))
+                        .padding(.leading, 8)
                 }
             }
         }

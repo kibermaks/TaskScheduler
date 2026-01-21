@@ -17,7 +17,7 @@ class SchedulingEngine: ObservableObject {
     @Published var schedulePlanning: Bool = true { didSet { saveState() } }
     @Published var pattern: SchedulePattern = .alternating { didSet { saveState() } }
     @Published var workSessionsPerCycle: Int = 2 { didSet { saveState() } }
-    @Published var sideSessionsPerCycle: Int = 1 { didSet { saveState() } }
+    @Published var sideSessionsPerCycle: Int = 2 { didSet { saveState() } }
     @Published var sideFirst: Bool = false { didSet { saveState() } } // New
     @Published var workCalendarName: String = "Work" { didSet { saveState() } }
     @Published var sideCalendarName: String = "Side Tasks" { didSet { saveState() } }
@@ -33,8 +33,12 @@ class SchedulingEngine: ObservableObject {
     @Published var dayEndHour: Int = (UserDefaults.standard.object(forKey: "TaskScheduler.DayEndHour") as? Int) ?? 24 {
         didSet { UserDefaults.standard.set(dayEndHour, forKey: "TaskScheduler.DayEndHour") }
     }
-    
-    
+    @Published var flexibleSideScheduling: Bool = UserDefaults.standard.object(forKey: "TaskScheduler.FlexibleSideScheduling") as? Bool ?? true {
+        didSet {
+            UserDefaults.standard.set(flexibleSideScheduling, forKey: "TaskScheduler.FlexibleSideScheduling")
+            saveState()
+        }
+    }
     
     
     // Task lists and enablement
@@ -110,6 +114,7 @@ class SchedulingEngine: ObservableObject {
         sideSessionsPerCycle = preset.sideSessionsPerCycle
         deepSessionConfig = preset.deepSessionConfig
         sideFirst = preset.sideFirst
+        flexibleSideScheduling = preset.flexibleSideScheduling
         
         schedulePlanning = preset.schedulePlanning
         pattern = preset.pattern
@@ -144,6 +149,7 @@ class SchedulingEngine: ObservableObject {
             sideSessionsPerCycle: sideSessionsPerCycle,
             sideFirst: sideFirst,
             deepSessionConfig: deepSessionConfig,
+            flexibleSideScheduling: flexibleSideScheduling,
             calendarMapping: CalendarMapping(
                 workCalendarName: workCalendarName,
                 sideCalendarName: sideCalendarName
@@ -321,6 +327,7 @@ class SchedulingEngine: ObservableObject {
             if let conflictEnd = conflict {
                 if !planningNeeded && !isDeep {
                     // Try swapping work <-> side when one doesn't fit
+                    // If flexibleSideScheduling is enabled, also try fitting side in smaller gaps
                     if let alt = tryAlternativeSession(
                         currentTime: currentTime,
                         conflictEnd: conflictEnd,
@@ -333,7 +340,8 @@ class SchedulingEngine: ObservableObject {
                         workTitles: workTitles,
                         sideTitles: sideTitles,
                         projectedWorkCount: projectedWorkCount,
-                        projectedSideCount: projectedSideCount
+                        projectedSideCount: projectedSideCount,
+                        flexibleSideScheduling: flexibleSideScheduling
                     ) {
                         sessions.append(alt)
                         if alt.type == .work {
@@ -451,6 +459,8 @@ class SchedulingEngine: ObservableObject {
     // MARK: - Try Alternative Session
     
     /// Tries to fit a different session type in a gap that's too small for the preferred type
+    /// When flexibleSideScheduling is OFF, only tries swapping if both types fit perfectly
+    /// When flexibleSideScheduling is ON, also tries fitting sides in smaller gaps
     private func tryAlternativeSession(
         currentTime: Date,
         conflictEnd: Date,
@@ -463,8 +473,15 @@ class SchedulingEngine: ObservableObject {
         workTitles: [String],
         sideTitles: [String],
         projectedWorkCount: Int,
-        projectedSideCount: Int
+        projectedSideCount: Int,
+        flexibleSideScheduling: Bool
     ) -> ScheduledSession? {
+        // If flexibleSideScheduling is OFF, don't try alternative session types at all
+        // This prevents sides from filling gaps when work doesn't fit
+        guard flexibleSideScheduling else {
+            return nil
+        }
+        
         // If we can't fit a work session, try side (and vice versa)
         let alternativeType: SessionType
         let alternativeDuration: Int
@@ -509,6 +526,41 @@ class SchedulingEngine: ObservableObject {
                 calendarName: alternativeCalendar,
                 notes: alternativeType == .work ? "#work" : "#side"
             )
+        }
+        
+        // If flexibleSideScheduling is enabled and we're trying to fit a work session,
+        // also try fitting a side session in the available gap before the conflict
+        // This allows sides to be scheduled in smaller gaps that work sessions can't fit into
+        if currentType == .work && sideCount < sideSessions {
+            let gapDuration = conflictEnd.timeIntervalSince(currentTime)
+            let sideDuration = TimeInterval(sideSessionDuration * 60)
+            
+            // Check if side session fits in the gap (even if it's smaller than work duration)
+            if gapDuration >= sideDuration {
+                let sideEnd = currentTime.addingTimeInterval(sideDuration)
+                
+                // Double-check no conflicts and that it fits before end of day
+                if sideEnd <= endOfDay {
+                    let sideConflict = findConflict(
+                        start: currentTime,
+                        end: sideEnd,
+                        busySlots: busySlots,
+                        buffer: buffer
+                    )
+                    
+                    if sideConflict == nil {
+                        let sideTitle = (useSideTasks && projectedSideCount < sideTitles.count) ? sideTitles[projectedSideCount] : sideSessionName
+                        return ScheduledSession(
+                            type: .side,
+                            title: sideTitle,
+                            startTime: currentTime,
+                            endTime: sideEnd,
+                            calendarName: sideCalendarName,
+                            notes: "#side"
+                        )
+                    }
+                }
+            }
         }
         
         return nil
@@ -792,6 +844,7 @@ class SchedulingEngine: ObservableObject {
             sideSessionsPerCycle: sideSessionsPerCycle,
             sideFirst: sideFirst,
             deepSessionConfig: deepSessionConfig,
+            flexibleSideScheduling: flexibleSideScheduling,
             calendarMapping: CalendarMapping(
                 workCalendarName: workCalendarName,
                 sideCalendarName: sideCalendarName
@@ -805,9 +858,12 @@ class SchedulingEngine: ObservableObject {
     
     private func loadState() {
         guard let data = UserDefaults.standard.data(forKey: "TaskScheduler.SavedState"),
-              let state = try? JSONDecoder().decode(Preset.self, from: data) else {
+              var state = try? JSONDecoder().decode(Preset.self, from: data) else {
             return
         }
+        
+        // Migrate saved state to current version if needed
+        state.migrateToCurrentVersion()
         
         isLoadingState = true
         defer { isLoadingState = false }
@@ -828,6 +884,7 @@ class SchedulingEngine: ObservableObject {
         sideSessionsPerCycle = state.sideSessionsPerCycle
         sideFirst = state.sideFirst
         deepSessionConfig = state.deepSessionConfig
+        flexibleSideScheduling = state.flexibleSideScheduling
         workCalendarName = state.calendarMapping.workCalendarName
         sideCalendarName = state.calendarMapping.sideCalendarName
     }
@@ -849,6 +906,7 @@ class SchedulingEngine: ObservableObject {
                sideSessionsPerCycle != preset.sideSessionsPerCycle ||
                sideFirst != preset.sideFirst ||
                deepSessionConfig != preset.deepSessionConfig ||
+               flexibleSideScheduling != preset.flexibleSideScheduling ||
                workCalendarName != preset.calendarMapping.workCalendarName ||
                sideCalendarName != preset.calendarMapping.sideCalendarName
     }
