@@ -265,6 +265,7 @@ class CalendarService: ObservableObject {
     func createSessions(_ sessions: [ScheduledSession]) -> (success: Int, failed: Int) {
         var successCount = 0
         var failCount = 0
+        var savedNames: Set<String> = [] // Track unique names saved per type
         
         for session in sessions {
             if createEvent(
@@ -275,6 +276,12 @@ class CalendarService: ObservableObject {
                 notes: session.notes
             ) {
                 successCount += 1
+                // Save session name to history when successfully created (only once per unique name per batch)
+                let nameKey = "\(session.type.rawValue):\(session.title)"
+                if !savedNames.contains(nameKey) {
+                    SessionNameHistory.shared.addName(session.title, for: session.type)
+                    savedNames.insert(nameKey)
+                }
             } else {
                 failCount += 1
             }

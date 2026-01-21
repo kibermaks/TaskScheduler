@@ -14,6 +14,8 @@ struct SettingsPanel: View {
     @State private var showingPatternHelp = false
     @State private var showingRestHelp = false
     
+    @StateObject private var nameHistory = SessionNameHistory.shared
+    
     private let workHelpText = "Work sessions are your primary focus blocks. Use these for your main professional tasks or projects that require sustained concentration."
     private let sideHelpText = "Side sessions are for secondary tasks or 'life admin'. Perfect for paying bills, checking something new, responding to emails, or handling quick errands."
     private let deepHelpText = "Deep sessions (often called Deep Work) are rare, high-intensity focus blocks. They are injected periodically for your most demanding creative or analytical work."
@@ -38,7 +40,8 @@ struct SettingsPanel: View {
                     duration: $schedulingEngine.workSessionDuration,
                     calendar: $schedulingEngine.workCalendarName,
                     helpText: workHelpText,
-                    isShowingHelp: $showingWorkHelp
+                    isShowingHelp: $showingWorkHelp,
+                    sessionType: .work
                 )
                 
                 Divider().background(Color.white.opacity(0.1))
@@ -53,7 +56,8 @@ struct SettingsPanel: View {
                     duration: $schedulingEngine.sideSessionDuration,
                     calendar: $schedulingEngine.sideCalendarName,
                     helpText: sideHelpText,
-                    isShowingHelp: $showingSideHelp
+                    isShowingHelp: $showingSideHelp,
+                    sessionType: .side
                 )
                 
                 Divider().background(Color.white.opacity(0.1))
@@ -212,7 +216,8 @@ struct SettingsPanel: View {
         duration: Binding<Int>,
         calendar: Binding<String>,
         helpText: String,
-        isShowingHelp: Binding<Bool>
+        isShowingHelp: Binding<Bool>,
+        sessionType: SessionType
     ) -> some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 8) {
@@ -264,6 +269,45 @@ struct SettingsPanel: View {
                     .background(Color.white.opacity(0.1))
                     .cornerRadius(6)
                     .frame(width: 150)
+            }
+            
+            // Name History
+            let historyNames = nameHistory.getNames(for: sessionType)
+            if !historyNames.isEmpty {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Recent names:")
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundColor(.white.opacity(0.5))
+                    
+                    FlowLayout(spacing: 6) {
+                        ForEach(historyNames, id: \.self) { historyName in
+                            HStack(spacing: 4) {
+                                Button {
+                                    name.wrappedValue = historyName
+                                } label: {
+                                    Text(historyName)
+                                        .font(.system(size: 11))
+                                        .foregroundColor(.white.opacity(0.8))
+                                        .padding(.horizontal, 8)
+                                        .padding(.vertical, 4)
+                                        .background(Color.white.opacity(0.1))
+                                        .cornerRadius(4)
+                                }
+                                .buttonStyle(.plain)
+                                
+                                Button {
+                                    nameHistory.removeName(historyName, from: sessionType)
+                                } label: {
+                                    Image(systemName: "xmark")
+                                        .font(.system(size: 8, weight: .bold))
+                                        .foregroundColor(.white.opacity(0.5))
+                                        .frame(width: 14, height: 14)
+                                }
+                                .buttonStyle(.plain)
+                            }
+                        }
+                    }
+                }
             }
             
             // Duration
@@ -362,6 +406,45 @@ struct SettingsPanel: View {
                          .background(Color.white.opacity(0.1))
                          .cornerRadius(6)
                          .frame(width: 150)
+                 }
+                 
+                 // Deep Name History
+                 let deepHistoryNames = nameHistory.getNames(for: .deep)
+                 if !deepHistoryNames.isEmpty {
+                     VStack(alignment: .leading, spacing: 6) {
+                         Text("Recent names:")
+                             .font(.system(size: 11, weight: .medium))
+                             .foregroundColor(.white.opacity(0.5))
+                         
+                         FlowLayout(spacing: 6) {
+                             ForEach(deepHistoryNames, id: \.self) { historyName in
+                                 HStack(spacing: 4) {
+                                     Button {
+                                         schedulingEngine.deepSessionConfig.name = historyName
+                                     } label: {
+                                         Text(historyName)
+                                             .font(.system(size: 11))
+                                             .foregroundColor(.white.opacity(0.8))
+                                             .padding(.horizontal, 8)
+                                             .padding(.vertical, 4)
+                                             .background(Color.white.opacity(0.1))
+                                             .cornerRadius(4)
+                                     }
+                                     .buttonStyle(.plain)
+                                     
+                                     Button {
+                                         nameHistory.removeName(historyName, from: .deep)
+                                     } label: {
+                                         Image(systemName: "xmark")
+                                             .font(.system(size: 8, weight: .bold))
+                                             .foregroundColor(.white.opacity(0.5))
+                                             .frame(width: 14, height: 14)
+                                     }
+                                     .buttonStyle(.plain)
+                                 }
+                             }
+                         }
+                     }
                  }
                  
                  HStack {
@@ -564,6 +647,170 @@ struct SettingsPanel: View {
                  
                  NumericInputField(value: $schedulingEngine.deepRestDuration, range: 0...60, step: 5, unit: "min")
              }
+        }
+    }
+}
+
+// MARK: - Flow Layout Helper
+struct FlowLayout: Layout {
+    var spacing: CGFloat = 8
+    
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let result = FlowResult(
+            in: proposal.replacingUnspecifiedDimensions().width,
+            subviews: subviews,
+            spacing: spacing
+        )
+        return result.size
+    }
+    
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        let result = FlowResult(
+            in: bounds.width,
+            subviews: subviews,
+            spacing: spacing
+        )
+        for (index, subview) in subviews.enumerated() {
+            subview.place(at: CGPoint(x: bounds.minX + result.frames[index].minX, y: bounds.minY + result.frames[index].minY), proposal: .unspecified)
+        }
+    }
+    
+    struct FlowResult {
+        var size: CGSize = .zero
+        var frames: [CGRect] = []
+        
+        init(in maxWidth: CGFloat, subviews: Subviews, spacing: CGFloat) {
+            var currentX: CGFloat = 0
+            var currentY: CGFloat = 0
+            var lineHeight: CGFloat = 0
+            
+            for subview in subviews {
+                let size = subview.sizeThatFits(.unspecified)
+                
+                if currentX + size.width > maxWidth && currentX > 0 {
+                    currentX = 0
+                    currentY += lineHeight + spacing
+                    lineHeight = 0
+                }
+                
+                frames.append(CGRect(x: currentX, y: currentY, width: size.width, height: size.height))
+                lineHeight = max(lineHeight, size.height)
+                currentX += size.width + spacing
+            }
+            
+            self.size = CGSize(width: maxWidth, height: currentY + lineHeight)
+        }
+    }
+}
+
+// MARK: - Session Name History Manager
+class SessionNameHistory: ObservableObject {
+    static let shared = SessionNameHistory()
+    
+    private let workKey = "TaskScheduler.WorkSessionNames"
+    private let sideKey = "TaskScheduler.SideSessionNames"
+    private let deepKey = "TaskScheduler.DeepSessionNames"
+    
+    @Published var workNames: [String] = []
+    @Published var sideNames: [String] = []
+    @Published var deepNames: [String] = []
+    
+    private init() {
+        loadNames()
+    }
+    
+    private func loadNames() {
+        workNames = UserDefaults.standard.stringArray(forKey: workKey) ?? []
+        sideNames = UserDefaults.standard.stringArray(forKey: sideKey) ?? []
+        deepNames = UserDefaults.standard.stringArray(forKey: deepKey) ?? []
+    }
+    
+    func addName(_ name: String, for type: SessionType) {
+        guard !name.isEmpty else { return }
+        
+        var names: [String]
+        let key: String
+        
+        switch type {
+        case .work:
+            names = workNames
+            key = workKey
+        case .side:
+            names = sideNames
+            key = sideKey
+        case .deep:
+            names = deepNames
+            key = deepKey
+        default:
+            return
+        }
+        
+        // Remove if exists and add to front (most recent first)
+        names.removeAll { $0 == name }
+        names.insert(name, at: 0)
+        
+        // Limit to 20 most recent
+        if names.count > 20 {
+            names = Array(names.prefix(20))
+        }
+        
+        UserDefaults.standard.set(names, forKey: key)
+        
+        switch type {
+        case .work:
+            workNames = names
+        case .side:
+            sideNames = names
+        case .deep:
+            deepNames = names
+        default:
+            break
+        }
+    }
+    
+    func removeName(_ name: String, from type: SessionType) {
+        var names: [String]
+        let key: String
+        
+        switch type {
+        case .work:
+            names = workNames
+            key = workKey
+        case .side:
+            names = sideNames
+            key = sideKey
+        case .deep:
+            names = deepNames
+            key = deepKey
+        default:
+            return
+        }
+        
+        names.removeAll { $0 == name }
+        UserDefaults.standard.set(names, forKey: key)
+        
+        switch type {
+        case .work:
+            workNames = names
+        case .side:
+            sideNames = names
+        case .deep:
+            deepNames = names
+        default:
+            break
+        }
+    }
+    
+    func getNames(for type: SessionType) -> [String] {
+        switch type {
+        case .work:
+            return workNames
+        case .side:
+            return sideNames
+        case .deep:
+            return deepNames
+        default:
+            return []
         }
     }
 }
