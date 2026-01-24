@@ -5,6 +5,18 @@ All notable changes to Task Scheduler will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.6] - 2026-01-21
+
+### Added
+
+- Sides First & Last pattern
+- 'Flexible Side Scheduling' toggle to disallow sides to be scheduled in smaller gaps that work sessions can't fit into
+- Suggestion dropdowns with last inputted names for sessions
+
+### Changed
+
+- Overlapping calendar events in the timeline now render side-by-side for better readability
+
 ## [1.5] - 2026-01-18
 
 ### Added

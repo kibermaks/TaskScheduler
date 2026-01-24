@@ -1,4 +1,6 @@
 import SwiftUI
+import AppKit
+import Combine
 
 struct SettingsPanel: View {
     @EnvironmentObject var schedulingEngine: SchedulingEngine
@@ -254,61 +256,13 @@ struct SettingsPanel: View {
                 NumericInputField(value: count, range: 0...15)
             }
             
-            // Name
-            HStack {
-                Text("Name:")
-                    .font(.system(size: 13))
-                    .foregroundColor(.white.opacity(0.7))
-                
-                Spacer()
-                
-                TextField("Session name", text: name)
-                    .textFieldStyle(.plain)
-                    .font(.system(size: 13))
-                    .padding(6)
-                    .background(Color.white.opacity(0.1))
-                    .cornerRadius(6)
-                    .frame(width: 150)
-            }
-            
-            // Name History
-            let historyNames = nameHistory.getNames(for: sessionType)
-            if !historyNames.isEmpty {
-                VStack(alignment: .leading, spacing: 6) {
-                    Text("Recent names:")
-                        .font(.system(size: 11, weight: .medium))
-                        .foregroundColor(.white.opacity(0.5))
-                    
-                    FlowLayout(spacing: 6) {
-                        ForEach(historyNames, id: \.self) { historyName in
-                            HStack(spacing: 4) {
-                                Button {
-                                    name.wrappedValue = historyName
-                                } label: {
-                                    Text(historyName)
-                                        .font(.system(size: 11))
-                                        .foregroundColor(.white.opacity(0.8))
-                                        .padding(.horizontal, 8)
-                                        .padding(.vertical, 4)
-                                        .background(Color.white.opacity(0.1))
-                                        .cornerRadius(4)
-                                }
-                                .buttonStyle(.plain)
-                                
-                                Button {
-                                    nameHistory.removeName(historyName, from: sessionType)
-                                } label: {
-                                    Image(systemName: "xmark")
-                                        .font(.system(size: 8, weight: .bold))
-                                        .foregroundColor(.white.opacity(0.5))
-                                        .frame(width: 14, height: 14)
-                                }
-                                .buttonStyle(.plain)
-                            }
-                        }
-                    }
-                }
-            }
+            // Name with history dropdown
+            NameFieldWithHistory(
+                label: "Name:",
+                text: name,
+                sessionType: sessionType,
+                placeholder: "Session name"
+            )
             
             // Duration
             HStack {
@@ -394,58 +348,12 @@ struct SettingsPanel: View {
                     NumericInputField(value: $schedulingEngine.deepSessionConfig.injectAfterEvery, range: 1...10, unit: "slots")
                 }
  
-                 HStack {
-                     Text("Name:")
-                         .font(.system(size: 13))
-                         .foregroundColor(.white.opacity(0.7))
-                     Spacer()
-                     TextField("Name", text: $schedulingEngine.deepSessionConfig.name)
-                         .textFieldStyle(.plain)
-                         .font(.system(size: 13))
-                         .padding(6)
-                         .background(Color.white.opacity(0.1))
-                         .cornerRadius(6)
-                         .frame(width: 150)
-                 }
-                 
-                 // Deep Name History
-                 let deepHistoryNames = nameHistory.getNames(for: .deep)
-                 if !deepHistoryNames.isEmpty {
-                     VStack(alignment: .leading, spacing: 6) {
-                         Text("Recent names:")
-                             .font(.system(size: 11, weight: .medium))
-                             .foregroundColor(.white.opacity(0.5))
-                         
-                         FlowLayout(spacing: 6) {
-                             ForEach(deepHistoryNames, id: \.self) { historyName in
-                                 HStack(spacing: 4) {
-                                     Button {
-                                         schedulingEngine.deepSessionConfig.name = historyName
-                                     } label: {
-                                         Text(historyName)
-                                             .font(.system(size: 11))
-                                             .foregroundColor(.white.opacity(0.8))
-                                             .padding(.horizontal, 8)
-                                             .padding(.vertical, 4)
-                                             .background(Color.white.opacity(0.1))
-                                             .cornerRadius(4)
-                                     }
-                                     .buttonStyle(.plain)
-                                     
-                                     Button {
-                                         nameHistory.removeName(historyName, from: .deep)
-                                     } label: {
-                                         Image(systemName: "xmark")
-                                             .font(.system(size: 8, weight: .bold))
-                                             .foregroundColor(.white.opacity(0.5))
-                                             .frame(width: 14, height: 14)
-                                     }
-                                     .buttonStyle(.plain)
-                                 }
-                             }
-                         }
-                     }
-                 }
+                 NameFieldWithHistory(
+                     label: "Name:",
+                     text: $schedulingEngine.deepSessionConfig.name,
+                     sessionType: .deep,
+                     placeholder: "Name"
+                 )
                  
                  HStack {
                      Text("Duration:")
@@ -674,54 +582,66 @@ struct SettingsPanel: View {
     }
 }
 
-// MARK: - Flow Layout Helper
-struct FlowLayout: Layout {
-    var spacing: CGFloat = 8
+// MARK: - Name Field with Suggestions
+struct NameFieldWithHistory: View {
+    let label: String
+    @Binding var text: String
+    let sessionType: SessionType
+    let placeholder: String
     
-    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
-        let result = FlowResult(
-            in: proposal.replacingUnspecifiedDimensions().width,
-            subviews: subviews,
-            spacing: spacing
-        )
-        return result.size
-    }
+    @StateObject private var nameHistory = SessionNameHistory.shared
+    @StateObject private var suggestionModel = SuggestionsModel<String>()
     
-    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
-        let result = FlowResult(
-            in: bounds.width,
-            subviews: subviews,
-            spacing: spacing
-        )
-        for (index, subview) in subviews.enumerated() {
-            subview.place(at: CGPoint(x: bounds.minX + result.frames[index].minX, y: bounds.minY + result.frames[index].minY), proposal: .unspecified)
+    private var accentColor: Color {
+        switch sessionType {
+        case .work: return Color(hex: "8B5CF6")
+        case .side: return Color(hex: "3B82F6")
+        case .deep: return Color(hex: "10B981")
+        default: return .blue
         }
     }
     
-    struct FlowResult {
-        var size: CGSize = .zero
-        var frames: [CGRect] = []
-        
-        init(in maxWidth: CGFloat, subviews: Subviews, spacing: CGFloat) {
-            var currentX: CGFloat = 0
-            var currentY: CGFloat = 0
-            var lineHeight: CGFloat = 0
+    private var suggestionGroups: [SuggestionGroup<String>] {
+        let names = nameHistory.getNames(for: sessionType)
+        if names.isEmpty { return [] }
+        // Create suggestions from history
+        // Add current text if not empty and not in history? No, strict history.
+        let suggestions = names.map { Suggestion(text: $0, value: $0) }
+        return [SuggestionGroup(title: "History", suggestions: suggestions)]
+    }
+    
+    var body: some View {
+        HStack {
+            Text(label)
+                .font(.system(size: 13))
+                .foregroundColor(.white.opacity(0.7))
             
-            for subview in subviews {
-                let size = subview.sizeThatFits(.unspecified)
+            Spacer()
+            
+            // Match NumericInputField styling and calendar dropdown width
+            ZStack(alignment: .leading) {
+                RoundedRectangle(cornerRadius: 6)
+                    .fill(Color.white.opacity(suggestionModel.isFocused ? 0.2 : 0.15))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 6)
+                            .stroke(Color.white.opacity(suggestionModel.isFocused ? 0.4 : 0), lineWidth: 1)
+                    )
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
                 
-                if currentX + size.width > maxWidth && currentX > 0 {
-                    currentX = 0
-                    currentY += lineHeight + spacing
-                    lineHeight = 0
-                }
-                
-                frames.append(CGRect(x: currentX, y: currentY, width: size.width, height: size.height))
-                lineHeight = max(lineHeight, size.height)
-                currentX += size.width + spacing
+                SuggestionInputWithModel(
+                    text: $text,
+                    model: suggestionModel,
+                    suggestionGroups: suggestionGroups,
+                    placeholder: placeholder,
+                    accentColor: accentColor,
+                    onDelete: { name in
+                        nameHistory.removeName(name, from: sessionType)
+                    }
+                )
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .padding(.horizontal, 8)
             }
-            
-            self.size = CGSize(width: maxWidth, height: currentY + lineHeight)
+            .frame(width: 150, height: 24)
         }
     }
 }
@@ -834,6 +754,713 @@ class SessionNameHistory: ObservableObject {
             return deepNames
         default:
             return []
+        }
+    }
+}
+
+// MARK: - Suggestions Implementation
+
+struct Suggestion<V: Equatable>: Equatable, Identifiable {
+    var id: String { text }
+    var text: String = ""
+    var value: V
+    
+    static func ==(_ lhs: Suggestion<V>, _ rhs: Suggestion<V>) -> Bool {
+        return lhs.value == rhs.value
+    }
+}
+
+struct SuggestionGroup<V: Equatable>: Equatable {
+    var title: String?
+    var suggestions: [Suggestion<V>]
+    
+    static func ==(_ lhs: SuggestionGroup<V>, _ rhs: SuggestionGroup<V>) -> Bool {
+        return lhs.suggestions == rhs.suggestions
+    }
+}
+
+class SuggestionsModel<V: Equatable>: ObservableObject {
+    @Published var suggestionGroups: [SuggestionGroup<V>] = []
+    @Published var selectedSuggestion: Suggestion<V>?
+    
+    @Published var suggestionsVisible: Bool = false
+    @Published var suggestionConfirmed: Bool = false
+    @Published var isFocused: Bool = false
+    
+    @Published var width: CGFloat = 100
+    
+    var textBinding: Binding<String>?
+    
+    func modifiedText(_ text: String) {
+        self.textBinding?.wrappedValue = text
+        
+        // Show if there are suggestions
+        self.suggestionsVisible = !self.suggestionGroups.isEmpty
+        self.suggestionConfirmed = false
+        
+        if !text.isEmpty {
+            let allSuggestions = self.suggestions
+            // Select first matching (case insensitive)
+            if let firstMatch = allSuggestions.first(where: { $0.text.localizedCaseInsensitiveContains(text) }) {
+                 self.selectedSuggestion = firstMatch
+            } else {
+                 self.selectedSuggestion = nil
+            }
+        } else {
+             self.selectedSuggestion = nil
+        }
+    }
+    
+    func startEditing() {
+        self.suggestionsVisible = !self.suggestionGroups.isEmpty
+    }
+    
+    func cancel() {
+        self.suggestionConfirmed = false
+        self.suggestionsVisible = false
+        self.selectedSuggestion = nil
+    }
+    
+    private var suggestions: [Suggestion<V>] {
+        self.suggestionGroups.flatMap(\.suggestions)
+    }
+    
+    func moveUp() {
+        self.suggestionConfirmed = false
+        
+        guard let selectedSuggestion = self.selectedSuggestion else {
+             if let last = self.suggestions.last {
+                 self.selectedSuggestion = last
+             }
+            return
+        }
+
+        guard let suggestion = self.previousSuggestion(for: selectedSuggestion) else {
+            self.selectedSuggestion = nil
+            return
+        }
+        self.selectedSuggestion = suggestion
+    }
+
+    func moveDown() {
+        self.suggestionConfirmed = false
+        
+        guard let selectedSuggestion = self.selectedSuggestion else {
+            guard let suggestion = self.firstSuggestion else {
+                return
+            }
+            self.selectedSuggestion = suggestion
+            return
+        }
+        
+        guard let suggestion = self.nextSuggestion(for: selectedSuggestion) else {
+            return
+        }
+        self.selectedSuggestion = suggestion
+    }
+    
+    var firstSuggestion: Suggestion<V>? {
+        let suggestions = self.suggestions
+        return suggestions.first
+    }
+
+    func nextSuggestion(for suggestion: Suggestion<V>) -> Suggestion<V>? {
+        let suggestions = self.suggestions
+        guard let index = suggestions.firstIndex(of: suggestion),
+              index + 1 < suggestions.count else {
+            return nil
+        }
+        return suggestions[index + 1]
+    }
+
+    func previousSuggestion(for suggestion: Suggestion<V>) -> Suggestion<V>? {
+        let suggestions = self.suggestions
+        guard let index = suggestions.firstIndex(of: suggestion),
+              index - 1 >= 0 else {
+            return nil
+        }
+        return suggestions[index - 1]
+    }
+    
+    func chooseSuggestion(_ suggestion: Suggestion<V>?) {
+        self.selectedSuggestion = suggestion
+        self.suggestionConfirmed = false
+    }
+    
+    func confirmSuggestion(_ suggestion: Suggestion<V>) {
+        self.selectedSuggestion = suggestion
+        self.suggestionsVisible = false
+        self.textBinding?.wrappedValue = suggestion.text
+        self.suggestionConfirmed = true
+    }
+}
+
+fileprivate struct SuggestionView<V: Equatable>: View {
+    var suggestion: Suggestion<V>
+    var accentColor: Color
+    @ObservedObject var model: SuggestionsModel<V>
+    var onDelete: ((String) -> Void)?
+    
+    @State private var isHovering = false
+    
+    var body: some View {
+        let suggestion = self.suggestion
+        let model = self.model
+        let isSelected = model.selectedSuggestion == suggestion
+        
+        return HStack {
+            Text(suggestion.text)
+                .font(.system(size: 13))
+                // Always use light text for dark popup background
+                .foregroundColor(isSelected ? .white : .white.opacity(0.9))
+                .frame(maxWidth: .infinity, alignment: .leading)
+            
+            if isHovering || isSelected {
+                Button {
+                    onDelete?(suggestion.text)
+                } label: {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 10, weight: .bold))
+                        .foregroundColor(isSelected ? .white.opacity(0.9) : .white.opacity(0.7))
+                }
+                .buttonStyle(.plain)
+                .padding(.leading, 8)
+            }
+        }
+        .id(suggestion.text)
+        .padding(EdgeInsets(top: 6, leading: 8, bottom: 6, trailing: 8))
+        .background(
+            RoundedRectangle(cornerRadius: 6)
+                .foregroundColor(isSelected ? accentColor : (isHovering ? Color.white.opacity(0.1) : Color.clear))
+        )
+        .contentShape(Rectangle()) // Make entire area tappable/hoverable
+        .onHover(perform: { hovering in
+            isHovering = hovering
+            if hovering {
+                model.chooseSuggestion(suggestion)
+            }
+        })
+        .onTapGesture {
+            model.confirmSuggestion(suggestion)
+        }
+    }
+}
+
+fileprivate struct SuggestionGroupView<V: Equatable>: View {
+    var suggestionGroup: SuggestionGroup<V>
+    var showDivider: Bool
+    var accentColor: Color
+    @ObservedObject var model: SuggestionsModel<V>
+    var onDelete: ((String) -> Void)?
+    
+    var body: some View {
+        let suggestionGroup = self.suggestionGroup
+        let model = self.model
+        
+        return VStack(alignment: .leading, spacing: 0) {
+            if self.showDivider {
+                Divider()
+                    .background(Color.white.opacity(0.1))
+                    .padding(.vertical, 4)
+            }
+            if let title = suggestionGroup.title {
+                Text(title)
+                    .foregroundColor(.white.opacity(0.6)) // Light label for dark theme
+                    .font(.system(size: 11, weight: .bold))
+                    .padding(.leading, 8)
+                    .padding(.bottom, 2)
+                    .padding(.top, 4)
+            }
+            VStack(spacing: 0) {
+                ForEach(suggestionGroup.suggestions) { suggestion in
+                    SuggestionView(
+                        suggestion: suggestion,
+                        accentColor: accentColor,
+                        model: model,
+                        onDelete: onDelete
+                    )
+                }
+            }
+        }
+    }
+}
+
+fileprivate struct SuggestionPopup<V: Equatable>: View {
+    @ObservedObject var model: SuggestionsModel<V>
+    var accentColor: Color
+    var onDelete: ((String) -> Void)?
+    
+    var body: some View {
+        let model = self.model
+        let suggestionGroups = model.suggestionGroups
+        
+        return ScrollViewReader { proxy in
+            ScrollView {
+                VStack(spacing: 0) {
+                    ForEach(Array(suggestionGroups.enumerated()), id: \.0)  { (suggestionGroupIndex, suggestionGroup) in
+                        SuggestionGroupView(
+                            suggestionGroup: suggestionGroup,
+                            showDivider: suggestionGroupIndex > 0,
+                            accentColor: accentColor,
+                            model: model,
+                            onDelete: onDelete
+                        )
+                    }
+                }
+                .padding(6)
+            }
+            .frame(maxHeight: 250)
+            .onChange(of: model.selectedSuggestion) { _, newSelection in
+                if let selection = newSelection {
+                    withAnimation {
+                        proxy.scrollTo(selection.text, anchor: .center)
+                    }
+                }
+            }
+        }
+    }
+}
+
+fileprivate struct SuggestionTextField<V: Equatable>: NSViewRepresentable {
+    @Binding var text: String
+    @ObservedObject var model: SuggestionsModel<V>
+    var placeholder: String
+    
+    func makeNSView(context: Context) -> NSTextField {
+        let textField = NSTextField(frame: .zero)
+        textField.focusRingType = .none
+        textField.isBordered = false
+        textField.drawsBackground = false
+        textField.font = NSFont.systemFont(ofSize: 13)
+        // Set placeholder color to be lighter/consistent
+        let placeholderStr = NSAttributedString(string: placeholder, attributes: [
+            .foregroundColor: NSColor.white.withAlphaComponent(0.4)
+        ])
+        textField.placeholderAttributedString = placeholderStr
+        textField.textColor = .white
+        
+        textField.delegate = context.coordinator
+        
+        // Add click gesture to show suggestions immediately on click
+        let clickGesture = NSClickGestureRecognizer(target: context.coordinator, action: #selector(Coordinator.handleClick))
+        textField.addGestureRecognizer(clickGesture)
+        
+        context.coordinator.textField = textField
+        
+        return textField
+    }
+    
+    func updateNSView(_ textField: NSTextField, context: Context) {
+        let model = self.model
+        let text = self.text
+        
+        let coordinator = context.coordinator
+        coordinator.model = model
+        
+        // Update width tracking
+        if coordinator.textField == nil {
+            coordinator.textField = textField
+        }
+        
+        coordinator.updatingSelectedRange = true
+        defer {
+            coordinator.updatingSelectedRange = false
+        }
+        
+        // Keep the field strictly in sync with the bound text only.
+        // Do NOT overwrite with the currently selected suggestion while navigating
+        // or hovering – only confirmation (click/Enter) changes the binding itself.
+        if textField.stringValue != text {
+            textField.stringValue = text
+        }
+        
+        // We intentionally do NOT auto-complete / select ranges based on suggestions here.
+        // That avoids the field changing when moving with arrows or hovering.
+    }
+    
+    func makeCoordinator() -> Coordinator {
+        return Coordinator(text: self.$text, model: self.model)
+    }
+    
+    class Coordinator: NSObject, NSTextFieldDelegate {
+        @Binding var text: String
+        var model: SuggestionsModel<V>
+        var updatingSelectedRange: Bool = false
+        var textField: NSTextField? {
+            didSet {
+                if let textField = self.textField {
+                    textField.postsFrameChangedNotifications = true
+                    self.frameDidChangeSubscription = NotificationCenter.default.publisher(for: NSView.frameDidChangeNotification, object: textField)
+                        .sink(receiveValue: { [weak self] (_) in
+                            guard let self = self else { return }
+                            self.model.width = textField.frame.width
+                        })
+                    // Initial width
+                    self.model.width = textField.frame.width
+                }
+            }
+        }
+        var frameDidChangeSubscription: AnyCancellable?
+        
+        init(text: Binding<String>, model: SuggestionsModel<V>) {
+            self._text = text
+            self.model = model
+            super.init()
+        }
+        
+        @objc func handleClick() {
+            // Force show suggestions on click
+            self.model.startEditing()
+        }
+        
+        func controlTextDidBeginEditing(_ obj: Notification) {
+            self.model.isFocused = true
+            self.model.startEditing()
+        }
+        
+        func controlTextDidChange(_ notification: Notification) {
+            guard let textField = notification.object as? NSTextField else { return }
+            let text = textField.stringValue
+            self.text = text
+            self.model.modifiedText(text)
+        }
+        
+        func controlTextDidEndEditing(_ obj: Notification) {
+            self.model.isFocused = false
+            self.model.cancel()
+        }
+        
+        func control(_ control: NSControl, textView: NSTextView, doCommandBy commandSelector: Selector) -> Bool {
+            if commandSelector == #selector(NSResponder.moveUp(_:)) {
+                guard self.model.suggestionsVisible else { return false }
+                self.model.moveUp()
+                return true
+            }
+            
+            if commandSelector == #selector(NSResponder.moveDown(_:)) {
+                guard self.model.suggestionsVisible else { return false }
+                self.model.moveDown()
+                return true
+            }
+            
+            if commandSelector == #selector(NSResponder.complete(_:)) ||
+                commandSelector == #selector(NSResponder.cancelOperation(_:)) {
+                guard self.model.suggestionsVisible else { return false }
+                self.model.cancel()
+                return true
+            }
+            
+            if commandSelector == #selector(NSResponder.insertNewline(_:)) {
+                if let suggestion = self.model.selectedSuggestion {
+                    self.model.confirmSuggestion(suggestion)
+                     return true
+                }
+            }
+            
+            if commandSelector == #selector(NSResponder.insertTab(_:)) {
+                if let suggestion = self.model.selectedSuggestion {
+                    self.model.confirmSuggestion(suggestion)
+                    return true
+                }
+            }
+            
+            return false
+        }
+    }
+}
+
+fileprivate struct SuggestionInput<V: Equatable>: View {
+    @Binding var text: String
+    var suggestionGroups: [SuggestionGroup<V>]
+    var placeholder: String
+    var accentColor: Color = .blue
+    var onDelete: ((String) -> Void)?
+    
+    @StateObject var model = SuggestionsModel<V>()
+    
+    var body: some View {
+        let model = self.model
+        if model.suggestionGroups != self.suggestionGroups {
+            model.suggestionGroups = self.suggestionGroups
+        }
+        model.textBinding = self.$text
+        
+        return SuggestionTextField(text: self.$text, model: model, placeholder: placeholder)
+            .borderlessWindow(isVisible: Binding<Bool>(get: { model.suggestionsVisible && !model.suggestionGroups.isEmpty },
+                                                     set: { model.suggestionsVisible = $0 }),
+                              behavior: .transient,
+                              anchor: .bottomLeading,
+                              windowAnchor: .topLeading,
+                              windowOffset: CGPoint(x: -8, y: -4)) {
+                SuggestionPopup(model: model, accentColor: accentColor, onDelete: onDelete)
+                    .frame(width: max(model.width, 200))
+                    .background(Color(hex: "1E293B").opacity(0.98)) // Dark background
+                    .overlay(RoundedRectangle(cornerRadius: 8)
+                                .stroke(lineWidth: 1)
+                                .foregroundColor(Color.white.opacity(0.1))
+                    )
+                    .cornerRadius(8)
+                    .shadow(color: Color.black.opacity(0.5), radius: 10, x: 0, y: 4)
+                    .padding(10)
+            }
+            .onAppear {
+                model.suggestionGroups = self.suggestionGroups
+            }
+    }
+}
+
+fileprivate struct SuggestionInputWithModel<V: Equatable>: View {
+    @Binding var text: String
+    @ObservedObject var model: SuggestionsModel<V>
+    var suggestionGroups: [SuggestionGroup<V>]
+    var placeholder: String
+    var accentColor: Color = .blue
+    var onDelete: ((String) -> Void)?
+    
+    var body: some View {
+        if model.suggestionGroups != self.suggestionGroups {
+            model.suggestionGroups = self.suggestionGroups
+        }
+        model.textBinding = self.$text
+        
+        return SuggestionTextField(text: self.$text, model: model, placeholder: placeholder)
+            .borderlessWindow(isVisible: Binding<Bool>(get: { model.suggestionsVisible && !model.suggestionGroups.isEmpty },
+                                                     set: { model.suggestionsVisible = $0 }),
+                              behavior: .transient,
+                              anchor: .bottomLeading,
+                              windowAnchor: .topLeading,
+                              windowOffset: CGPoint(x: -8, y: -4)) {
+                SuggestionPopup(model: model, accentColor: accentColor, onDelete: onDelete)
+                    .frame(width: max(model.width, 200))
+                    .background(Color(hex: "1E293B").opacity(0.98)) // Dark background
+                    .overlay(RoundedRectangle(cornerRadius: 8)
+                                .stroke(lineWidth: 1)
+                                .foregroundColor(Color.white.opacity(0.1))
+                    )
+                    .cornerRadius(8)
+                    .shadow(color: Color.black.opacity(0.5), radius: 10, x: 0, y: 4)
+                    .padding(10)
+            }
+            .onAppear {
+                model.suggestionGroups = self.suggestionGroups
+            }
+    }
+}
+
+// MARK: - Window & Effects
+
+extension CGRect {
+    fileprivate func point(anchor: UnitPoint) -> CGPoint {
+        var point = self.origin
+        point.x += self.size.width * anchor.x
+        point.y += self.size.height * (1 - anchor.y)
+        return point
+    }
+}
+
+fileprivate enum BorderlessWindowBehavior {
+    case applicationDefined
+    case transient
+    case semitransient
+}
+
+fileprivate struct BorderlessWindow<Content>: NSViewRepresentable where Content: View {
+    @Binding private var isVisible: Bool
+    private var behavior: BorderlessWindowBehavior
+    private let anchor: UnitPoint
+    private let windowAnchor: UnitPoint
+    private let windowOffset: CGPoint
+    private let content: () -> Content
+    
+    init(isVisible: Binding<Bool>,
+         behavior: BorderlessWindowBehavior = .applicationDefined,
+         anchor: UnitPoint = .center,
+         windowAnchor: UnitPoint = .center,
+         windowOffset: CGPoint = .zero,
+         @ViewBuilder content: @escaping () -> Content) {
+        self._isVisible = isVisible
+        self.behavior = behavior
+        self.anchor = anchor
+        self.windowAnchor = windowAnchor
+        self.windowOffset = windowOffset
+        self.content = content
+    }
+    
+    func makeNSView(context: Context) -> NSView {
+        NSView(frame: .zero)
+    }
+    
+    func updateNSView(_ view: NSView, context: Context) {
+        // Set content first to prevent white flash
+        context.coordinator.hostingViewController.rootView = AnyView(self.content())
+        let window = context.coordinator.window
+        
+        // Ensure hosting view has clear background
+        context.coordinator.hostingViewController.view.wantsLayer = true
+        context.coordinator.hostingViewController.view.layer?.backgroundColor = NSColor.clear.cgColor
+        
+        let isVisible = self.isVisible
+        let wasVisible = window.isVisible && window.alphaValue > 0
+        
+        if isVisible != wasVisible {
+            if isVisible {
+                // Force layout before showing to prevent white flash
+                context.coordinator.hostingViewController.view.needsLayout = true
+                context.coordinator.hostingViewController.view.layoutSubtreeIfNeeded()
+                
+                if let parentWindow = view.window {
+                    parentWindow.addChildWindow(window, ordered: .above)
+                }
+                window.alphaValue = 1.0
+                window.makeKeyAndOrderFront(nil)
+            } else {
+                NSAnimationContext.runAnimationGroup { context in
+                    context.duration = 0.1
+                    context.timingFunction = CAMediaTimingFunction(name: CAMediaTimingFunctionName.easeIn)
+                    window.animator().alphaValue = 0.0
+                } completionHandler: {
+                    if let parentWindow = view.window {
+                        parentWindow.removeChildWindow(window)
+                    }
+                    window.orderOut(nil)
+                }
+            }
+        }
+        
+        var viewFrame = view.convert(view.bounds, to: nil)
+        viewFrame = view.window?.convertToScreen(viewFrame) ?? viewFrame
+        let viewPoint = viewFrame.point(anchor: self.anchor)
+        var windowFrame = window.frame
+        
+        // Calculate content size and update window frame
+        let contentSize = context.coordinator.hostingViewController.view.fittingSize
+        if contentSize.width > 0 && contentSize.height > 0 {
+            windowFrame.size = contentSize
+        }
+        
+        let windowPoint = windowFrame.point(anchor: self.windowAnchor)
+        
+        var shift: CGPoint = viewPoint
+        let windowOffset = self.windowOffset
+        shift.x += windowOffset.x
+        shift.y -= windowOffset.y
+        shift.x -= windowPoint.x
+        shift.y -= windowPoint.y
+        
+        windowFrame.origin.x += shift.x
+        windowFrame.origin.y += shift.y
+        
+        window.setFrame(windowFrame, display: false)
+    }
+    
+    func makeCoordinator() -> Coordinator {
+        Coordinator(self)
+    }
+    
+    class Coordinator: NSObject, NSWindowDelegate {
+        private var parent: BorderlessWindow
+        fileprivate let window: NSWindow
+        fileprivate let hostingViewController: NSHostingController<AnyView>
+        private var localMouseDownEventMonitor: Any?
+        
+        fileprivate init(_ parent: BorderlessWindow) {
+            self.parent = parent
+            let window = NSWindow(contentRect: .zero,
+                                  styleMask: [.borderless],
+                                  backing: .buffered,
+                                  defer: true)
+            window.isOpaque = false
+            window.backgroundColor = .clear
+            window.hidesOnDeactivate = true
+            window.isExcludedFromWindowsMenu = true
+            window.isReleasedWhenClosed = false
+            // Hide window initially to prevent white flash
+            window.alphaValue = 0.0
+            window.orderOut(nil)
+            self.window = window
+            let hostingViewController = NSHostingController(rootView: AnyView(EmptyView()))
+            // Set dark background for hosting view to prevent white flash
+            hostingViewController.view.wantsLayer = true
+            hostingViewController.view.layer?.backgroundColor = NSColor.clear.cgColor
+            window.contentViewController = hostingViewController
+            self.hostingViewController = hostingViewController
+            super.init()
+            window.delegate = self
+            
+            let behaviour = self.parent.behavior
+            if behaviour != .applicationDefined {
+                self.localMouseDownEventMonitor = NSEvent.addLocalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown, .otherMouseDown]) { [weak self] (event) -> NSEvent? in
+                    guard let self = self else { return event }
+                    if !self.window.isVisible { return event }
+                    if event.window != self.window {
+                        if behaviour == .semitransient {
+                            if event.window != self.window.parent {
+                                self.parent.isVisible = false
+                                return nil
+                            }
+                        } else {
+                            self.parent.isVisible = false
+                            return nil
+                        }
+                    }
+                    return event
+                }
+            }
+        }
+    }
+}
+
+fileprivate extension View {
+    func borderlessWindow<Content: View>(isVisible: Binding<Bool>,
+                                                behavior: BorderlessWindowBehavior = .applicationDefined,
+                                                anchor: UnitPoint = .center,
+                                                windowAnchor: UnitPoint = .center,
+                                                windowOffset: CGPoint = .zero,
+                                                @ViewBuilder content: @escaping () -> Content) -> some View {
+        self.background(BorderlessWindow(isVisible: isVisible,
+                                         behavior: behavior,
+                                         anchor: anchor,
+                                         windowAnchor: windowAnchor,
+                                         windowOffset: windowOffset,
+                                         content: content))
+    }
+}
+
+fileprivate struct VisualEffectBlur: View {
+    private let material: NSVisualEffectView.Material
+    private let blendingMode: NSVisualEffectView.BlendingMode
+    private let cornerRadius: CGFloat
+    
+    init(material: NSVisualEffectView.Material = .headerView,
+                blendingMode: NSVisualEffectView.BlendingMode = .behindWindow,
+                cornerRadius: CGFloat = 0) {
+        self.material = material
+        self.blendingMode = blendingMode
+        self.cornerRadius = cornerRadius
+    }
+    
+    var body: some View {
+        Representable(material: self.material,
+                      blendingMode: self.blendingMode,
+                      cornerRadius: self.cornerRadius)
+            .accessibility(hidden: true)
+    }
+    
+    struct Representable: NSViewRepresentable {
+        var material: NSVisualEffectView.Material
+        var blendingMode: NSVisualEffectView.BlendingMode
+        var cornerRadius: CGFloat
+        
+        func makeNSView(context: Context) -> NSVisualEffectView {
+            return NSVisualEffectView()
+        }
+        
+        func updateNSView(_ view: NSVisualEffectView, context: Context) {
+            view.material = self.material
+            view.blendingMode = self.blendingMode
+            view.wantsLayer = true
+            view.layer?.cornerRadius = self.cornerRadius
+            view.layer?.masksToBounds = true
         }
     }
 }

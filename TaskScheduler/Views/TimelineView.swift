@@ -208,9 +208,8 @@ struct TimelineView: View {
                 }
                 
                 // Existing events - left half
-    
-                ForEach(calendarService.busySlots) { slot in
-                    eventBlock(for: slot, containerWidth: geometry.size.width)
+                ForEach(busySlotsWithLayout) { positionedSlot in
+                    eventBlock(for: positionedSlot, containerWidth: geometry.size.width)
                 }
                 
                 // Projected sessions - right half
@@ -350,6 +349,17 @@ private struct WidthPreferenceKey: PreferenceKey {
 
 extension TimelineView {
     
+    private struct PositionedBusySlot: Identifiable {
+        let slot: BusyTimeSlot
+        let column: Int
+        var totalColumns: Int
+        var id: String { slot.id }
+    }
+    
+    private var busySlotsWithLayout: [PositionedBusySlot] {
+        layoutBusySlots(calendarService.busySlots)
+    }
+    
     private var timeColumnView: some View {
         VStack(spacing: 0) {
             ForEach(visibleHours, id: \.self) { hour in
@@ -412,6 +422,56 @@ extension TimelineView {
         }
     }
     
+    private func layoutBusySlots(_ slots: [BusyTimeSlot]) -> [PositionedBusySlot] {
+        struct ActiveSlot {
+            let slot: BusyTimeSlot
+            let column: Int
+            let positionedIndex: Int
+        }
+        
+        let sortedSlots = slots.sorted { $0.startTime < $1.startTime }
+        var positionedSlots: [PositionedBusySlot] = []
+        var activeSlots: [ActiveSlot] = []
+        var currentClusterIndices: [Int] = []
+        var currentClusterMaxColumns = 0
+        
+        func finalizeCluster() {
+            guard !currentClusterIndices.isEmpty else { return }
+            let totalColumns = max(currentClusterMaxColumns, 1)
+            for index in currentClusterIndices {
+                positionedSlots[index].totalColumns = totalColumns
+            }
+            currentClusterIndices.removeAll()
+            currentClusterMaxColumns = 0
+        }
+        
+        for slot in sortedSlots {
+            activeSlots.removeAll { active in
+                active.slot.endTime <= slot.startTime
+            }
+            
+            if activeSlots.isEmpty {
+                finalizeCluster()
+            }
+            
+            let usedColumns = Set(activeSlots.map { $0.column })
+            var column = 0
+            while usedColumns.contains(column) {
+                column += 1
+            }
+            
+            let positionedSlot = PositionedBusySlot(slot: slot, column: column, totalColumns: 1)
+            let positionedIndex = positionedSlots.count
+            positionedSlots.append(positionedSlot)
+            activeSlots.append(ActiveSlot(slot: slot, column: column, positionedIndex: positionedIndex))
+            currentClusterIndices.append(positionedIndex)
+            currentClusterMaxColumns = max(currentClusterMaxColumns, column + 1)
+        }
+        
+        finalizeCluster()
+        return positionedSlots
+    }
+    
     
     
     private func currentTimeIndicator(currentTime: Date, width: CGFloat) -> some View {
@@ -435,14 +495,20 @@ extension TimelineView {
     
     // MARK: - Event Block (Busy) - Left Half
     
-    private func eventBlock(for slot: BusyTimeSlot, containerWidth: CGFloat) -> some View {
+    private func eventBlock(for positionedSlot: PositionedBusySlot, containerWidth: CGFloat) -> some View {
+        let slot = positionedSlot.slot
         let yPos = calculateYPosition(for: slot.startTime)
         let height = calculateHeight(from: slot.startTime, to: slot.endTime)
-        let blockWidth = (containerWidth / 2) - 16
+        let columns = max(1, positionedSlot.totalColumns)
+        let columnSpacing: CGFloat = 4
+        let availableWidth = max((containerWidth / 2) - 16, 10)
+        let totalSpacing = columnSpacing * CGFloat(max(0, columns - 1))
+        let blockWidth = max((availableWidth - totalSpacing) / CGFloat(columns), 8)
         let blockHeight = max(height, 20)
+        let columnOffset = CGFloat(positionedSlot.column) * (blockWidth + columnSpacing)
         
         // Calculate center position for .position() modifier
-        let centerX = 8 + blockWidth / 2
+        let centerX = 8 + blockWidth / 2 + columnOffset
         let centerY = yPos + blockHeight / 2
         
         return ZStack(alignment: .topLeading) {
