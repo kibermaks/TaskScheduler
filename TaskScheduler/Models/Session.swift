@@ -65,6 +65,16 @@ struct ScheduledSession: Identifiable, Equatable {
         self.calendarName = calendarName
         self.notes = notes
     }
+    
+    /// Returns the hashtag string (without #) for this session type
+    func hashtag() -> String {
+        switch type {
+        case .work: return "work"
+        case .side: return "side"
+        case .deep: return "deep"
+        case .planning: return "plan"
+        }
+    }
 }
 
 // MARK: - Busy Time Slot (from existing calendar events)

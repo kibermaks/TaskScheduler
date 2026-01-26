@@ -28,6 +28,7 @@ struct TimelineView: View {
     @State private var originalNotes: String = ""
     @State private var originalURL: String = ""
     @State private var isCanceling = false
+    @State private var autoFocusField: EditField? = nil
     @FocusState private var focusedField: EditField?
     
     enum EditField {
@@ -538,6 +539,12 @@ extension TimelineView {
                         .foregroundColor(Color(hex: "3B82F6"))
                         .lineLimit(1)
                         .truncationMode(.middle)
+                        .contentShape(Rectangle())
+                        .onTapGesture(count: 2) {
+                            selectedSession = nil
+                            selectedBusySlot = slot
+                            autoFocusField = .url
+                        }
                 }
                 
                 if let notes = slot.notes, !notes.isEmpty, height > 45 {
@@ -546,6 +553,12 @@ extension TimelineView {
                         .foregroundColor(.white.opacity(0.8))
                         .lineLimit(nil)
                         .fixedSize(horizontal: false, vertical: false)
+                        .contentShape(Rectangle())
+                        .onTapGesture(count: 2) {
+                            selectedSession = nil
+                            selectedBusySlot = slot
+                            autoFocusField = .notes
+                        }
                 }
             }
             .padding(4)
@@ -555,9 +568,10 @@ extension TimelineView {
         .onTapGesture(count: 2) {
             selectedSession = nil
             selectedBusySlot = slot
+            autoFocusField = nil // Regular double-click, no auto-focus
         }
         .contextMenu {
-            Button("View Details") {
+            Button("View & Edit Event Details") {
                 selectedSession = nil
                 selectedBusySlot = slot
             }
@@ -572,7 +586,7 @@ extension TimelineView {
         let blockHeight = max(height, 20)
         let blockWidth = (containerWidth / 2) - 24  // Extra space for scrollbar
         let xOffset = containerWidth / 2 + 8
-        let isCompact = height < 40
+        let isCompact = height < 25
         
         // Calculate center position for .position() modifier
         let centerX = xOffset + blockWidth / 2
@@ -676,10 +690,11 @@ extension TimelineView {
     
     private func sessionDetailContent(_ session: ScheduledSession) -> some View {
         VStack(alignment: .leading, spacing: 12) {
-            HStack {
+            HStack(alignment: .top) {
                 Image(systemName: session.type.icon)
                     .font(.system(size: 18))
                     .foregroundColor(session.type.color)
+                    .frame(width: 18)
                 Text(session.title)
                     .font(.system(size: 16, weight: .semibold))
                     .foregroundColor(.white)
@@ -697,10 +712,29 @@ extension TimelineView {
             Divider().background(Color.white.opacity(0.1))
             
             VStack(alignment: .leading, spacing: 10) {
-                Label(timeRangeString(start: session.startTime, end: session.endTime), systemImage: "clock")
-                Label("\(session.durationMinutes) minutes", systemImage: "hourglass")
-                Label(session.calendarName, systemImage: "calendar")
-                Label(session.type.rawValue, systemImage: "tag")
+                HStack(spacing: 8) {
+                    Image(systemName: "clock")
+                        .frame(width: 18)
+                    Text(timeRangeString(start: session.startTime, end: session.endTime))
+                }
+                
+                HStack(spacing: 8) {
+                    Image(systemName: "hourglass")
+                        .frame(width: 18)
+                    Text("\(session.durationMinutes) minutes")
+                }
+                
+                HStack(spacing: 8) {
+                    Image(systemName: "calendar")
+                        .frame(width: 18)
+                    Text(session.calendarName)
+                }
+                
+                HStack(spacing: 8) {
+                    Image(systemName: "number.square")
+                        .frame(width: 18)
+                    Text(session.hashtag())
+                }
             }
             .font(.system(size: 14))
             .foregroundColor(.white.opacity(0.8))
@@ -709,10 +743,11 @@ extension TimelineView {
     
     private func busySlotDetailContent(_ slot: BusyTimeSlot) -> some View {
         VStack(alignment: .leading, spacing: 12) {
-            HStack {
+            HStack(alignment: .top) {
                 Image(systemName: "calendar")
                     .font(.system(size: 18))
                     .foregroundColor(slot.calendarColor)
+                    .frame(width: 18)
                 
                 // Inline editable title
                 if isEditingTitle {
@@ -919,6 +954,30 @@ extension TimelineView {
                 saveURL(for: slot)
             }
         }
+        .onAppear {
+            // Auto-focus on field when detail view opens
+            if let field = autoFocusField {
+                switch field {
+                case .title:
+                    originalTitle = slot.title
+                    editingTitle = slot.title
+                    isEditingTitle = true
+                    focusedField = .title
+                case .notes:
+                    originalNotes = slot.notes ?? ""
+                    editingNotes = slot.notes ?? ""
+                    isEditingNotes = true
+                    focusedField = .notes
+                case .url:
+                    originalURL = slot.url?.absoluteString ?? ""
+                    editingURL = slot.url?.absoluteString ?? ""
+                    isEditingURL = true
+                    focusedField = .url
+                }
+                // Clear auto-focus after applying it
+                autoFocusField = nil
+            }
+        }
     }
     
     // MARK: - Position Calculations
@@ -1101,6 +1160,7 @@ extension TimelineView {
         originalURL = ""
         isCanceling = false
         focusedField = nil
+        autoFocusField = nil
     }
     
     private func cancelTitleEdit() {

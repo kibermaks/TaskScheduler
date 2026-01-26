@@ -12,6 +12,7 @@ struct SettingsPanel: View {
     @State private var showingWorkHelp = false
     @State private var showingSideHelp = false
     @State private var showingDeepHelp = false
+    @State private var showingFlexibleSideHelp = false
     @State private var showingPlanningHelp = false
     @State private var showingPatternHelp = false
     @State private var showingRestHelp = false
@@ -21,6 +22,7 @@ struct SettingsPanel: View {
     private let workHelpText = "Work sessions are your primary focus blocks. Use these for your main professional tasks or projects that require sustained concentration."
     private let sideHelpText = "Side sessions are for secondary tasks or 'life admin'. Perfect for paying bills, checking something new, responding to emails, or handling quick errands."
     private let deepHelpText = "Deep sessions (often called Deep Work) are rare, high-intensity focus blocks. You want to inject these periodically for your most demanding creative or analytical work that requires additional focus."
+    private let flexibleSideHelpText = "Try to fit side sessions into smaller time gaps when work sessions don't fit. By default it's enabled to help you fit more sessions and finish your day earlier."
     private let planningHelpText = "The Planning session is a short block at the start of your day to review your actual tasks and organize them into your sequence. It ensures you start with clarity."
     private let patternHelpText = "Scheduling patterns define how Work and Side sessions are interleaved. Various patterns work best for different situations(e.g. weekends, workdays, meeting days, etc.)."
     private let restHelpText = "Rest intervals are crucial for maintaining peak performance. Choose different durations for after-work, after-side, or after-deep sessions to recharge effectively."
@@ -456,7 +458,7 @@ struct SettingsPanel: View {
                             }
                         }
                         .pickerStyle(.menu)
-                        .frame(width: 200)
+                        .frame(width: 200, height: 24)
                     }
                     
                     Text(schedulingEngine.pattern.description)
@@ -498,11 +500,24 @@ struct SettingsPanel: View {
                     // Flexible Side Scheduling setting
                     Divider().background(Color.white.opacity(0.05))
                     
-                    HStack {
+                    HStack(spacing: 8) {
                         Text("Flexible Side Scheduling")
                             .font(.system(size: 13))
                             .foregroundColor(.white.opacity(0.7))
-                        
+                        Button {
+                            showingFlexibleSideHelp.toggle()
+                        } label: {
+                            Image(systemName: "info.circle")
+                                .font(.system(size: 13))
+                                .foregroundColor(.white.opacity(0.4))
+                        }
+                        .buttonStyle(.plain)
+                        .popover(isPresented: $showingFlexibleSideHelp) {
+                            Text(flexibleSideHelpText)
+                                .font(.system(size: 13))
+                                .padding()
+                                .frame(width: 250)
+                        }
                         Spacer()
                         
                         Toggle("", isOn: $schedulingEngine.flexibleSideScheduling)
@@ -510,11 +525,6 @@ struct SettingsPanel: View {
                             .toggleStyle(.switch)
                             .tint(Color(hex: "3B82F6"))
                     }
-                    
-                    Text("Try to fit side sessions into smaller time gaps when work sessions don't fit")
-                        .font(.system(size: 11))
-                        .foregroundColor(.white.opacity(0.5))
-                        .padding(.leading, 8)
                 }
             }
         }
