@@ -27,6 +27,9 @@ class SchedulingEngine: ObservableObject {
     @Published var awareExistingTasks: Bool = UserDefaults.standard.object(forKey: "TaskScheduler.AwareExistingTasks") as? Bool ?? true {
         didSet { UserDefaults.standard.set(awareExistingTasks, forKey: "TaskScheduler.AwareExistingTasks") }
     }
+    @Published var showDidYouKnowCard: Bool = UserDefaults.standard.object(forKey: "TaskScheduler.ShowDidYouKnowCard") as? Bool ?? true {
+        didSet { UserDefaults.standard.set(showDidYouKnowCard, forKey: "TaskScheduler.ShowDidYouKnowCard") }
+    }
     @Published var dayStartHour: Int = (UserDefaults.standard.object(forKey: "TaskScheduler.DayStartHour") as? Int) ?? 6 {
         didSet { UserDefaults.standard.set(dayStartHour, forKey: "TaskScheduler.DayStartHour") }
     }

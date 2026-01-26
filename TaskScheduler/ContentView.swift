@@ -915,14 +915,51 @@ struct RightPanel: View {
     
     @State private var showingAvailabilityHelp = false
     @State private var showingProjectionHelp = false
+    @State private var didYouKnowIndex = 0
     
     private let availabilityHelp = "Shows calculated free time gaps in your calendar. 'Possible' counts indicate how many sessions of each type could fit into these gaps based on your duration settings."
-    private let projectionHelp = "A live preview of where your sessions will be placed. Events with dashed borders are projected and don't exist in your calendar until you click 'Schedule All'."
+    private let projectionHelp = "A live preview of how many sessions will be placed in your calendar and when you might be done for the day."
+    private let didYouKnowFacts: [DidYouKnowFact] = [
+        DidYouKnowFact(
+            title: "Edit existing events",
+            message: "Click Title, Notes, or URL in the preview to edit the calendar event instantly."
+        ),
+        DidYouKnowFact(
+            title: "Toggle night time",
+            message: "Use the moon button or Settings to hide or show night hours on the timeline."
+        ),
+        DidYouKnowFact(
+            title: "Local only changes",
+            message: "Scheduling runs on your Mac and calendar updates happen only after you confirm Schedule or Delete."
+        ),
+        DidYouKnowFact(
+            title: "Live preview",
+            message: "Adjust durations or presets and watch projected sessions reshuffle immediately before committing."
+        ),
+        DidYouKnowFact(
+            title: "Preset shortcuts",
+            message: "Save Workday, Focus, Weekend, or any custom preset once and keep it one click away."
+        )
+    ]
     
     var body: some View {
         VStack(spacing: 20) {
+            ScrollView(showsIndicators: false) {
             availabilityCard
             sessionsSummaryCard
+            if schedulingEngine.showDidYouKnowCard, let fact = currentDidYouKnowFact {
+                DidYouKnowCard(
+                    fact: fact,
+                    factIndex: didYouKnowIndex,
+                    totalFacts: didYouKnowFacts.count,
+                    onNext: nextDidYouKnowFact,
+                    onPrevious: previousDidYouKnowFact,
+                    onClose: { schedulingEngine.showDidYouKnowCard = false }
+                )
+                .frame(maxWidth: .infinity)
+                .transition(.move(edge: .trailing).combined(with: .opacity))
+            }
+            }
             Spacer()
             actionButtons
         }
@@ -969,6 +1006,26 @@ struct RightPanel: View {
     
     private func row(_ label: String, _ val: String, _ color: Color? = nil) -> some View {
         HStack { Text(label); Spacer(); Text(val).fontWeight(.semibold).foregroundColor(color ?? .white.opacity(0.8)) }
+    }
+    
+    private var currentDidYouKnowFact: DidYouKnowFact? {
+        guard !didYouKnowFacts.isEmpty else { return nil }
+        let safeIndex = max(0, min(didYouKnowIndex, didYouKnowFacts.count - 1))
+        return didYouKnowFacts[safeIndex]
+    }
+    
+    private func nextDidYouKnowFact() {
+        guard !didYouKnowFacts.isEmpty else { return }
+        withAnimation(.easeInOut(duration: 0.25)) {
+            didYouKnowIndex = (didYouKnowIndex + 1) % didYouKnowFacts.count
+        }
+    }
+    
+    private func previousDidYouKnowFact() {
+        guard !didYouKnowFacts.isEmpty else { return }
+        withAnimation(.easeInOut(duration: 0.25)) {
+            didYouKnowIndex = (didYouKnowIndex - 1 + didYouKnowFacts.count) % didYouKnowFacts.count
+        }
     }
     
     private var sessionsSummaryCard: some View {
@@ -1124,6 +1181,112 @@ struct RightPanel: View {
     }
 }
 
+private struct DidYouKnowFact: Identifiable, Equatable {
+    let id = UUID()
+    let title: String
+    let message: String
+}
+
+private struct DidYouKnowCard: View {
+    let fact: DidYouKnowFact
+    let factIndex: Int
+    let totalFacts: Int
+    let onNext: () -> Void
+    let onPrevious: () -> Void
+    let onClose: () -> Void
+    
+    @State private var rotationTimer: Timer?
+    private let rotationInterval: TimeInterval = 12
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .top) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Did you know?")
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundColor(.white.opacity(0.6))
+                    Text(fact.title)
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundColor(.white)
+                }
+                Spacer()
+                controlButtons
+            }
+            Text(fact.message)
+                .font(.system(size: 12))
+                .foregroundColor(.white.opacity(0.8))
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.trailing, 8)
+            
+            if totalFacts > 1 {
+                HStack(spacing: 4) {
+                    ForEach(0..<totalFacts, id: \.self) { idx in
+                        Capsule()
+                            .fill(idx == factIndex ? Color.white.opacity(0.9) : Color.white.opacity(0.25))
+                            .frame(width: idx == factIndex ? 16 : 8, height: 3)
+                    }
+                    Spacer(minLength: 0)
+                }
+                .padding(.top, 2)
+            }
+        }
+        .padding(14)
+        .background(Color.white.opacity(0.04))
+        .cornerRadius(12)
+        .overlay(
+            RoundedRectangle(cornerRadius: 12)
+                .stroke(Color.white.opacity(0.08), lineWidth: 1)
+        )
+        .onAppear(perform: restartTimer)
+        .onDisappear(perform: stopTimer)
+        .onChange(of: fact.id) { _, _ in restartTimer() }
+        .onChange(of: totalFacts) { _, _ in restartTimer() }
+    }
+    
+    private var controlButtons: some View {
+        HStack(spacing: 6) {
+            controlButton(icon: "chevron.right", disabled: totalFacts < 2, action: onNext)
+            Rectangle()
+                .fill(Color.white.opacity(0.1))
+                .frame(width: 1, height: 14)
+                .padding(.horizontal, 2)
+            controlButton(icon: "xmark", action: onClose)
+        }
+    }
+    
+    private func controlButton(icon: String, disabled: Bool = false, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: icon)
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundColor(.white.opacity(disabled ? 0.25 : 0.8))
+                .frame(width: 24, height: 22)
+                .background(
+                    RoundedRectangle(cornerRadius: 6)
+                        .fill(Color.white.opacity(disabled ? 0.05 : 0.12))
+                )
+        }
+        .buttonStyle(.plain)
+        .disabled(disabled)
+    }
+    
+    private func restartTimer() {
+        stopTimer()
+        startTimer()
+    }
+    
+    private func startTimer() {
+        guard rotationTimer == nil && totalFacts > 1 else { return }
+        rotationTimer = Timer.scheduledTimer(withTimeInterval: rotationInterval, repeats: true) { _ in
+            onNext()
+        }
+    }
+    
+    private func stopTimer() {
+        rotationTimer?.invalidate()
+        rotationTimer = nil
+    }
+}
+
 // MARK: - Delete Confirmation Sheet
 struct DeleteConfirmationSheet: View {
     @EnvironmentObject var schedulingEngine: SchedulingEngine
@@ -1142,7 +1305,7 @@ struct DeleteConfirmationSheet: View {
                 .bold()
             
             VStack(spacing: 8) {
-                Text("This will delete ALL events from the following calendars for the selected day:")
+                Text("This will delete added events from the following calendars for the selected day:")
                     .multilineTextAlignment(.center)
                     .foregroundColor(.secondary)
                     .font(.system(size: 13))
@@ -1175,7 +1338,7 @@ struct DeleteConfirmationSheet: View {
             }
             
             Toggle(isOn: $deletePastSessions) {
-                Text("Delete past events too")
+                Text("Delete lapsed (past) events too")
                     .font(.system(size: 13))
             }
             .toggleStyle(.checkbox)
@@ -1184,7 +1347,7 @@ struct DeleteConfirmationSheet: View {
                 Button("Cancel") { showingSheet = false }
                     .keyboardShortcut(.cancelAction)
                 
-                Button("Delete All") { onDelete(); showingSheet = false }
+                Button("Delete Events") { onDelete(); showingSheet = false }
                     .buttonStyle(.borderedProminent)
                     .tint(.red)
             }

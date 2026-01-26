@@ -121,6 +121,13 @@ struct AppSettingsView: View {
                     .font(.caption)
                     .foregroundColor(.secondary)
             }
+
+            Section("Tips") {
+                Toggle("Show \"Did you know?\" card", isOn: $schedulingEngine.showDidYouKnowCard)
+                Text("Displays rotating tips next of how to use the app.")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
             
             Section("Preset Management") {
                 Button(role: .destructive, action: { showingResetPresetsConfirmation = true }) {
