@@ -838,6 +838,7 @@ struct LeftPanel: View {
             presetMenu
                 .frame(width: 170)
         }
+        .frame(maxWidth: .infinity)
         .padding(.bottom, 12)
     }
     
@@ -853,7 +854,7 @@ struct LeftPanel: View {
                 Button(role: .destructive) { deletePreset(p) } label: { Label("Delete Preset", systemImage: "trash") }
             }
         } label: {
-            HStack {
+            HStack(spacing: 6) {
                 if let p = selectedPreset {
                     Image(systemName: p.icon).foregroundColor(Color(hex: "8B5CF6"))
                     let modified = schedulingEngine.isPresetModified(p)
@@ -862,14 +863,18 @@ struct LeftPanel: View {
                     Image(systemName: "doc").foregroundColor(.white.opacity(0.5))
                     Text("No Preset Selected").foregroundColor(.white.opacity(0.5))
                 }
-                Spacer()
-                Image(systemName: "chevron.up.chevron.down").font(.system(size: 10)).foregroundColor(.white.opacity(0.5))
+                Image(systemName: "chevron.up.chevron.down")
+                    .font(.system(size: 10))
+                    .foregroundColor(.white.opacity(0.5))
             }
+            .frame(maxWidth: .infinity, minHeight: 24, maxHeight: 24, alignment: .trailing)
             .font(.system(size: 13, weight: .medium))
-            .padding(.horizontal, 12).padding(.vertical, 8)
-            .background(Color.white.opacity(0.1)).cornerRadius(8)
+            .padding(.horizontal, 12)
+            .contentShape(Rectangle())
         }
         .menuStyle(.borderlessButton)
+        .frame(maxWidth: .infinity, alignment: .trailing)
+        .frame(height: 24)
     }
     
     private func updateCurrentPreset(_ preset: Preset) {
@@ -1202,9 +1207,16 @@ private struct DidYouKnowCard: View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(alignment: .top) {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("Did you know?")
-                        .font(.system(size: 11, weight: .medium))
-                        .foregroundColor(.white.opacity(0.6))
+                    HStack(spacing: 4) {
+                        Image(systemName: "lightbulb")
+                            .resizable()
+                            .scaledToFit()
+                            .frame(width: 10, height: 10)
+                            .foregroundColor(.yellow.opacity(0.7))
+                        Text("Did you know?")
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundColor(.white.opacity(0.6))
+                    }
                     Text(fact.title)
                         .font(.system(size: 15, weight: .semibold))
                         .foregroundColor(.white)
