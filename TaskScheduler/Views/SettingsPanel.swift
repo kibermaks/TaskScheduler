@@ -20,9 +20,9 @@ struct SettingsPanel: View {
     
     private let workHelpText = "Work sessions are your primary focus blocks. Use these for your main professional tasks or projects that require sustained concentration."
     private let sideHelpText = "Side sessions are for secondary tasks or 'life admin'. Perfect for paying bills, checking something new, responding to emails, or handling quick errands."
-    private let deepHelpText = "Deep sessions (often called Deep Work) are rare, high-intensity focus blocks. They are injected periodically for your most demanding creative or analytical work."
-    private let planningHelpText = "The Planning session is a short block at the start of your day to review your tasks and organize your sequence. It ensures you start with clarity."
-    private let patternHelpText = "Scheduling patterns define how Work and Side sessions are interleaved. 'Alternating' swaps between them, while 'Concentrated' groups types together."
+    private let deepHelpText = "Deep sessions (often called Deep Work) are rare, high-intensity focus blocks. You want to inject these periodically for your most demanding creative or analytical work that requires additional focus."
+    private let planningHelpText = "The Planning session is a short block at the start of your day to review your actual tasks and organize them into your sequence. It ensures you start with clarity."
+    private let patternHelpText = "Scheduling patterns define how Work and Side sessions are interleaved. Various patterns work best for different situations(e.g. weekends, workdays, meeting days, etc.)."
     private let restHelpText = "Rest intervals are crucial for maintaining peak performance. Choose different durations for after-work, after-side, or after-deep sessions to recharge effectively."
     
     var body: some View {
