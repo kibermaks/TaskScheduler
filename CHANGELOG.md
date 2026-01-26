@@ -5,7 +5,7 @@ All notable changes to Task Scheduler will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [1.6] - 2026-01-21
+## [1.6] - 2026-01-25
 
 ### Added
 
@@ -16,6 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - Overlapping calendar events in the timeline now render side-by-side for better readability
+- Update now self-installs from GitHub releases and restarts the app
 
 ## [1.5] - 2026-01-18
 

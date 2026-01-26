@@ -458,13 +458,64 @@ struct ContentViewBody: View {
 }
 
 private extension ContentView {
+    /// Enriches markdown text by converting it to nicely formatted plain text
+    func enrichMarkdown(_ text: String) -> String {
+        var result = text
+        
+        // Process line by line for multiline patterns
+        let lines = result.components(separatedBy: .newlines)
+        let processedLines = lines.map { line -> String in
+            var processed = line
+            
+            // Convert markdown headers to plain text (keep the text, remove #)
+            if let headerMatch = try? NSRegularExpression(pattern: #"^#{1,6}\s+(.+)$"#, options: []),
+               let match = headerMatch.firstMatch(in: processed, range: NSRange(processed.startIndex..., in: processed)),
+               let textRange = Range(match.range(at: 1), in: processed) {
+                processed = String(processed[textRange])
+            }
+            
+            // Convert markdown list markers to bullet points
+            if let listMatch = try? NSRegularExpression(pattern: #"^[\-\*\+]\s+(.+)$"#, options: []),
+               let match = listMatch.firstMatch(in: processed, range: NSRange(processed.startIndex..., in: processed)),
+               let textRange = Range(match.range(at: 1), in: processed) {
+                processed = "• \(processed[textRange])"
+            }
+            
+            return processed
+        }
+        result = processedLines.joined(separator: "\n")
+        
+        // Remove markdown bold/italic markers but keep the text
+        result = result.replacingOccurrences(of: #"\*\*([^\*]+)\*\*"#, with: "$1", options: .regularExpression)
+        result = result.replacingOccurrences(of: #"\*([^\*]+)\*"#, with: "$1", options: .regularExpression)
+        result = result.replacingOccurrences(of: #"__([^_]+)__"#, with: "$1", options: .regularExpression)
+        result = result.replacingOccurrences(of: #"_([^_]+)_"#, with: "$1", options: .regularExpression)
+        
+        // Remove markdown code blocks (```code```)
+        result = result.replacingOccurrences(of: #"```[\s\S]*?```"#, with: "", options: .regularExpression)
+        
+        // Convert inline code to plain text (remove backticks)
+        result = result.replacingOccurrences(of: #"`([^`]+)`"#, with: "$1", options: .regularExpression)
+        
+        // Convert markdown links [text](url) -> text
+        result = result.replacingOccurrences(of: #"\[([^\]]+)\]\([^\)]+\)"#, with: "$1", options: .regularExpression)
+        
+        // Clean up multiple consecutive newlines
+        result = result.replacingOccurrences(of: #"\n{3,}"#, with: "\n\n", options: .regularExpression)
+        
+        return result.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+    
     func buildUpdateAlert(_ payload: UpdateService.UpdateAlert) -> Alert {
         switch payload.kind {
         case .updateAvailable(let info):
+            let releaseNotes = info.releaseNotes.isEmpty 
+                ? "Visit the release page for full details." 
+                : enrichMarkdown(info.releaseNotes)
             let message = [
                 "Task Scheduler \(info.version) is available.",
                 "",
-                info.releaseNotes.isEmpty ? "Visit the release page for full details." : info.releaseNotes
+                releaseNotes
             ].joined(separator: "\n")
             return Alert(
                 title: Text("Update Available"),
@@ -554,6 +605,7 @@ struct SettingsChangeModifier: ViewModifier {
 
 // MARK: - Header View
 struct HeaderView: View {
+    @EnvironmentObject var updateService: UpdateService
     @Binding var dateSelection: ContentView.DateSelection
     @Binding var selectedDate: Date
     @Binding var useNowTime: Bool
@@ -598,6 +650,16 @@ struct HeaderView: View {
             Text("Plan your productive day")
                 .font(.subheadline)
                 .foregroundColor(.white.opacity(0.6))
+            if let status = updateService.installationStatus {
+                HStack(spacing: 8) {
+                    ProgressView()
+                        .scaleEffect(0.7, anchor: .center)
+                        .progressViewStyle(.circular)
+                    Text(status.message)
+                        .font(.caption)
+                        .foregroundColor(.white.opacity(0.85))
+                }
+            }
         }
     }
     
