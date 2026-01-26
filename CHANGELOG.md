@@ -5,6 +5,18 @@ All notable changes to Task Scheduler will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.7] - 2026-01-26
+
+### Added
+
+- New “Did you know?” tips card with rotating tips
+
+### Changed
+
+- Auto-updater now downloads, installs, and relaunches the app on its own with live progress in the header
+- Timeline double-click editing for titles, notes, and URLs plus clearer details and side-by-side overlaps
+- Updated wording in Settings and other UI elements
+
 ## [1.6] - 2026-01-25
 
 ### Added
