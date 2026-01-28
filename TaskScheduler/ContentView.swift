@@ -839,6 +839,7 @@ struct LeftPanel: View {
                 .frame(width: 170)
         }
         .frame(maxWidth: .infinity)
+        .background(Color.white.opacity(0.6))
         .padding(.bottom, 12)
     }
     

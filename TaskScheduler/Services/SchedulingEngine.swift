@@ -246,13 +246,20 @@ class SchedulingEngine: ObservableObject {
                 calendarName = workCalendarName
                 sessionTag = "#plan"
             } else {
+                // Special handling for injectAfterEvery == 0: inject immediately
+                let shouldInjectDeepImmediately = deepSessionConfig.enabled
+                    && deepCount < deepSessionConfig.sessionCount
+                    && deepSessionConfig.injectAfterEvery == 0
+                
+                // Normal injection logic: inject after N regular sessions
                 let shouldInjectDeep = deepSessionConfig.enabled
                     && deepCount < deepSessionConfig.sessionCount
                     && regularSessionsScheduled > 0
+                    && deepSessionConfig.injectAfterEvery > 0
                 
                 let sessionsSinceLastDeep = regularSessionsScheduled - (deepCount * deepSessionConfig.injectAfterEvery)
                  
-                if shouldInjectDeep && sessionsSinceLastDeep >= deepSessionConfig.injectAfterEvery {
+                if shouldInjectDeepImmediately || (shouldInjectDeep && sessionsSinceLastDeep >= deepSessionConfig.injectAfterEvery) {
                      sessionType = .deep
                      sessionDuration = deepSessionConfig.duration
                      

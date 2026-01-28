@@ -646,9 +646,16 @@ extension TimelineView {
             selectedSession = session
         }
         .contextMenu {
-            Button("View Details") {
+            Button {
                 selectedBusySlot = nil
                 selectedSession = session
+            } label: {
+                Label("View Details", systemImage: "info.circle")
+            }
+            Button {
+                scheduleProjectedSession(session)
+            } label: {
+                Label("Schedule Session", systemImage: "calendar.badge.plus")
             }
         }
     }
@@ -686,6 +693,22 @@ extension TimelineView {
             .transition(.scale.combined(with: .opacity))
         }
         .animation(.spring(response: 0.3, dampingFraction: 0.8), value: showingDetailSheet)
+    }
+
+    private func scheduleProjectedSession(_ session: ScheduledSession) {
+        let result = calendarService.createSessions([session])
+        if result.success > 0 {
+            schedulingEngine.schedulingMessage = "Scheduled \(session.title) -> \(session.calendarName)"
+            schedulingEngine.projectedSessions.removeAll { $0.id == session.id }
+            if selectedSession?.id == session.id {
+                selectedSession = nil
+            }
+            Task {
+                await calendarService.fetchEvents(for: selectedDate)
+            }
+        } else {
+            schedulingEngine.schedulingMessage = "Failed to schedule \(session.title)."
+        }
     }
     
     private func sessionDetailContent(_ session: ScheduledSession) -> some View {

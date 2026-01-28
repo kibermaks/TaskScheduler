@@ -347,7 +347,7 @@ struct SettingsPanel: View {
                         .font(.system(size: 13))
                         .foregroundColor(.white.opacity(0.7))
                     Spacer()
-                    NumericInputField(value: $schedulingEngine.deepSessionConfig.injectAfterEvery, range: 1...10, unit: "slots")
+                    NumericInputField(value: $schedulingEngine.deepSessionConfig.injectAfterEvery, range: 0...10, unit: "slots")
                 }
  
                  NameFieldWithHistory(
