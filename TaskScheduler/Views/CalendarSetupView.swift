@@ -7,6 +7,9 @@ struct CalendarSetupView: View {
     @State private var selectedWorkCalendar: String = ""
     @State private var selectedSideCalendar: String = ""
     @State private var selectedDeepCalendar: String = ""
+    @State private var selectedWorkCalendarId: String = ""
+    @State private var selectedSideCalendarId: String = ""
+    @State private var selectedDeepCalendarId: String = ""
     @State private var workDuration: Int = 40
     @State private var restDuration: Int = 10
     @State private var basicSessions: Int = 5
@@ -16,7 +19,12 @@ struct CalendarSetupView: View {
     @State private var isReloading = false
     
     var canComplete: Bool {
-        !selectedWorkCalendar.isEmpty && !selectedSideCalendar.isEmpty && !selectedDeepCalendar.isEmpty
+        !selectedWorkCalendar.isEmpty &&
+        !selectedSideCalendar.isEmpty &&
+        !selectedDeepCalendar.isEmpty &&
+        !selectedWorkCalendarId.isEmpty &&
+        !selectedSideCalendarId.isEmpty &&
+        !selectedDeepCalendarId.isEmpty
     }
     
     var body: some View {
@@ -114,7 +122,8 @@ struct CalendarSetupView: View {
                                     color: Color(hex: "8B5CF6"),
                                     description: "Primary focus blocks for important tasks",
                                     tag: "#work",
-                                    selectedCalendar: $selectedWorkCalendar
+                                    selectedCalendar: $selectedWorkCalendar,
+                                    selectedCalendarId: $selectedWorkCalendarId
                                 )
                                 
                                 calendarSelectionCard(
@@ -123,7 +132,8 @@ struct CalendarSetupView: View {
                                     color: Color(hex: "3B82F6"),
                                     description: "Life admin, emails, and quick errands",
                                     tag: "#side",
-                                    selectedCalendar: $selectedSideCalendar
+                                    selectedCalendar: $selectedSideCalendar,
+                                    selectedCalendarId: $selectedSideCalendarId
                                 )
                                 
                                 calendarSelectionCard(
@@ -132,7 +142,8 @@ struct CalendarSetupView: View {
                                     color: Color(hex: "10B981"),
                                     description: "Rare, high-intensity focus blocks",
                                     tag: "#deep",
-                                    selectedCalendar: $selectedDeepCalendar
+                                    selectedCalendar: $selectedDeepCalendar,
+                                    selectedCalendarId: $selectedDeepCalendarId
                                 )
                             }
                         }
@@ -303,7 +314,8 @@ struct CalendarSetupView: View {
         color: Color,
         description: String,
         tag: String,
-        selectedCalendar: Binding<String>
+        selectedCalendar: Binding<String>,
+        selectedCalendarId: Binding<String>
     ) -> some View {
         VStack(alignment: .leading, spacing: 16) {
             // Header
@@ -353,7 +365,11 @@ struct CalendarSetupView: View {
                 CalendarPickerPopover(
                     selectedCalendar: selectedCalendar,
                     calendars: calendarService.calendarInfoList(),
-                    accentColor: color
+                    accentColor: color,
+                    onSelection: { info in
+                        selectedCalendar.wrappedValue = info.name
+                        selectedCalendarId.wrappedValue = info.id
+                    }
                 )
             }
         }
@@ -381,6 +397,14 @@ struct CalendarSetupView: View {
         let calendars = calendarService.calendarNames()
         guard !calendars.isEmpty else { return }
         
+        func assign(_ name: String, to idStorage: inout String) {
+            if let calendar = calendarService.availableCalendars.first(where: { $0.title == name }) {
+                idStorage = calendar.calendarIdentifier
+            } else {
+                idStorage = ""
+            }
+        }
+        
         func prioritizedMatch(from candidates: [String], keywords: [String]) -> String? {
             // 1. Look for exact matches, in priority order
             for keyword in keywords {
@@ -403,9 +427,13 @@ struct CalendarSetupView: View {
             let workKeywords = ["work", "tasks"]
             if let match = prioritizedMatch(from: calendars, keywords: workKeywords) {
                 selectedWorkCalendar = match
-            } else {
-                selectedWorkCalendar = calendars.first ?? ""
+                assign(match, to: &selectedWorkCalendarId)
+            } else if let first = calendars.first {
+                selectedWorkCalendar = first
+                assign(first, to: &selectedWorkCalendarId)
             }
+        } else if selectedWorkCalendarId.isEmpty {
+            assign(selectedWorkCalendar, to: &selectedWorkCalendarId)
         }
 
         // Side: prioritize "side" then "admin" then "personal"
@@ -413,11 +441,16 @@ struct CalendarSetupView: View {
             let sideKeywords = ["side", "admin", "personal"]
             if let match = prioritizedMatch(from: calendars, keywords: sideKeywords) {
                 selectedSideCalendar = match
+                assign(match, to: &selectedSideCalendarId)
             } else if calendars.count > 1 {
                 selectedSideCalendar = calendars[1]
-            } else {
-                selectedSideCalendar = calendars.first ?? ""
+                assign(calendars[1], to: &selectedSideCalendarId)
+            } else if let first = calendars.first {
+                selectedSideCalendar = first
+                assign(first, to: &selectedSideCalendarId)
             }
+        } else if selectedSideCalendarId.isEmpty {
+            assign(selectedSideCalendar, to: &selectedSideCalendarId)
         }
         
         // Deep: prioritize "deep" then "focus" then "work"
@@ -425,11 +458,16 @@ struct CalendarSetupView: View {
             let deepKeywords = ["deep", "focus", "work"]
             if let match = prioritizedMatch(from: calendars, keywords: deepKeywords) {
                 selectedDeepCalendar = match
+                assign(match, to: &selectedDeepCalendarId)
             } else if calendars.count > 2 {
                 selectedDeepCalendar = calendars[2]
-            } else {
-                selectedDeepCalendar = calendars.first ?? ""
+                assign(calendars[2], to: &selectedDeepCalendarId)
+            } else if let first = calendars.first {
+                selectedDeepCalendar = first
+                assign(first, to: &selectedDeepCalendarId)
             }
+        } else if selectedDeepCalendarId.isEmpty {
+            assign(selectedDeepCalendar, to: &selectedDeepCalendarId)
         }
     }
     
@@ -461,6 +499,9 @@ struct CalendarSetupView: View {
             workCalendar: selectedWorkCalendar,
             sideCalendar: selectedSideCalendar,
             deepCalendar: selectedDeepCalendar,
+            workCalendarId: selectedWorkCalendarId,
+            sideCalendarId: selectedSideCalendarId,
+            deepCalendarId: selectedDeepCalendarId,
             workDuration: workDuration,
             restDuration: restDuration,
             basicSessions: basicSessions
@@ -469,10 +510,13 @@ struct CalendarSetupView: View {
         // Save to scheduling engine for backward compatibility
         schedulingEngine.workCalendarName = selectedWorkCalendar
         schedulingEngine.sideCalendarName = selectedSideCalendar
+        schedulingEngine.workCalendarIdentifier = selectedWorkCalendarId
+        schedulingEngine.sideCalendarIdentifier = selectedSideCalendarId
         
         // Update deep session config
         var deepConfig = schedulingEngine.deepSessionConfig
         deepConfig.calendarName = selectedDeepCalendar
+        deepConfig.calendarIdentifier = selectedDeepCalendarId
         schedulingEngine.deepSessionConfig = deepConfig
         
         // Give a moment for all saves to complete, then mark setup as complete

@@ -92,6 +92,13 @@ struct ContentView: View {
             // Reset setup for testing
             hasCompletedSetup = false
         }
+        .onReceive(NotificationCenter.default.publisher(for: Notification.Name("PresetsUpdated"))) { _ in
+            presets = PresetStorage.shared.loadPresets()
+            if let current = selectedPreset,
+               let refreshed = presets.first(where: { $0.id == current.id }) {
+                selectedPreset = refreshed
+            }
+        }
         .onReceive(updateService.$pendingAlert) { alert in
             updateAlert = alert
         }
@@ -211,6 +218,10 @@ struct ContentViewBody: View {
         .onChange(of: calendarService.lastRefresh) { _, _ in
             // Calendar events changed externally (from Calendar.app)
             if autoPreview { updateProjectedSchedule() }
+        }
+        .onChange(of: calendarService.availableCalendars) { _, _ in
+            schedulingEngine.reconcileCalendars(with: calendarService)
+            PresetStorage.shared.populateCalendarIdentifiers(using: calendarService.availableCalendars)
         }
         .modifier(SettingsChangeModifier(autoPreview: autoPreview, updatePreview: updateProjectedSchedule))
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
@@ -361,18 +372,21 @@ struct ContentViewBody: View {
     
     private func ensureCalendarsExist(for preset: Preset) {
         let workName = preset.calendarMapping.workCalendarName
-        if calendarService.getCalendar(named: workName) == nil {
+        if calendarService.getCalendar(identifier: preset.calendarMapping.workCalendarIdentifier) == nil &&
+            calendarService.getCalendar(named: workName) == nil {
             calendarService.createCalendar(named: workName, color: .blue)
         }
         
         let sideName = preset.calendarMapping.sideCalendarName
-        if calendarService.getCalendar(named: sideName) == nil {
+        if calendarService.getCalendar(identifier: preset.calendarMapping.sideCalendarIdentifier) == nil &&
+            calendarService.getCalendar(named: sideName) == nil {
             calendarService.createCalendar(named: sideName, color: .orange)
         }
         
         if preset.deepSessionConfig.enabled {
             let deepName = preset.deepSessionConfig.calendarName
-            if calendarService.getCalendar(named: deepName) == nil {
+            if calendarService.getCalendar(identifier: preset.deepSessionConfig.calendarIdentifier) == nil &&
+                calendarService.getCalendar(named: deepName) == nil {
                 calendarService.createCalendar(named: deepName, color: .purple)
             }
         }
@@ -383,8 +397,14 @@ struct ContentViewBody: View {
         
         let existing = calendarService.countExistingSessions(
             for: selectedDate,
-            workCalendar: schedulingEngine.workCalendarName,
-            sideCalendar: schedulingEngine.sideCalendarName,
+            workCalendar: CalendarDescriptor(
+                name: schedulingEngine.workCalendarName,
+                identifier: schedulingEngine.workCalendarIdentifier
+            ),
+            sideCalendar: CalendarDescriptor(
+                name: schedulingEngine.sideCalendarName,
+                identifier: schedulingEngine.sideCalendarIdentifier
+            ),
             deepConfig: schedulingEngine.deepSessionConfig
         )
         
@@ -403,6 +423,8 @@ struct ContentViewBody: View {
             let _ = await calendarService.requestAccess()
         }
         await calendarService.fetchEvents(for: selectedDate)
+        schedulingEngine.reconcileCalendars(with: calendarService)
+        PresetStorage.shared.populateCalendarIdentifiers(using: calendarService.availableCalendars)
         if autoPreview { updateProjectedSchedule() }
     }
     
@@ -421,13 +443,33 @@ struct ContentViewBody: View {
     
     private func deleteScheduledSessions() {
         // Collect all calendars to clear
-        var calendars = [schedulingEngine.workCalendarName, schedulingEngine.sideCalendarName]
+        var calendars: [CalendarDescriptor] = [
+            CalendarDescriptor(
+                name: schedulingEngine.workCalendarName,
+                identifier: schedulingEngine.workCalendarIdentifier
+            ),
+            CalendarDescriptor(
+                name: schedulingEngine.sideCalendarName,
+                identifier: schedulingEngine.sideCalendarIdentifier
+            )
+        ]
         if schedulingEngine.deepSessionConfig.enabled {
-            calendars.append(schedulingEngine.deepSessionConfig.calendarName)
+            calendars.append(
+                CalendarDescriptor(
+                    name: schedulingEngine.deepSessionConfig.calendarName,
+                    identifier: schedulingEngine.deepSessionConfig.calendarIdentifier
+                )
+            )
         }
         
-        // Remove duplicates if any calendars share the same name
-        calendars = Array(Set(calendars))
+        // Remove duplicates if any calendars share the same identity
+        var uniqueCalendars: [CalendarDescriptor] = []
+        for descriptor in calendars {
+            if !uniqueCalendars.contains(where: { $0.identifier != nil && $0.identifier == descriptor.identifier }) &&
+                !uniqueCalendars.contains(where: { $0.identifier == nil && $0.name == descriptor.name }) {
+                uniqueCalendars.append(descriptor)
+            }
+        }
         
         // Passing nil for sessionNames means "delete all events on these calendars"
         let result: (deleted: Int, failed: Int)
@@ -435,7 +477,7 @@ struct ContentViewBody: View {
             result = calendarService.deleteSessionEvents(
                 for: selectedDate,
                 sessionNames: nil,
-                fromCalendars: calendars,
+                fromCalendars: uniqueCalendars,
                 requireSessionTag: true
             )
         } else {
@@ -443,7 +485,7 @@ struct ContentViewBody: View {
                 for: selectedDate,
                 after: Date(),
                 sessionNames: nil,
-                fromCalendars: calendars,
+                fromCalendars: uniqueCalendars,
                 requireSessionTag: true
             )
         }
@@ -839,7 +881,6 @@ struct LeftPanel: View {
                 .frame(width: 170)
         }
         .frame(maxWidth: .infinity)
-        .background(Color.white.opacity(0.6))
         .padding(.bottom, 12)
     }
     
@@ -891,7 +932,12 @@ struct LeftPanel: View {
             sideSessionsPerCycle: schedulingEngine.sideSessionsPerCycle,
             sideFirst: schedulingEngine.sideFirst,
             deepSessionConfig: schedulingEngine.deepSessionConfig,
-            calendarMapping: CalendarMapping(workCalendarName: schedulingEngine.workCalendarName, sideCalendarName: schedulingEngine.sideCalendarName))
+            calendarMapping: CalendarMapping(
+                workCalendarName: schedulingEngine.workCalendarName,
+                sideCalendarName: schedulingEngine.sideCalendarName,
+                workCalendarIdentifier: schedulingEngine.workCalendarIdentifier,
+                sideCalendarIdentifier: schedulingEngine.sideCalendarIdentifier
+            ))
         PresetStorage.shared.updatePreset(updated)
         presets = PresetStorage.shared.loadPresets()
         selectedPreset = updated

@@ -45,7 +45,11 @@ struct SettingsPanel: View {
                     calendar: $schedulingEngine.workCalendarName,
                     helpText: workHelpText,
                     isShowingHelp: $showingWorkHelp,
-                    sessionType: .work
+                    sessionType: .work,
+                    onCalendarSelected: { info in
+                        schedulingEngine.workCalendarIdentifier = info.identifier
+                        schedulingEngine.workCalendarName = info.name
+                    }
                 )
                 
                 Divider().background(Color.white.opacity(0.1))
@@ -61,7 +65,11 @@ struct SettingsPanel: View {
                     calendar: $schedulingEngine.sideCalendarName,
                     helpText: sideHelpText,
                     isShowingHelp: $showingSideHelp,
-                    sessionType: .side
+                    sessionType: .side,
+                    onCalendarSelected: { info in
+                        schedulingEngine.sideCalendarIdentifier = info.identifier
+                        schedulingEngine.sideCalendarName = info.name
+                    }
                 )
                 
                 Divider().background(Color.white.opacity(0.1))
@@ -221,7 +229,8 @@ struct SettingsPanel: View {
         calendar: Binding<String>,
         helpText: String,
         isShowingHelp: Binding<Bool>,
-        sessionType: SessionType
+        sessionType: SessionType,
+        onCalendarSelected: @escaping (CalendarService.CalendarInfo) -> Void
     ) -> some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 8) {
@@ -292,8 +301,9 @@ struct SettingsPanel: View {
                 
                 CalendarPickerCompact(
                     selectedCalendar: calendar,
-                    calendars: calendarService.calendarInfoList(),
-                    accentColor: iconColor
+                    calendars: calendarService.calendarInfoList(includeExcluded: false),
+                    accentColor: iconColor,
+                    onSelection: onCalendarSelected
                 )
                 .frame(width: 150)
             }
@@ -372,8 +382,14 @@ struct SettingsPanel: View {
                     Spacer()
                     CalendarPickerCompact(
                         selectedCalendar: $schedulingEngine.deepSessionConfig.calendarName,
-                        calendars: calendarService.calendarInfoList(),
-                        accentColor: Color(hex: "10B981")
+                        calendars: calendarService.calendarInfoList(includeExcluded: false),
+                        accentColor: Color(hex: "10B981"),
+                        onSelection: { info in
+                            var config = schedulingEngine.deepSessionConfig
+                            config.calendarName = info.name
+                            config.calendarIdentifier = info.identifier
+                            schedulingEngine.deepSessionConfig = config
+                        }
                     )
                     .frame(width: 150)
                 }
@@ -1485,4 +1501,3 @@ fileprivate struct VisualEffectBlur: View {
         .frame(width: 320, height: 800)
         .background(Color(hex: "0F172A"))
 }
-

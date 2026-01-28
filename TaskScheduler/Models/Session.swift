@@ -46,6 +46,7 @@ struct ScheduledSession: Identifiable, Equatable {
     var startTime: Date
     var endTime: Date
     let calendarName: String
+    let calendarIdentifier: String?
     let notes: String?
     
     var duration: TimeInterval {
@@ -56,13 +57,23 @@ struct ScheduledSession: Identifiable, Equatable {
         Int(duration / 60)
     }
     
-    init(id: UUID = UUID(), type: SessionType, title: String, startTime: Date, endTime: Date, calendarName: String, notes: String? = nil) {
+    init(
+        id: UUID = UUID(),
+        type: SessionType,
+        title: String,
+        startTime: Date,
+        endTime: Date,
+        calendarName: String,
+        calendarIdentifier: String? = nil,
+        notes: String? = nil
+    ) {
         self.id = id
         self.type = type
         self.title = title
         self.startTime = startTime
         self.endTime = endTime
         self.calendarName = calendarName
+        self.calendarIdentifier = calendarIdentifier
         self.notes = notes
     }
     
@@ -87,7 +98,8 @@ struct BusyTimeSlot: Identifiable {
     let url: URL?
     let calendarName: String
     let calendarColor: Color
-    
+    let calendarIdentifier: String?
+
     init(from event: EKEvent) {
         self.id = event.eventIdentifier ?? UUID().uuidString
         self.title = event.title ?? "Busy"
@@ -96,14 +108,25 @@ struct BusyTimeSlot: Identifiable {
         self.notes = event.notes
         self.url = event.url
         self.calendarName = event.calendar?.title ?? "Unknown"
+        self.calendarIdentifier = event.calendar?.calendarIdentifier
         if let cgColor = event.calendar?.cgColor {
             self.calendarColor = Color(cgColor: cgColor)
         } else {
             self.calendarColor = .gray
         }
     }
-    
-    init(id: String = UUID().uuidString, title: String, startTime: Date, endTime: Date, notes: String? = nil, url: URL? = nil, calendarName: String, calendarColor: Color = .gray) {
+
+    init(
+        id: String = UUID().uuidString,
+        title: String,
+        startTime: Date,
+        endTime: Date,
+        notes: String? = nil,
+        url: URL? = nil,
+        calendarName: String,
+        calendarColor: Color = .gray,
+        calendarIdentifier: String? = nil
+    ) {
         self.id = id
         self.title = title
         self.startTime = startTime
@@ -112,6 +135,7 @@ struct BusyTimeSlot: Identifiable {
         self.url = url
         self.calendarName = calendarName
         self.calendarColor = calendarColor
+        self.calendarIdentifier = calendarIdentifier
     }
 }
 

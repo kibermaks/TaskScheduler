@@ -1,4 +1,5 @@
 import Foundation
+import EventKit
 
 // MARK: - Preset Schema Version
 /// Tracks the schema version of presets for migration purposes
@@ -6,8 +7,9 @@ import Foundation
 enum PresetSchemaVersion: Int, Codable, Comparable {
     case v1 = 1  // Initial version (before flexibleSideScheduling)
     case v2 = 2  // Added flexibleSideScheduling field
+    case v3 = 3  // Added calendar identifiers
     
-    static let current: PresetSchemaVersion = .v2
+    static let current: PresetSchemaVersion = .v3
     
     static func < (lhs: PresetSchemaVersion, rhs: PresetSchemaVersion) -> Bool {
         return lhs.rawValue < rhs.rawValue
@@ -18,10 +20,14 @@ enum PresetSchemaVersion: Int, Codable, Comparable {
 struct CalendarMapping: Codable, Equatable {
     var workCalendarName: String
     var sideCalendarName: String
+    var workCalendarIdentifier: String?
+    var sideCalendarIdentifier: String?
     
     static let `default` = CalendarMapping(
         workCalendarName: "Work",
-        sideCalendarName: "Side Tasks"
+        sideCalendarName: "Side Tasks",
+        workCalendarIdentifier: nil,
+        sideCalendarIdentifier: nil
     )
 }
 
@@ -33,6 +39,7 @@ struct DeepSessionConfig: Codable, Equatable {
     var name: String
     var duration: Int
     var calendarName: String
+    var calendarIdentifier: String?
     
     static let `default` = DeepSessionConfig(
         enabled: false,
@@ -40,7 +47,8 @@ struct DeepSessionConfig: Codable, Equatable {
         injectAfterEvery: 3,
         name: "Deep Session",
         duration: 100, // 2.5x of standard 40 min work duration
-        calendarName: "Work"
+        calendarName: "Work",
+        calendarIdentifier: nil
     )
 }
 
@@ -251,7 +259,9 @@ struct Preset: Identifiable, Codable, Equatable {
         pattern: .alternating,
         calendarMapping: CalendarMapping(
             workCalendarName: "Work",
-            sideCalendarName: "Side Tasks"
+            sideCalendarName: "Side Tasks",
+            workCalendarIdentifier: nil,
+            sideCalendarIdentifier: nil
         )
     )
     
@@ -270,11 +280,14 @@ struct Preset: Identifiable, Codable, Equatable {
             injectAfterEvery: 3,
             name: "Deep Session",
             duration: calculateDeepDuration(from: workDuration),
-            calendarName: "Work"
+            calendarName: "Work",
+            calendarIdentifier: nil
         ),
         calendarMapping: CalendarMapping(
             workCalendarName: "Work",
-            sideCalendarName: "Side Tasks"
+            sideCalendarName: "Side Tasks",
+            workCalendarIdentifier: nil,
+            sideCalendarIdentifier: nil
         )
     )
     
@@ -289,7 +302,9 @@ struct Preset: Identifiable, Codable, Equatable {
         pattern: .allWorkFirst,
         calendarMapping: CalendarMapping(
             workCalendarName: "Work",
-            sideCalendarName: "Side Tasks"
+            sideCalendarName: "Side Tasks",
+            workCalendarIdentifier: nil,
+            sideCalendarIdentifier: nil
         )
     )
     
@@ -311,11 +326,14 @@ struct Preset: Identifiable, Codable, Equatable {
             injectAfterEvery: 3,
             name: "Deep Session",
             duration: calculateDeepDuration(from: workDuration),
-            calendarName: "Work"
+            calendarName: "Work",
+            calendarIdentifier: nil
         ),
         calendarMapping: CalendarMapping(
             workCalendarName: "Work",
-            sideCalendarName: "Side Tasks"
+            sideCalendarName: "Side Tasks",
+            workCalendarIdentifier: nil,
+            sideCalendarIdentifier: nil
         ),
         defaultStartHour: 10
     )
@@ -331,7 +349,9 @@ struct Preset: Identifiable, Codable, Equatable {
         pattern: .alternating,
         calendarMapping: CalendarMapping(
             workCalendarName: "Work",
-            sideCalendarName: "Side Tasks"
+            sideCalendarName: "Side Tasks",
+            workCalendarIdentifier: nil,
+            sideCalendarIdentifier: nil
         )
     )
     
@@ -349,13 +369,18 @@ struct Preset: Identifiable, Codable, Equatable {
         workCalendar: String,
         sideCalendar: String,
         deepCalendar: String,
+        workCalendarId: String? = nil,
+        sideCalendarId: String? = nil,
+        deepCalendarId: String? = nil,
         workDuration: Int = 40,
         restDuration: Int = 10,
         basicSessions: Int = 5
     ) -> [Preset] {
         let workMapping = CalendarMapping(
             workCalendarName: workCalendar,
-            sideCalendarName: sideCalendar
+            sideCalendarName: sideCalendar,
+            workCalendarIdentifier: workCalendarId,
+            sideCalendarIdentifier: sideCalendarId
         )
         
         // Calculate session counts
@@ -373,7 +398,8 @@ struct Preset: Identifiable, Codable, Equatable {
             injectAfterEvery: 3,
             name: "Deep Session",
             duration: calculateDeepDuration(from: workDuration),
-            calendarName: deepCalendar
+            calendarName: deepCalendar,
+            calendarIdentifier: deepCalendarId
         )
         
         // Deep config enabled for Focus Day preset
@@ -383,7 +409,8 @@ struct Preset: Identifiable, Codable, Equatable {
             injectAfterEvery: 3,
             name: "Deep Session",
             duration: calculateDeepDuration(from: workDuration),
-            calendarName: deepCalendar
+            calendarName: deepCalendar,
+            calendarIdentifier: deepCalendarId
         )
 
         // Deep config enabled for Focus Day preset
@@ -393,7 +420,8 @@ struct Preset: Identifiable, Codable, Equatable {
             injectAfterEvery: 2,
             name: "Weekend Deep",
             duration: calculateDeepDuration(from: workDuration),
-            calendarName: deepCalendar
+            calendarName: deepCalendar,
+            calendarIdentifier: deepCalendarId
         )
         
         return [
@@ -484,7 +512,18 @@ extension Preset {
             flexibleSideScheduling = true // Default to enabled for migrated presets
             schemaVersion = .v2
         case .v2:
-            // Already at latest version
+            // Migration from v2 to v3: Initialize calendar identifiers as unknown
+            if calendarMapping.workCalendarIdentifier == nil {
+                calendarMapping.workCalendarIdentifier = nil
+            }
+            if calendarMapping.sideCalendarIdentifier == nil {
+                calendarMapping.sideCalendarIdentifier = nil
+            }
+            if deepSessionConfig.calendarIdentifier == nil {
+                deepSessionConfig.calendarIdentifier = nil
+            }
+            schemaVersion = .v3
+        case .v3:
             break
         }
     }
@@ -538,6 +577,9 @@ class PresetStorage {
         workCalendar: String,
         sideCalendar: String,
         deepCalendar: String,
+        workCalendarId: String? = nil,
+        sideCalendarId: String? = nil,
+        deepCalendarId: String? = nil,
         workDuration: Int = 40,
         restDuration: Int = 10,
         basicSessions: Int = 5
@@ -546,6 +588,9 @@ class PresetStorage {
             workCalendar: workCalendar,
             sideCalendar: sideCalendar,
             deepCalendar: deepCalendar,
+            workCalendarId: workCalendarId,
+            sideCalendarId: sideCalendarId,
+            deepCalendarId: deepCalendarId,
             workDuration: workDuration,
             restDuration: restDuration,
             basicSessions: basicSessions
@@ -582,6 +627,38 @@ class PresetStorage {
         var presets = loadPresets()
         presets.removeAll { $0.id == preset.id }
         savePresets(presets)
+    }
+    
+    func populateCalendarIdentifiers(using calendars: [EKCalendar]) {
+        guard !calendars.isEmpty else { return }
+        var presets = loadPresets()
+        var changed = false
+        
+        func identifier(for name: String) -> String? {
+            calendars.first(where: { $0.title == name })?.calendarIdentifier
+        }
+        
+        for index in presets.indices {
+            if presets[index].calendarMapping.workCalendarIdentifier == nil,
+               let id = identifier(for: presets[index].calendarMapping.workCalendarName) {
+                presets[index].calendarMapping.workCalendarIdentifier = id
+                changed = true
+            }
+            if presets[index].calendarMapping.sideCalendarIdentifier == nil,
+               let id = identifier(for: presets[index].calendarMapping.sideCalendarName) {
+                presets[index].calendarMapping.sideCalendarIdentifier = id
+                changed = true
+            }
+            if presets[index].deepSessionConfig.calendarIdentifier == nil,
+               let id = identifier(for: presets[index].deepSessionConfig.calendarName) {
+                presets[index].deepSessionConfig.calendarIdentifier = id
+                changed = true
+            }
+        }
+        
+        if changed {
+            savePresets(presets)
+        }
     }
     
     // MARK: - Persistence of Selection

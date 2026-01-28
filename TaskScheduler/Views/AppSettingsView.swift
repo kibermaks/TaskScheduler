@@ -13,6 +13,9 @@ struct AppSettingsView: View {
     @AppStorage("showDevSettings") private var showDevSettings = false
     
     @State private var showingResetPresetsConfirmation = false
+    @State private var pendingReplacementContext: CalendarReplacementContext?
+    @State private var selectedReplacementCalendarId: String = ""
+    @State private var replacementErrorMessage: String?
     
     var body: some View {
         Form {
@@ -76,7 +79,7 @@ struct AppSettingsView: View {
                             Toggle(isOn: Binding(
                                 get: { !calendarService.isCalendarExcluded(identifier: calendar.calendarIdentifier) },
                                 set: { included in
-                                    calendarService.setCalendar(calendar, included: included)
+                                    handleCalendarToggle(for: calendar, included: included)
                                 }
                             )) {
                                 HStack(spacing: 10) {
@@ -182,6 +185,26 @@ struct AppSettingsView: View {
         } message: {
             Text("This will permanently delete all saved presets and launch Calendar Setup to recreate them.")
         }
+        .sheet(item: $pendingReplacementContext, onDismiss: {
+            selectedReplacementCalendarId = ""
+        }) { context in
+            CalendarReplacementSheet(
+                context: context,
+                replacementOptions: replacementOptions(excluding: context.calendar),
+                selectedCalendarId: $selectedReplacementCalendarId,
+                onCancel: {
+                    pendingReplacementContext = nil
+                },
+                onConfirm: {
+                    confirmCalendarReplacement(for: context)
+                }
+            )
+        }
+        .alert("Cannot Hide Calendar", isPresented: replacementErrorBinding) {
+            Button("OK", role: .cancel) { }
+        } message: {
+            Text(replacementErrorMessage ?? "Unknown issue occurred.")
+        }
         .onAppear {
             if let window = NSApp.windows.first(where: { $0.title == "Settings" }) {
                 window.standardWindowButton(.miniaturizeButton)?.isHidden = true
@@ -244,5 +267,199 @@ extension AppSettingsView {
             return Color(nsColor: nsColor)
         }
         return .gray
+    }
+    
+    private func handleCalendarToggle(for calendar: EKCalendar, included: Bool) {
+        if included {
+            calendarService.setCalendar(calendar, included: true)
+            return
+        }
+        
+        let affectedPresets = presetsUsingCalendar(calendar: calendar)
+        guard !affectedPresets.isEmpty else {
+            calendarService.setCalendar(calendar, included: false)
+            return
+        }
+        
+        let options = replacementOptions(excluding: calendar)
+        guard !options.isEmpty else {
+            replacementErrorMessage = "No other visible calendars are available to replace \"\(calendar.title)\". Create or enable another calendar first."
+            return
+        }
+        
+        selectedReplacementCalendarId = ""
+        pendingReplacementContext = CalendarReplacementContext(calendar: calendar, affectedPresets: affectedPresets)
+    }
+    
+    private func presetsUsingCalendar(calendar: EKCalendar) -> [Preset] {
+        let presets = PresetStorage.shared.loadPresets()
+        return presets.filter { preset in
+            preset.calendarMapping.workCalendarIdentifier == calendar.calendarIdentifier ||
+            (preset.calendarMapping.workCalendarIdentifier == nil && preset.calendarMapping.workCalendarName == calendar.title) ||
+            preset.calendarMapping.sideCalendarIdentifier == calendar.calendarIdentifier ||
+            (preset.calendarMapping.sideCalendarIdentifier == nil && preset.calendarMapping.sideCalendarName == calendar.title) ||
+            preset.deepSessionConfig.calendarIdentifier == calendar.calendarIdentifier ||
+            (preset.deepSessionConfig.calendarIdentifier == nil && preset.deepSessionConfig.calendarName == calendar.title)
+        }
+    }
+    
+    private func replacementOptions(excluding calendar: EKCalendar) -> [EKCalendar] {
+        calendarService.availableCalendars.filter {
+            $0.calendarIdentifier != calendar.calendarIdentifier &&
+            !calendarService.isCalendarExcluded(identifier: $0.calendarIdentifier)
+        }
+    }
+    
+    private func confirmCalendarReplacement(for context: CalendarReplacementContext) {
+        guard
+            let replacement = calendarService.availableCalendars.first(where: { $0.calendarIdentifier == selectedReplacementCalendarId })
+        else {
+            replacementErrorMessage = "Select a replacement calendar before continuing."
+            return
+        }
+        
+        applyCalendarReplacement(
+            oldCalendar: context.calendar,
+            newCalendar: replacement,
+            affectedPresetIDs: Set(context.affectedPresets.map { $0.id })
+        )
+        
+        calendarService.setCalendar(context.calendar, included: false)
+        pendingReplacementContext = nil
+    }
+    
+    private func applyCalendarReplacement(oldCalendar: EKCalendar, newCalendar: EKCalendar, affectedPresetIDs: Set<UUID>) {
+        var presets = PresetStorage.shared.loadPresets()
+        var changed = false
+        let newIdentifier = newCalendar.calendarIdentifier
+        
+        for index in presets.indices {
+            guard affectedPresetIDs.contains(presets[index].id) else { continue }
+            
+            if presets[index].calendarMapping.workCalendarIdentifier == oldCalendar.calendarIdentifier ||
+                (presets[index].calendarMapping.workCalendarIdentifier == nil && presets[index].calendarMapping.workCalendarName == oldCalendar.title) {
+                presets[index].calendarMapping.workCalendarName = newCalendar.title
+                presets[index].calendarMapping.workCalendarIdentifier = newIdentifier
+                changed = true
+            }
+            if presets[index].calendarMapping.sideCalendarIdentifier == oldCalendar.calendarIdentifier ||
+                (presets[index].calendarMapping.sideCalendarIdentifier == nil && presets[index].calendarMapping.sideCalendarName == oldCalendar.title) {
+                presets[index].calendarMapping.sideCalendarName = newCalendar.title
+                presets[index].calendarMapping.sideCalendarIdentifier = newIdentifier
+                changed = true
+            }
+            if presets[index].deepSessionConfig.calendarIdentifier == oldCalendar.calendarIdentifier ||
+                (presets[index].deepSessionConfig.calendarIdentifier == nil && presets[index].deepSessionConfig.calendarName == oldCalendar.title) {
+                presets[index].deepSessionConfig.calendarName = newCalendar.title
+                presets[index].deepSessionConfig.calendarIdentifier = newIdentifier
+                changed = true
+            }
+        }
+        
+        if changed {
+            PresetStorage.shared.savePresets(presets)
+            NotificationCenter.default.post(name: Notification.Name("PresetsUpdated"), object: nil)
+        }
+        
+        if schedulingEngine.workCalendarIdentifier == oldCalendar.calendarIdentifier ||
+            (schedulingEngine.workCalendarIdentifier == nil && schedulingEngine.workCalendarName == oldCalendar.title) {
+            schedulingEngine.workCalendarName = newCalendar.title
+            schedulingEngine.workCalendarIdentifier = newIdentifier
+        }
+        if schedulingEngine.sideCalendarIdentifier == oldCalendar.calendarIdentifier ||
+            (schedulingEngine.sideCalendarIdentifier == nil && schedulingEngine.sideCalendarName == oldCalendar.title) {
+            schedulingEngine.sideCalendarName = newCalendar.title
+            schedulingEngine.sideCalendarIdentifier = newIdentifier
+        }
+        if schedulingEngine.deepSessionConfig.calendarIdentifier == oldCalendar.calendarIdentifier ||
+            (schedulingEngine.deepSessionConfig.calendarIdentifier == nil && schedulingEngine.deepSessionConfig.calendarName == oldCalendar.title) {
+            var config = schedulingEngine.deepSessionConfig
+            config.calendarName = newCalendar.title
+            config.calendarIdentifier = newIdentifier
+            schedulingEngine.deepSessionConfig = config
+        }
+    }
+    
+    private var replacementErrorBinding: Binding<Bool> {
+        Binding(
+            get: { replacementErrorMessage != nil },
+            set: { newValue in
+                if !newValue {
+                    replacementErrorMessage = nil
+                }
+            }
+        )
+    }
+}
+
+private struct CalendarReplacementContext: Identifiable {
+    let calendar: EKCalendar
+    let affectedPresets: [Preset]
+    
+    var id: String { calendar.calendarIdentifier }
+}
+
+private struct CalendarReplacementSheet: View {
+    let context: CalendarReplacementContext
+    let replacementOptions: [EKCalendar]
+    @Binding var selectedCalendarId: String
+    let onCancel: () -> Void
+    let onConfirm: () -> Void
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("Reassign Calendar")
+                .font(.title2)
+                .fontWeight(.bold)
+            
+            Text("\"\(context.calendar.title)\" is used in the presets below. Choose a replacement calendar before hiding it.")
+                .font(.system(size: 13))
+                .foregroundColor(.secondary)
+            
+            if !context.affectedPresets.isEmpty {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Affected Presets (\(context.affectedPresets.count))")
+                        .font(.headline)
+                    ForEach(context.affectedPresets) { preset in
+                        HStack(spacing: 6) {
+                            Image(systemName: preset.icon)
+                                .foregroundColor(.accentColor)
+                                .frame(width: 18)
+                            Text(preset.name)
+                                .font(.system(size: 13, weight: .medium))
+                            Spacer()
+                        }
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(Color.gray.opacity(0.15))
+                        .cornerRadius(8)
+                    }
+                }
+            }
+            
+            Picker("Replacement Calendar", selection: $selectedCalendarId) {
+                Text("Select a calendar…").tag("")
+                ForEach(replacementOptions, id: \.calendarIdentifier) { option in
+                    Text(option.title).tag(option.calendarIdentifier)
+                }
+            }
+            .pickerStyle(.menu)
+            
+            Spacer(minLength: 0)
+            
+            HStack {
+                Button("Cancel", role: .cancel) {
+                    onCancel()
+                }
+                Spacer()
+                Button("Replace & Hide") {
+                    onConfirm()
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(selectedCalendarId.isEmpty)
+            }
+        }
+        .padding(24)
+        .frame(minWidth: 380)
     }
 }

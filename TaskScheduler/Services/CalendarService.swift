@@ -3,6 +3,11 @@ import EventKit
 import SwiftUI
 import AppKit
 
+struct CalendarDescriptor: Equatable {
+    let name: String
+    let identifier: String?
+}
+
 // MARK: - Calendar Service
 /// Manages all interactions with macOS Calendar via EventKit
 class CalendarService: ObservableObject {
@@ -98,8 +103,25 @@ class CalendarService: ObservableObject {
         return availableCalendars.first { $0.title == name }
     }
     
+    func getCalendar(identifier: String?) -> EKCalendar? {
+        guard let identifier else { return nil }
+        return availableCalendars.first { $0.calendarIdentifier == identifier }
+    }
+    
     func calendarNames() -> [String] {
         return availableCalendars.map { $0.title }.sorted()
+    }
+    
+    private func calendar(from descriptor: CalendarDescriptor) -> EKCalendar? {
+        if let identifier = descriptor.identifier,
+           let calendar = getCalendar(identifier: identifier) {
+            return calendar
+        }
+        return getCalendar(named: descriptor.name)
+    }
+    
+    private func calendars(from descriptors: [CalendarDescriptor]) -> [EKCalendar] {
+        descriptors.compactMap { calendar(from: $0) }
     }
 
     private func eventContainsSessionTag(_ event: EKEvent) -> Bool {
@@ -109,12 +131,17 @@ class CalendarService: ObservableObject {
     
     struct CalendarInfo: Identifiable {
         let id: String
+        let identifier: String
         let name: String
         let color: Color
+        let isExcluded: Bool
         
-        init(calendar: EKCalendar) {
-            self.id = calendar.calendarIdentifier
+        init(calendar: EKCalendar, isExcluded: Bool) {
+            let calendarId = calendar.calendarIdentifier
+            self.id = calendarId
+            self.identifier = calendarId
             self.name = calendar.title
+            self.isExcluded = isExcluded
             if let cgColor = calendar.cgColor,
                let nsColor = NSColor(cgColor: cgColor) {
                 self.color = Color(nsColor: nsColor)
@@ -124,10 +151,16 @@ class CalendarService: ObservableObject {
         }
     }
     
-    func calendarInfoList() -> [CalendarInfo] {
+    func calendarInfoList(includeExcluded: Bool = true) -> [CalendarInfo] {
         return availableCalendars
+            .filter { includeExcluded || isCalendarIncluded($0) }
             .sorted { $0.title < $1.title }
-            .map { CalendarInfo(calendar: $0) }
+            .map { calendar in
+                CalendarInfo(
+                    calendar: calendar,
+                    isExcluded: isCalendarExcluded(identifier: calendar.calendarIdentifier)
+                )
+            }
     }
     
     /// Returns every calendar that supports event entities (read-only + editable).
@@ -163,7 +196,11 @@ class CalendarService: ObservableObject {
         
         if changed {
             persistExcludedCalendars()
-            refreshCurrentEvents()
+            if included {
+                refreshCurrentEvents()
+            } else {
+                removeBusySlots(for: identifier)
+            }
         }
     }
     
@@ -180,6 +217,12 @@ class CalendarService: ObservableObject {
         if filtered.count != excludedCalendarIDs.count {
             excludedCalendarIDs = Set(filtered)
             persistExcludedCalendars()
+        }
+    }
+    
+    private func removeBusySlots(for identifier: String) {
+        busySlots.removeAll { slot in
+            slot.calendarIdentifier == identifier
         }
     }
     
@@ -238,11 +281,11 @@ class CalendarService: ObservableObject {
         title: String,
         startDate: Date,
         endDate: Date,
-        calendarName: String,
+        calendar: CalendarDescriptor,
         notes: String? = nil
     ) -> Bool {
-        guard let calendar = getCalendar(named: calendarName) else {
-            errorMessage = "Calendar '\(calendarName)' not found"
+        guard let destination = self.calendar(from: calendar) else {
+            errorMessage = "Calendar '\(calendar.name)' not found"
             return false
         }
         
@@ -250,7 +293,7 @@ class CalendarService: ObservableObject {
         event.title = title
         event.startDate = startDate
         event.endDate = endDate
-        event.calendar = calendar
+        event.calendar = destination
         event.notes = notes
         
         do {
@@ -272,7 +315,10 @@ class CalendarService: ObservableObject {
                 title: session.title,
                 startDate: session.startTime,
                 endDate: session.endTime,
-                calendarName: session.calendarName,
+                calendar: CalendarDescriptor(
+                    name: session.calendarName,
+                    identifier: session.calendarIdentifier
+                ),
                 notes: session.notes
             ) {
                 successCount += 1
@@ -330,8 +376,8 @@ class CalendarService: ObservableObject {
     
     func countExistingSessions(
         for date: Date,
-        workCalendar: String,
-        sideCalendar: String,
+        workCalendar: CalendarDescriptor,
+        sideCalendar: CalendarDescriptor,
         deepConfig: DeepSessionConfig?
     ) -> (work: Int, side: Int, deep: Int, titles: Set<String>) {
         let calendar = Calendar.current
@@ -340,12 +386,11 @@ class CalendarService: ObservableObject {
             return (0, 0, 0, [])
         }
         
-        var calendarsToFetch = [workCalendar, sideCalendar]
+        var calendarsToFetch: [CalendarDescriptor] = [workCalendar, sideCalendar]
         if let deep = deepConfig, deep.enabled {
-            calendarsToFetch.append(deep.calendarName)
+            calendarsToFetch.append(CalendarDescriptor(name: deep.calendarName, identifier: deep.calendarIdentifier))
         }
-        let uniqueNames = Array(Set(calendarsToFetch))
-        let calendars = availableCalendars.filter { uniqueNames.contains($0.title) }
+        let calendars = calendars(from: calendarsToFetch)
             .filter { isCalendarIncluded($0) }
         
         if calendars.isEmpty { return (0, 0, 0, []) }
@@ -436,21 +481,21 @@ class CalendarService: ObservableObject {
     // MARK: - Delete Events
     
     /// Deletes all events from specified calendars for a given date
-    func deleteEvents(for date: Date, fromCalendars calendarNames: [String]) -> (deleted: Int, failed: Int) {
+    func deleteEvents(for date: Date, fromCalendars calendarsToDelete: [CalendarDescriptor]) -> (deleted: Int, failed: Int) {
         let calendar = Calendar.current
         let startOfDay = calendar.startOfDay(for: date)
         guard let endOfDay = calendar.date(byAdding: .day, value: 1, to: startOfDay) else {
             return (0, 0)
         }
         
-        let calendarsToDelete = availableCalendars.filter { calendarNames.contains($0.title) }
+        let calendars = calendars(from: calendarsToDelete)
         
-        guard !calendarsToDelete.isEmpty else {
+        guard !calendars.isEmpty else {
             errorMessage = "No matching calendars found for deletion"
             return (0, 0)
         }
         
-        let predicate = eventStore.predicateForEvents(withStart: startOfDay, end: endOfDay, calendars: calendarsToDelete)
+        let predicate = eventStore.predicateForEvents(withStart: startOfDay, end: endOfDay, calendars: calendars)
         let events = eventStore.events(matching: predicate)
         
         var deletedCount = 0
@@ -472,7 +517,7 @@ class CalendarService: ObservableObject {
     func deleteSessionEvents(
         for date: Date,
         sessionNames: [String]? = nil,
-        fromCalendars calendarNames: [String],
+        fromCalendars calendarsToDelete: [CalendarDescriptor],
         requireSessionTag: Bool = false
     ) -> (deleted: Int, failed: Int) {
         let calendar = Calendar.current
@@ -481,13 +526,13 @@ class CalendarService: ObservableObject {
             return (0, 0)
         }
         
-        let calendarsToDelete = availableCalendars.filter { calendarNames.contains($0.title) }
+        let calendars = calendars(from: calendarsToDelete)
         
-        guard !calendarsToDelete.isEmpty else {
+        guard !calendars.isEmpty else {
             return (0, 0)
         }
         
-        let predicate = eventStore.predicateForEvents(withStart: startOfDay, end: endOfDay, calendars: calendarsToDelete)
+        let predicate = eventStore.predicateForEvents(withStart: startOfDay, end: endOfDay, calendars: calendars)
         let events = eventStore.events(matching: predicate)
         
         let sessionsToDelete = events.filter { event in
@@ -521,7 +566,7 @@ class CalendarService: ObservableObject {
         for date: Date,
         after cutoffTime: Date,
         sessionNames: [String]? = nil,
-        fromCalendars calendarNames: [String],
+        fromCalendars calendarsToDelete: [CalendarDescriptor],
         requireSessionTag: Bool = false
     ) -> (deleted: Int, failed: Int) {
         let calendar = Calendar.current
@@ -530,13 +575,13 @@ class CalendarService: ObservableObject {
             return (0, 0)
         }
         
-        let calendarsToDelete = availableCalendars.filter { calendarNames.contains($0.title) }
+        let calendars = calendars(from: calendarsToDelete)
         
-        guard !calendarsToDelete.isEmpty else {
+        guard !calendars.isEmpty else {
             return (0, 0)
         }
         
-        let predicate = eventStore.predicateForEvents(withStart: startOfDay, end: endOfDay, calendars: calendarsToDelete)
+        let predicate = eventStore.predicateForEvents(withStart: startOfDay, end: endOfDay, calendars: calendars)
         let events = eventStore.events(matching: predicate)
         
         let sessionsToDelete = events.filter { event in

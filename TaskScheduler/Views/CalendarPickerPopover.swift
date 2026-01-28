@@ -4,6 +4,7 @@ struct CalendarPickerPopover: View {
     @Binding var selectedCalendar: String
     let calendars: [CalendarService.CalendarInfo]
     let accentColor: Color
+    var onSelection: ((CalendarService.CalendarInfo) -> Void)?
     
     @State private var showingPopover = false
     
@@ -54,7 +55,9 @@ struct CalendarPickerPopover: View {
         VStack(alignment: .leading, spacing: 0) {
             ForEach(calendars) { info in
                 Button {
+                    guard !info.isExcluded else { return }
                     selectedCalendar = info.name
+                    onSelection?(info)
                     showingPopover = false
                 } label: {
                     HStack(spacing: 12) {
@@ -62,9 +65,16 @@ struct CalendarPickerPopover: View {
                             .fill(info.color)
                             .frame(width: 12, height: 12)
                         
-                        Text(info.name)
-                            .font(.system(size: 13, weight: .medium))
-                            .foregroundColor(.primary)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(info.name)
+                                .font(.system(size: 13, weight: .medium))
+                                .foregroundColor(.primary)
+                            if info.isExcluded {
+                                Text("Hidden via Calendar Filters")
+                                    .font(.system(size: 11))
+                                    .foregroundColor(.secondary)
+                            }
+                        }
                         
                         Spacer()
                         
@@ -81,10 +91,12 @@ struct CalendarPickerPopover: View {
                         accentColor.opacity(0.1) :
                         Color.clear
                     )
+                    .opacity(info.isExcluded ? 0.35 : 1.0)
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
                 .focusable(false)
+                .disabled(info.isExcluded)
                 
                 if info.id != calendars.last?.id {
                     Divider()
@@ -102,6 +114,7 @@ struct CalendarPickerCompact: View {
     @Binding var selectedCalendar: String
     let calendars: [CalendarService.CalendarInfo]
     let accentColor: Color
+    var onSelection: ((CalendarService.CalendarInfo) -> Void)?
     
     @State private var showingPopover = false
     
@@ -149,7 +162,9 @@ struct CalendarPickerCompact: View {
         VStack(alignment: .leading, spacing: 0) {
             ForEach(calendars) { info in
                 Button {
+                    guard !info.isExcluded else { return }
                     selectedCalendar = info.name
+                    onSelection?(info)
                     showingPopover = false
                 } label: {
                     HStack(spacing: 12) {
@@ -157,9 +172,16 @@ struct CalendarPickerCompact: View {
                             .fill(info.color)
                             .frame(width: 12, height: 12)
                         
-                        Text(info.name)
-                            .font(.system(size: 13, weight: .medium))
-                            .foregroundColor(.primary)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(info.name)
+                                .font(.system(size: 13, weight: .medium))
+                                .foregroundColor(.primary)
+                            if info.isExcluded {
+                                Text("Hidden via Calendar Filters")
+                                    .font(.system(size: 11))
+                                    .foregroundColor(.secondary)
+                            }
+                        }
                         
                         Spacer()
                         
@@ -176,10 +198,12 @@ struct CalendarPickerCompact: View {
                         accentColor.opacity(0.1) :
                         Color.clear
                     )
+                    .opacity(info.isExcluded ? 0.35 : 1.0)
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
                 .focusable(false)
+                .disabled(info.isExcluded)
                 
                 if info.id != calendars.last?.id {
                     Divider()

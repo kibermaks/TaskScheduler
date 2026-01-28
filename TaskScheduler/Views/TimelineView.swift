@@ -48,7 +48,7 @@ struct TimelineView: View {
     
     private var isNarrow: Bool {
         // Use a reasonable threshold for narrow width
-        containerWidth < 600
+        containerWidth < 650
     }
 
     private var isExtraNarrow: Bool {
@@ -214,7 +214,7 @@ struct TimelineView: View {
                 }
                 
                 // Projected sessions - right half
-                ForEach(schedulingEngine.projectedSessions) { session in
+                ForEach(filteredProjectedSessions) { session in
                     projectedSessionBlock(for: session, containerWidth: geometry.size.width)
                 }
             }
@@ -357,8 +357,31 @@ extension TimelineView {
         var id: String { slot.id }
     }
     
+    private var filteredBusySlots: [BusyTimeSlot] {
+        let excluded = calendarService.excludedCalendarIDs
+        guard !excluded.isEmpty else { return calendarService.busySlots }
+        return calendarService.busySlots.filter { slot in
+            guard let identifier = slot.calendarIdentifier else { return true }
+            return !excluded.contains(identifier)
+        }
+    }
+    
+    private var filteredProjectedSessions: [ScheduledSession] {
+        let excluded = calendarService.excludedCalendarIDs
+        guard !excluded.isEmpty else { return schedulingEngine.projectedSessions }
+        return schedulingEngine.projectedSessions.filter { session in
+            if let identifier = session.calendarIdentifier {
+                return !excluded.contains(identifier)
+            }
+            guard let calendar = calendarService.availableCalendars.first(where: { $0.title == session.calendarName }) else {
+                return true
+            }
+            return !excluded.contains(calendar.calendarIdentifier)
+        }
+    }
+    
     private var busySlotsWithLayout: [PositionedBusySlot] {
-        layoutBusySlots(calendarService.busySlots)
+        layoutBusySlots(filteredBusySlots)
     }
     
     private var timeColumnView: some View {
