@@ -1,15 +1,17 @@
 #!/bin/bash
 set -e
 
-# Configuration
-APP_NAME="Task Scheduler"
-APP_FILE="Task Scheduler.app"
-DMG_NAME="TaskScheduler"
-SOURCE_APP="./$APP_FILE"
-BUILD_DIR="./build_output"
-DMG_DIR="./dmg_output"
-VOLUME_NAME="Task Scheduler Installer"
-BACKGROUND_FILE="dmg_background.png"
+# Configuration (overridable via env vars for CI/local parity)
+APP_NAME="${APP_NAME_OVERRIDE:-Task Scheduler}"
+APP_FILE="${APP_FILE_OVERRIDE:-$APP_NAME.app}"
+DMG_NAME="${DMG_NAME_OVERRIDE:-TaskScheduler}"
+SOURCE_APP="${APP_SOURCE_OVERRIDE:-./$APP_FILE}"
+BUILD_DIR="${BUILD_DIR_OVERRIDE:-./build_output}"
+DMG_DIR="${DMG_DIR_OVERRIDE:-./dmg_output}"
+VOLUME_NAME="${DMG_VOLUME_NAME_OVERRIDE:-Task Scheduler Installer}"
+BACKGROUND_FILE="${DMG_BACKGROUND_FILE_OVERRIDE:-dmg_background.png}"
+REPO_URL="${DMG_REPO_URL_OVERRIDE:-https://github.com/kibermaks/TaskScheduler}"
+INCLUDE_README="${DMG_INCLUDE_README_OVERRIDE:-false}"
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -46,7 +48,7 @@ if [ ! -d "$SOURCE_APP" ]; then
     fi
 fi
 
-VERSION=$(get_version)
+VERSION="${DMG_VERSION_OVERRIDE:-$(get_version)}"
 BUILD=$(get_build_number)
 
 if [ -z "$VERSION" ]; then
@@ -79,7 +81,32 @@ if [ -f "$BACKGROUND_FILE" ]; then
     cp "$BACKGROUND_FILE" "$TEMP_DMG_FOLDER/.background/"
 fi
 
-DMG_FILENAME="$DMG_NAME-$VERSION.dmg"
+INCLUDE_README_NORMALIZED=$(printf '%s' "$INCLUDE_README" | tr '[:upper:]' '[:lower:]')
+if [ "$INCLUDE_README_NORMALIZED" = "true" ]; then
+    cat > "$TEMP_DMG_FOLDER/README.txt" <<EOF
+$APP_NAME - Installation Instructions
+=====================================
+
+To install $APP_NAME:
+
+1. Drag "$APP_FILE" to the "Applications" folder
+2. Open from Applications or Spotlight
+3. Grant Calendar permissions when prompted
+4. Start scheduling your productive day!
+
+Requirements:
+- macOS 13.0 or later
+- Calendar access (requested on first launch)
+
+For more information, visit:
+$REPO_URL
+
+---
+$APP_NAME is open source software released under the MIT License.
+EOF
+fi
+
+DMG_FILENAME="${DMG_FILENAME_OVERRIDE:-$DMG_NAME-$VERSION.dmg}"
 DMG_PATH="$DMG_DIR/$DMG_FILENAME"
 
 if [ -f "$DMG_PATH" ]; then
@@ -152,6 +179,6 @@ echo -e "   🏷️  Version: ${GREEN}$VERSION${NC} (Build $BUILD)"
 echo ""
 echo -e "${BLUE}🚀 Ready for distribution!${NC}"
 
-if command -v open &> /dev/null; then
+if [ -z "${CI:-}" ] && command -v open &> /dev/null; then
     open "$DMG_DIR"
 fi

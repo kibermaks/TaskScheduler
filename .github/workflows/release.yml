@@ -85,56 +85,19 @@ jobs:
           echo "app_name=$APP_NAME" >> $GITHUB_ENV
       
       - name: Create DMG
+        env:
+          VERSION: ${{ steps.version.outputs.version_number }}
+          APP_NAME: ${{ env.app_name }}
+          REPO_SLUG: ${{ github.repository }}
         run: |
-          APP_FILE="${{ env.app_name }}"
-          BUILD_DIR="./build_output"
-          DMG_DIR="./dmg_output"
-          VERSION="${{ steps.version.outputs.version_number }}"
-          VOLUME_NAME="Task Scheduler Installer"
-          DMG_FILENAME="TaskScheduler-v$VERSION.dmg"
+          export DMG_FILENAME_OVERRIDE="TaskScheduler-v${VERSION}.dmg"
+          export DMG_REPO_URL_OVERRIDE="https://github.com/${REPO_SLUG}"
+          export APP_SOURCE_OVERRIDE="./build_output/$APP_NAME"
+          export CI=1
+          ./create_dmg.sh
           
-          mkdir -p "$DMG_DIR"
-          TEMP_DMG_FOLDER="$DMG_DIR/temp_dmg"
-          mkdir -p "$TEMP_DMG_FOLDER"
-          
-          cp -R "$BUILD_DIR/$APP_FILE" "$TEMP_DMG_FOLDER/$APP_FILE"
-          ln -s /Applications "$TEMP_DMG_FOLDER/Applications"
-          cat > "$TEMP_DMG_FOLDER/README.txt" << 'EOF'
-          Task Scheduler - Installation Instructions
-          ===========================================
-          
-          To install Task Scheduler:
-          
-          1. Drag "TaskScheduler.app" to the "Applications" folder
-          2. Open from Applications or Spotlight
-          3. Grant Calendar permissions when prompted
-          4. Start scheduling your productive day!
-          
-          Requirements:
-          - macOS 13.0 or later
-          - Calendar access (requested on first launch)
-          
-          For more information, visit:
-          https://github.com/${{ github.repository }}
-          
-          ---
-          Task Scheduler is open source software released under the MIT License.
-          EOF
-          
-          DMG_PATH="$DMG_DIR/$DMG_FILENAME"
-          TEMP_DMG="$DMG_DIR/temp.dmg"
-          
-          hdiutil create -volname "$VOLUME_NAME" \
-              -srcfolder "$TEMP_DMG_FOLDER" \
-              -ov \
-              -format UDZO \
-              -imagekey zlib-level=9 \
-              "$DMG_PATH"
-          
-          rm -rf "$TEMP_DMG_FOLDER"
-          echo "DMG created: $DMG_PATH"
-          echo "dmg_path=$DMG_PATH" >> $GITHUB_ENV
-          echo "dmg_filename=$DMG_FILENAME" >> $GITHUB_ENV
+          echo "dmg_path=dmg_output/$DMG_FILENAME_OVERRIDE" >> $GITHUB_ENV
+          echo "dmg_filename=$DMG_FILENAME_OVERRIDE" >> $GITHUB_ENV
       
       - name: Create ZIP archive
         run: |
