@@ -5,6 +5,18 @@ All notable changes to Task Scheduler will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.8] - 2026-01-28
+
+### Added
+
+- Calendar replacement controls in App Settings to let you exclude or replace specific calendars when scheduling
+- A context menu action on projected sessions to schedule a chosen session immediately
+
+### Changed
+
+- Deep session "inject after" setting now supports a range of 0–10 sessions for more flexible patterns
+- Minor usability improvements and refinements
+
 ## [1.7] - 2026-01-26
 
 ### Added
