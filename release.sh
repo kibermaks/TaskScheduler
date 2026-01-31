@@ -10,6 +10,27 @@ NC='\033[0m'
 echo -e "${BLUE}🚀 Task Scheduler Release Helper${NC}"
 echo ""
 
+generate_release_notes() {
+    local version="$1"
+    local output_file="$2"
+    local changelog=""
+    local version_regex
+    version_regex=$(printf '%s\n' "$version" | sed 's/[][(){}?+.^$\\|]/\\&/g')
+
+    if [ -f "CHANGELOG.md" ]; then
+        changelog=$(sed -n "/## \\[$version_regex\\]/,/## \\[/p" CHANGELOG.md | sed '$d')
+        if [ -z "$changelog" ]; then
+            changelog=$(sed -n "/## \\[Unreleased\\]/,/## \\[/p" CHANGELOG.md | sed '$d')
+        fi
+    fi
+
+    if [ -z "$changelog" ]; then
+        changelog="Release v$version\n\nSee CHANGELOG.md for full details."
+    fi
+
+    printf "%s\n" "$changelog" > "$output_file"
+}
+
 get_version() {
     grep "MARKETING_VERSION =" "TaskScheduler.xcodeproj/project.pbxproj" | head -n 1 | sed 's/.*= //;s/;//' | tr -d '[:space:]'
 }
@@ -85,6 +106,10 @@ if [ $? -ne 0 ]; then
 fi
 
 NEW_VERSION=$(get_version)
+DMG_FILENAME="TaskScheduler-$NEW_VERSION.dmg"
+DMG_PATH="dmg_output/$DMG_FILENAME"
+ZIP_FILENAME="TaskScheduler-v$NEW_VERSION.zip"
+ZIP_PATH="$ZIP_FILENAME"
 echo ""
 echo -e "${GREEN}✅ Built version $NEW_VERSION${NC}"
 
@@ -98,10 +123,23 @@ if [ $? -ne 0 ]; then
 fi
 
 echo ""
+echo -e "${BLUE}🗜  Creating ZIP archive...${NC}"
+if [ ! -d "Task Scheduler.app" ]; then
+    echo -e "${RED}❌ 'Task Scheduler.app' not found in project root. Cannot create ZIP.${NC}"
+    exit 1
+fi
+if [ -f "$ZIP_PATH" ]; then
+    rm -f "$ZIP_PATH"
+fi
+zip -r "$ZIP_PATH" "Task Scheduler.app" -q
+echo -e "${GREEN}✅ ZIP created: $ZIP_PATH${NC}"
+
+echo ""
 echo -e "${GREEN}✅ Release artifacts created!${NC}"
 echo ""
 echo "The following files are ready:"
-ls -lh dmg_output/*.dmg 2>/dev/null || echo "  (DMG not found)"
+ls -lh "$DMG_PATH" 2>/dev/null || echo "  (DMG not found)"
+ls -lh "$ZIP_PATH" 2>/dev/null || echo "  (ZIP not found)"
 echo ""
 
 echo -e "${BLUE}📚 Git Operations${NC}"
@@ -125,21 +163,40 @@ if [[ $REPLY =~ ^[Yy]$ ]] || [[ -z $REPLY ]]; then
         git push origin main
         git push origin "v$NEW_VERSION"
         echo -e "${GREEN}✅ Pushed to remote${NC}"
-        echo ""
-        echo -e "${BLUE}🎉 GitHub Actions will now build and create the release automatically!${NC}"
-        echo ""
-        echo "Check the progress at:"
-        REPO_URL=$(git config --get remote.origin.url | sed 's/\.git$//' | sed 's/git@github\.com:/https:\/\/github.com\//')
-        echo "  ${REPO_URL}/actions"
     fi
+fi
+
+echo ""
+if [ -f "$DMG_PATH" ] && [ -f "$ZIP_PATH" ]; then
+    if command -v gh >/dev/null 2>&1; then
+        echo -e "${BLUE}☁️ Publish GitHub Release${NC}"
+        read -p "Upload local DMG/ZIP to GitHub release now? (Y/n): " -n 1 -r
+        echo
+        if [[ $REPLY =~ ^[Yy]$ ]] || [[ -z $REPLY ]]; then
+            NOTES_FILE=$(mktemp /tmp/task_scheduler_release_notes.XXXXXX)
+            generate_release_notes "$NEW_VERSION" "$NOTES_FILE"
+            RELEASE_TAG="v$NEW_VERSION"
+            if gh release create "$RELEASE_TAG" "$DMG_PATH" "$ZIP_PATH" --title "Task Scheduler $RELEASE_TAG" --notes-file "$NOTES_FILE" --verify-tag; then
+                echo -e "${GREEN}✅ GitHub release published with local artifacts${NC}"
+            else
+                echo -e "${RED}❌ Failed to publish GitHub release via gh.${NC}"
+            fi
+            rm -f "$NOTES_FILE"
+        else
+            echo "Skipping GitHub release upload."
+        fi
+    else
+        echo -e "${YELLOW}⚠️  GitHub CLI (gh) not found. Install it to upload releases automatically.${NC}"
+    fi
+else
+    echo -e "${YELLOW}⚠️  Missing DMG or ZIP artifacts; cannot upload release automatically.${NC}"
 fi
 
 echo ""
 echo -e "${BLUE}📋 Next Steps${NC}"
 echo ""
-echo "1. Wait for GitHub Actions to complete the release build"
-echo "2. Review the automatically created GitHub Release"
-echo "3. Edit the release notes if needed"
-echo "4. Announce the release to users"
+echo "1. Verify the GitHub release (if uploaded automatically)."
+echo "2. If you skipped uploading, run 'gh release create v$NEW_VERSION $DMG_PATH $ZIP_PATH --notes \"...\"'."
+echo "3. Announce the release to users."
 echo ""
 echo -e "${GREEN}🎉 Release process complete!${NC}"

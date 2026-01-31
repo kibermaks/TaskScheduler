@@ -9,7 +9,49 @@ SOURCE_APP="${APP_SOURCE_OVERRIDE:-./$APP_FILE}"
 BUILD_DIR="${BUILD_DIR_OVERRIDE:-./build_output}"
 DMG_DIR="${DMG_DIR_OVERRIDE:-./dmg_output}"
 VOLUME_NAME="${DMG_VOLUME_NAME_OVERRIDE:-Task Scheduler Installer}"
-BACKGROUND_FILE="${DMG_BACKGROUND_FILE_OVERRIDE:-dmg_background.png}"
+#
+# DMG visuals
+# Finder AppleScript cannot "draw" an arbitrary overlay at coordinates.
+# The only supported options are:
+# - set a window background picture, OR
+# - position actual items (files/folders) as icons.
+#
+# We use a background picture that contains ONLY the arrow (transparent elsewhere).
+BACKGROUND_FILE="${DMG_BACKGROUND_FILE_OVERRIDE:-dmg_background_arrow.tiff}"
+
+# Layout tuning (overridable for quick iteration)
+# Note: Finder window bounds are in screen points. Background pictures are anchored to the window;
+# Finder typically centers them, but behavior can vary by macOS version.
+#
+# These defaults aim to center the whole "app → Applications" layout in the window.
+DMG_WINDOW_LEFT="${DMG_WINDOW_LEFT_OVERRIDE:-300}"
+DMG_WINDOW_TOP="${DMG_WINDOW_TOP_OVERRIDE:-100}"
+DMG_WINDOW_WIDTH="${DMG_WINDOW_WIDTH_OVERRIDE:-480}"
+DMG_WINDOW_HEIGHT="${DMG_WINDOW_HEIGHT_OVERRIDE:-380}"
+DMG_ICON_SIZE="${DMG_ICON_SIZE_OVERRIDE:-96}"
+
+# Spacing between the two icons (center-to-center). Default gives a nice gap for the arrow.
+DMG_ICON_SPACING="${DMG_ICON_SPACING_OVERRIDE:-200}"
+
+# Arrow anchor (within the window). Icons will be placed to the left/right of this point.
+# If your arrow artwork isn't centered, override these to match the arrow's actual center.
+DMG_ARROW_CENTER_X="${DMG_ARROW_CENTER_X_OVERRIDE:-$((DMG_WINDOW_WIDTH / 2))}"
+DMG_ARROW_CENTER_Y="${DMG_ARROW_CENTER_Y_OVERRIDE:-$((DMG_WINDOW_HEIGHT / 2))}-40"
+
+# Default icon positions derived from the arrow anchor.
+DMG_DEFAULT_APP_POS_X=$((DMG_ARROW_CENTER_X - (DMG_ICON_SPACING / 2)))
+DMG_DEFAULT_APPLICATIONS_POS_X=$((DMG_ARROW_CENTER_X + (DMG_ICON_SPACING / 2)))
+DMG_DEFAULT_APP_POS_Y=$DMG_ARROW_CENTER_Y
+DMG_DEFAULT_APPLICATIONS_POS_Y=$DMG_ARROW_CENTER_Y
+
+# Icon positions within the window
+DMG_APP_POS_X="${DMG_APP_POS_X_OVERRIDE:-$DMG_DEFAULT_APP_POS_X}"
+DMG_APP_POS_Y="${DMG_APP_POS_Y_OVERRIDE:-$DMG_DEFAULT_APP_POS_Y}"
+DMG_APPLICATIONS_POS_X="${DMG_APPLICATIONS_POS_X_OVERRIDE:-$DMG_DEFAULT_APPLICATIONS_POS_X}"
+DMG_APPLICATIONS_POS_Y="${DMG_APPLICATIONS_POS_Y_OVERRIDE:-$DMG_DEFAULT_APPLICATIONS_POS_Y}"
+
+DMG_WINDOW_RIGHT=$((DMG_WINDOW_LEFT + DMG_WINDOW_WIDTH))
+DMG_WINDOW_BOTTOM=$((DMG_WINDOW_TOP + DMG_WINDOW_HEIGHT))
 REPO_URL="${DMG_REPO_URL_OVERRIDE:-https://github.com/kibermaks/TaskScheduler}"
 INCLUDE_README="${DMG_INCLUDE_README_OVERRIDE:-false}"
 
@@ -75,7 +117,7 @@ cp -R "$SOURCE_APP" "$TEMP_DMG_FOLDER/$APP_FILE"
 echo -e "${BLUE}🔗 Creating Applications shortcut...${NC}"
 ln -s /Applications "$TEMP_DMG_FOLDER/Applications"
 
-# Copy background if it exists
+# Copy background (arrow-only) if it exists
 if [ -f "$BACKGROUND_FILE" ]; then
     mkdir -p "$TEMP_DMG_FOLDER/.background"
     cp "$BACKGROUND_FILE" "$TEMP_DMG_FOLDER/.background/"
@@ -128,22 +170,27 @@ echo -e "${BLUE}🔧 Configuring DMG layout...${NC}"
 MOUNT_DIR="/Volumes/$VOLUME_NAME"
 hdiutil attach "$TEMP_DMG" -mountpoint "$MOUNT_DIR" -nobrowse > /dev/null
 
-# Set up the DMG window with custom background and layout
+# Set up the DMG window layout
 osascript <<EOF > /dev/null 2>&1 || true
 tell application "Finder"
     tell disk "$VOLUME_NAME"
         open
-        set current view of container window to icon view
-        set toolbar visible of container window to false
-        set statusbar visible of container window to false
-        set the bounds of container window to {400, 100, 1000, 550}
-        set viewOptions to the icon view options of container window
+        set containerWindow to container window
+        set current view of containerWindow to icon view
+        set toolbar visible of containerWindow to false
+        set statusbar visible of containerWindow to false
+        set the bounds of containerWindow to {$DMG_WINDOW_LEFT, $DMG_WINDOW_TOP, $DMG_WINDOW_RIGHT, $DMG_WINDOW_BOTTOM}
+        set viewOptions to the icon view options of containerWindow
         set arrangement of viewOptions to not arranged
-        set icon size of viewOptions to 128
-        set background picture of viewOptions to file ".background:$BACKGROUND_FILE"
-        set position of item "$APP_FILE" of container window to {125, 185}
-        set position of item "Applications" of container window to {465, 185}
-        close
+        set icon size of viewOptions to $DMG_ICON_SIZE
+        if exists file ".background:$BACKGROUND_FILE" then
+            set background picture of viewOptions to file ".background:$BACKGROUND_FILE"
+        end if
+        set position of item "$APP_FILE" of containerWindow to {$DMG_APP_POS_X, $DMG_APP_POS_Y}
+        set position of item "Applications" of containerWindow to {$DMG_APPLICATIONS_POS_X, $DMG_APPLICATIONS_POS_Y}
+        delay 0.5
+        set the bounds of containerWindow to {$DMG_WINDOW_LEFT, $DMG_WINDOW_TOP, $DMG_WINDOW_RIGHT, $DMG_WINDOW_BOTTOM}
+        close containerWindow
         open
         update without registering applications
         delay 2
