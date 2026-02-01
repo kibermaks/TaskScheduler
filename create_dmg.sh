@@ -23,7 +23,7 @@ BACKGROUND_FILE="${DMG_BACKGROUND_FILE_OVERRIDE:-dmg_background_arrow.tiff}"
 # Note: Finder window bounds are in screen points. Background pictures are anchored to the window;
 # Finder typically centers them, but behavior can vary by macOS version.
 #
-# These defaults aim to center the whole "app → Applications" layout in the window.
+# These defaults aim to place icons relative to the arrow artwork.
 DMG_WINDOW_LEFT="${DMG_WINDOW_LEFT_OVERRIDE:-300}"
 DMG_WINDOW_TOP="${DMG_WINDOW_TOP_OVERRIDE:-100}"
 DMG_WINDOW_WIDTH="${DMG_WINDOW_WIDTH_OVERRIDE:-480}"
@@ -35,8 +35,11 @@ DMG_ICON_SPACING="${DMG_ICON_SPACING_OVERRIDE:-200}"
 
 # Arrow anchor (within the window). Icons will be placed to the left/right of this point.
 # If your arrow artwork isn't centered, override these to match the arrow's actual center.
-DMG_ARROW_CENTER_X="${DMG_ARROW_CENTER_X_OVERRIDE:-$((DMG_WINDOW_WIDTH / 2))}"
-DMG_ARROW_CENTER_Y="${DMG_ARROW_CENTER_Y_OVERRIDE:-$((DMG_WINDOW_HEIGHT / 2))}-40"
+DMG_ARROW_Y_OFFSET="${DMG_ARROW_Y_OFFSET_OVERRIDE:-40}"
+DMG_ARROW_CENTER_X_DEFAULT=$((DMG_WINDOW_WIDTH / 2))
+DMG_ARROW_CENTER_Y_DEFAULT=$((DMG_WINDOW_HEIGHT / 2 - DMG_ARROW_Y_OFFSET))
+DMG_ARROW_CENTER_X="${DMG_ARROW_CENTER_X_OVERRIDE:-$DMG_ARROW_CENTER_X_DEFAULT}"
+DMG_ARROW_CENTER_Y="${DMG_ARROW_CENTER_Y_OVERRIDE:-$DMG_ARROW_CENTER_Y_DEFAULT}"
 
 # Default icon positions derived from the arrow anchor.
 DMG_DEFAULT_APP_POS_X=$((DMG_ARROW_CENTER_X - (DMG_ICON_SPACING / 2)))
@@ -188,8 +191,6 @@ tell application "Finder"
         end if
         set position of item "$APP_FILE" of containerWindow to {$DMG_APP_POS_X, $DMG_APP_POS_Y}
         set position of item "Applications" of containerWindow to {$DMG_APPLICATIONS_POS_X, $DMG_APPLICATIONS_POS_Y}
-        delay 0.5
-        set the bounds of containerWindow to {$DMG_WINDOW_LEFT, $DMG_WINDOW_TOP, $DMG_WINDOW_RIGHT, $DMG_WINDOW_BOTTOM}
         close containerWindow
         open
         update without registering applications
