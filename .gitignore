@@ -116,3 +116,4 @@ release_notes.md
 # Logs
 *.log
 dev/
+.derived_data/

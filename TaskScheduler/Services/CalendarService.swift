@@ -46,11 +46,13 @@ class CalendarService: ObservableObject {
     private func setupNotificationObserver() {
         notificationObserver = NotificationCenter.default.addObserver(
             forName: .EKEventStoreChanged,
-            object: eventStore,
+            object: nil,
             queue: .main
         ) { [weak self] _ in
             guard let self = self, let date = self.currentFetchDate else { return }
             Task {
+                // Clear cached EventKit objects so deletions are reflected immediately.
+                self.eventStore.reset()
                 await self.fetchEvents(for: date)
             }
         }

@@ -246,8 +246,11 @@ struct ContentViewBody: View {
             if !dateChanged {
                 if useNowTime && dateSelection == .today {
                     startTime = roundedNowTime()
-                } else if autoPreview {
-                    updateProjectedSchedule()
+                }
+                
+                Task {
+                    await calendarService.fetchEvents(for: selectedDate)
+                    if autoPreview { updateProjectedSchedule() }
                 }
             }
         }
