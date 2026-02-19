@@ -203,12 +203,14 @@ class SchedulingEngine: ObservableObject {
         var sideCount = 0
         var deepCount = 0
         var regularSessionsScheduled = 0
+        var regularCountAtLastDeep = 0
         
         if awareExistingTasks, let existing = existingSessions {
             workCount = existing.work
             sideCount = existing.side
             deepCount = existing.deep
             regularSessionsScheduled = workCount + sideCount
+            regularCountAtLastDeep = regularSessionsScheduled
         }
         
         var attempts = 0
@@ -265,7 +267,7 @@ class SchedulingEngine: ObservableObject {
                     && regularSessionsScheduled > 0
                     && deepSessionConfig.injectAfterEvery > 0
                 
-                let sessionsSinceLastDeep = regularSessionsScheduled - (deepCount * deepSessionConfig.injectAfterEvery)
+                let sessionsSinceLastDeep = regularSessionsScheduled - regularCountAtLastDeep
                  
                 if shouldInjectDeepImmediately || (shouldInjectDeep && sessionsSinceLastDeep >= deepSessionConfig.injectAfterEvery) {
                      sessionType = .deep
@@ -436,6 +438,7 @@ class SchedulingEngine: ObservableObject {
             } else if isDeep {
                 deepCount += 1
                 projectedDeepCount += 1
+                regularCountAtLastDeep = regularSessionsScheduled
                 appliedRest = deepRestDuration
             } else {
                 switch sessionType {
