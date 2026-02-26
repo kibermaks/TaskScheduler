@@ -4,11 +4,24 @@ import AppKit
 @main
 struct TaskSchedulerApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
-    @StateObject private var calendarService = CalendarService()
-    @StateObject private var schedulingEngine = SchedulingEngine()
-    @StateObject private var updateService = UpdateService()
-    @StateObject private var appState = AppState()
-    
+    @StateObject private var calendarService: CalendarService
+    @StateObject private var schedulingEngine: SchedulingEngine
+    @StateObject private var updateService: UpdateService
+    @StateObject private var appState: AppState
+
+    init() {
+        let calendar = CalendarService()
+        let engine = SchedulingEngine()
+        let update = UpdateService()
+        let state = AppState()
+        state.schedulingEngine = engine
+        state.calendarService = calendar
+        _calendarService = StateObject(wrappedValue: calendar)
+        _schedulingEngine = StateObject(wrappedValue: engine)
+        _updateService = StateObject(wrappedValue: update)
+        _appState = StateObject(wrappedValue: state)
+    }
+
     var body: some Scene {
         WindowGroup {
             ContentView()
@@ -19,8 +32,6 @@ struct TaskSchedulerApp: App {
                 .frame(minWidth: 1000, minHeight: 700)
                 .onAppear {
                     updateService.startAutomaticChecks()
-                    appState.schedulingEngine = schedulingEngine
-                    appState.calendarService = calendarService
                 }
         }
         .windowStyle(.hiddenTitleBar)
