@@ -292,6 +292,7 @@ struct NewPresetSheet: View {
                     LabeledContent("Work Sessions", value: "\(schedulingEngine.workSessions)")
                     LabeledContent("Side Sessions", value: "\(schedulingEngine.sideSessions)")
                     LabeledContent("Pattern", value: schedulingEngine.pattern.rawValue)
+                    LabeledContent("Tasks/Session", value: "\(schedulingEngine.tasksPerSlot)")
                     LabeledContent("Work Calendar", value: schedulingEngine.workCalendarName)
                     LabeledContent("Side Calendar", value: schedulingEngine.sideCalendarName)
                 }

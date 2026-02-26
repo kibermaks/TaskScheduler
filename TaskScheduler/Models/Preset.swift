@@ -8,8 +8,9 @@ enum PresetSchemaVersion: Int, Codable, Comparable {
     case v1 = 1  // Initial version (before flexibleSideScheduling)
     case v2 = 2  // Added flexibleSideScheduling field
     case v3 = 3  // Added calendar identifiers
-    
-    static let current: PresetSchemaVersion = .v3
+    case v4 = 4  // Added tasksPerSlot for multi-task sessions
+
+    static let current: PresetSchemaVersion = .v4
     
     static func < (lhs: PresetSchemaVersion, rhs: PresetSchemaVersion) -> Bool {
         return lhs.rawValue < rhs.rawValue
@@ -86,7 +87,10 @@ struct Preset: Identifiable, Codable, Equatable {
     var pattern: SchedulePattern
     var workSessionsPerCycle: Int
     var flexibleSideScheduling: Bool
-    
+
+    // Tasks per session slot (for AI pair programming interleaving)
+    var tasksPerSlot: Int
+
     // Default start hour for future days
     var defaultStartHour: Int
     
@@ -115,6 +119,7 @@ struct Preset: Identifiable, Codable, Equatable {
         deepSessionConfig: DeepSessionConfig = .default,
         flexibleSideScheduling: Bool = true,
         calendarMapping: CalendarMapping = .default,
+        tasksPerSlot: Int = 1,
         defaultStartHour: Int = 8,
         schemaVersion: PresetSchemaVersion = .current
     ) {
@@ -142,6 +147,7 @@ struct Preset: Identifiable, Codable, Equatable {
         self.deepSessionConfig = deepSessionConfig
         self.flexibleSideScheduling = flexibleSideScheduling
         self.calendarMapping = calendarMapping
+        self.tasksPerSlot = tasksPerSlot
         self.defaultStartHour = defaultStartHour
         self.schemaVersion = schemaVersion
     }
@@ -211,7 +217,7 @@ struct Preset: Identifiable, Codable, Equatable {
         case workSessionDuration, sideSessionDuration
         case planningDuration, restDuration, sideRestDuration, deepRestDuration
         case schedulePlanning, pattern, workSessionsPerCycle, sideSessionsPerCycle, sideFirst
-        case deepSessionConfig, flexibleSideScheduling, calendarMapping, defaultStartHour
+        case deepSessionConfig, flexibleSideScheduling, calendarMapping, tasksPerSlot, defaultStartHour
         case schemaVersion
     }
     
@@ -238,6 +244,7 @@ struct Preset: Identifiable, Codable, Equatable {
         deepSessionConfig = try container.decode(DeepSessionConfig.self, forKey: .deepSessionConfig)
         flexibleSideScheduling = try container.decodeIfPresent(Bool.self, forKey: .flexibleSideScheduling) ?? true
         calendarMapping = try container.decode(CalendarMapping.self, forKey: .calendarMapping)
+        tasksPerSlot = try container.decodeIfPresent(Int.self, forKey: .tasksPerSlot) ?? 1
         defaultStartHour = try container.decodeIfPresent(Int.self, forKey: .defaultStartHour) ?? 8
         // If version is missing, assume v1 (old preset)
         schemaVersion = try container.decodeIfPresent(PresetSchemaVersion.self, forKey: .schemaVersion) ?? .v1
@@ -524,6 +531,9 @@ extension Preset {
             }
             schemaVersion = .v3
         case .v3:
+            // Migration from v3 to v4: tasksPerSlot defaults to 1 via decoder
+            schemaVersion = .v4
+        case .v4:
             break
         }
     }

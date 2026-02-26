@@ -635,6 +635,7 @@ struct SettingsChangeModifier: ViewModifier {
         Color.clear
             .onChange(of: engine.deepSessionConfig.duration) { _, _ in trigger() }
             .onChange(of: engine.deepSessionConfig.calendarName) { _, _ in trigger() }
+            .onChange(of: engine.tasksPerSlot) { _, _ in trigger() }
             .onChange(of: engine.workTasks) { _, _ in trigger() }
             .onChange(of: engine.sideTasks) { _, _ in trigger() }
             .onChange(of: engine.deepTasks) { _, _ in trigger() }
@@ -940,7 +941,8 @@ struct LeftPanel: View {
                 sideCalendarName: schedulingEngine.sideCalendarName,
                 workCalendarIdentifier: schedulingEngine.workCalendarIdentifier,
                 sideCalendarIdentifier: schedulingEngine.sideCalendarIdentifier
-            ))
+            ),
+            tasksPerSlot: schedulingEngine.tasksPerSlot)
         PresetStorage.shared.updatePreset(updated)
         presets = PresetStorage.shared.loadPresets()
         selectedPreset = updated

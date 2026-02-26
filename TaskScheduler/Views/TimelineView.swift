@@ -638,16 +638,32 @@ extension TimelineView {
                 .padding(3)
             } else {
                 VStack(alignment: .leading, spacing: 2) {
-                    HStack(alignment: .top, spacing: 3) {
-                        Image(systemName: session.type.icon)
-                            .font(.system(size: 11))
-                            .padding(.top, 1)
-                        Text(session.title)
-                            .font(.system(size: 12, weight: .semibold))
-                            .lineLimit(nil)
-                            .fixedSize(horizontal: false, vertical: true)
+                    if session.titles.count > 1 {
+                        VStack(alignment: .leading, spacing: 1) {
+                            ForEach(session.titles, id: \.self) { title in
+                                HStack(spacing: 4) {
+                                    Circle()
+                                        .fill(.white.opacity(0.9))
+                                        .frame(width: 4, height: 4)
+                                    Text(title)
+                                        .font(.system(size: 11, weight: .semibold))
+                                        .lineLimit(1)
+                                }
+                            }
+                        }
+                        .foregroundColor(.white)
+                    } else {
+                        HStack(alignment: .top, spacing: 3) {
+                            Image(systemName: session.type.icon)
+                                .font(.system(size: 11))
+                                .padding(.top, 1)
+                            Text(session.title)
+                                .font(.system(size: 12, weight: .semibold))
+                                .lineLimit(nil)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                        .foregroundColor(.white)
                     }
-                    .foregroundColor(.white)
                     
                     Text(timeRangeString(start: session.startTime, end: session.endTime))
                         .font(.system(size: 10, weight: .medium))

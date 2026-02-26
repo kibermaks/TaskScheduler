@@ -86,6 +86,11 @@ struct SettingsPanel: View {
                 
                 // Rest Section
                 restSection
+
+                Divider().background(Color.white.opacity(0.1))
+
+                // Tasks Per Session Section
+                tasksPerSlotSection
             }
             .padding()
         }
@@ -604,6 +609,47 @@ struct SettingsPanel: View {
                  
                  NumericInputField(value: $schedulingEngine.deepRestDuration, range: 0...60, step: 5, unit: "min")
              }
+        }
+    }
+
+    // MARK: - Tasks Per Session Section
+
+    @State private var showingTasksPerSlotHelp = false
+
+    private var tasksPerSlotSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 8) {
+                Image(systemName: "square.stack.fill")
+                    .foregroundColor(Color(hex: "06B6D4"))
+                Text("Tasks Per Session")
+                    .font(.headline)
+                    .foregroundColor(.white)
+
+                Button {
+                    showingTasksPerSlotHelp.toggle()
+                } label: {
+                    Image(systemName: "info.circle")
+                        .font(.system(size: 13))
+                        .foregroundColor(.white.opacity(0.4))
+                }
+                .buttonStyle(.plain)
+                .popover(isPresented: $showingTasksPerSlotHelp) {
+                    Text("How many tasks to assign per time block. Set to 2-3 for AI pair programming where you interleave tasks while waiting for LLM responses.")
+                        .font(.system(size: 13))
+                        .padding()
+                        .frame(width: 250)
+                }
+            }
+
+            HStack {
+                Text("Tasks per slot:")
+                    .font(.system(size: 13))
+                    .foregroundColor(.white.opacity(0.7))
+
+                Spacer()
+
+                NumericInputField(value: $schedulingEngine.tasksPerSlot, range: 1...4)
+            }
         }
     }
 }

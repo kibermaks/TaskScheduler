@@ -42,21 +42,30 @@ enum SessionType: String, Codable, CaseIterable, Identifiable {
 struct ScheduledSession: Identifiable, Equatable {
     let id: UUID
     let type: SessionType
-    let title: String
+    let titles: [String]
     var startTime: Date
     var endTime: Date
     let calendarName: String
     let calendarIdentifier: String?
     let notes: String?
-    
+
+    /// Display title for calendar events and single-line UI (joined with " / ")
+    var displayTitle: String {
+        titles.joined(separator: " / ")
+    }
+
+    /// Backward-compatible single title accessor
+    var title: String { displayTitle }
+
     var duration: TimeInterval {
         endTime.timeIntervalSince(startTime)
     }
-    
+
     var durationMinutes: Int {
         Int(duration / 60)
     }
-    
+
+    /// Single-title convenience init
     init(
         id: UUID = UUID(),
         type: SessionType,
@@ -69,14 +78,35 @@ struct ScheduledSession: Identifiable, Equatable {
     ) {
         self.id = id
         self.type = type
-        self.title = title
+        self.titles = [title]
         self.startTime = startTime
         self.endTime = endTime
         self.calendarName = calendarName
         self.calendarIdentifier = calendarIdentifier
         self.notes = notes
     }
-    
+
+    /// Multi-title init for tasks-per-slot grouping
+    init(
+        id: UUID = UUID(),
+        type: SessionType,
+        titles: [String],
+        startTime: Date,
+        endTime: Date,
+        calendarName: String,
+        calendarIdentifier: String? = nil,
+        notes: String? = nil
+    ) {
+        self.id = id
+        self.type = type
+        self.titles = titles
+        self.startTime = startTime
+        self.endTime = endTime
+        self.calendarName = calendarName
+        self.calendarIdentifier = calendarIdentifier
+        self.notes = notes
+    }
+
     /// Returns the hashtag string (without #) for this session type
     func hashtag() -> String {
         switch type {
