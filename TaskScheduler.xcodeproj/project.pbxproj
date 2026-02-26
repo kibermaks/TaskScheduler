@@ -31,6 +31,7 @@
 		018 /* CalendarSetupView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 118 /* CalendarSetupView.swift */; };
 		019 /* CalendarPickerPopover.swift in Sources */ = {isa = PBXBuildFile; fileRef = 119 /* CalendarPickerPopover.swift */; };
 		020 /* UpdateService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 120 /* UpdateService.swift */; };
+		021 /* AppState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 121 /* AppState.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -60,6 +61,7 @@
 		118 /* CalendarSetupView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalendarSetupView.swift; sourceTree = "<group>"; };
 		119 /* CalendarPickerPopover.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalendarPickerPopover.swift; sourceTree = "<group>"; };
 		120 /* UpdateService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UpdateService.swift; sourceTree = "<group>"; };
+		121 /* AppState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppState.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -137,6 +139,7 @@
 		405 /* Services */ = {
 			isa = PBXGroup;
 			children = (
+				121 /* AppState.swift */,
 				106 /* CalendarService.swift */,
 				107 /* SchedulingEngine.swift */,
 				108 /* AvailabilityCalculator.swift */,
@@ -237,6 +240,7 @@
 				018 /* CalendarSetupView.swift in Sources */,
 				019 /* CalendarPickerPopover.swift in Sources */,
 				020 /* UpdateService.swift in Sources */,
+				021 /* AppState.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

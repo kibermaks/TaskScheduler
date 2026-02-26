@@ -7,6 +7,7 @@ struct TaskSchedulerApp: App {
     @StateObject private var calendarService = CalendarService()
     @StateObject private var schedulingEngine = SchedulingEngine()
     @StateObject private var updateService = UpdateService()
+    @StateObject private var appState = AppState()
     
     var body: some Scene {
         WindowGroup {
@@ -14,9 +15,12 @@ struct TaskSchedulerApp: App {
                 .environmentObject(calendarService)
                 .environmentObject(schedulingEngine)
                 .environmentObject(updateService)
+                .environmentObject(appState)
                 .frame(minWidth: 1000, minHeight: 700)
                 .onAppear {
                     updateService.startAutomaticChecks()
+                    appState.schedulingEngine = schedulingEngine
+                    appState.calendarService = calendarService
                 }
         }
         .windowStyle(.hiddenTitleBar)

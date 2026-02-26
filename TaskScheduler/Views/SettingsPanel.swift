@@ -5,9 +5,9 @@ import Combine
 struct SettingsPanel: View {
     @EnvironmentObject var schedulingEngine: SchedulingEngine
     @EnvironmentObject var calendarService: CalendarService
-    
-    @Binding var hasSeenPatternsGuide: Bool
-    @Binding var showingPatternsGuide: Bool
+    @EnvironmentObject var appState: AppState
+
+    @AppStorage("hasSeenPatternsGuide") private var hasSeenPatternsGuide = false
     
     @State private var showingWorkHelp = false
     @State private var showingSideHelp = false
@@ -427,7 +427,7 @@ struct SettingsPanel: View {
             if !hasSeenPatternsGuide {
                 // Reveal options button with frosted glass effect
                 Button {
-                    showingPatternsGuide = true
+                    appState.showingPatternsGuide = true
                     hasSeenPatternsGuide = true
                 } label: {
                     HStack(spacing: 6) {
@@ -1492,12 +1492,10 @@ fileprivate struct VisualEffectBlur: View {
 }
 
 #Preview {
-    SettingsPanel(
-        hasSeenPatternsGuide: .constant(false),
-        showingPatternsGuide: .constant(false)
-    )
+    SettingsPanel()
         .environmentObject(SchedulingEngine())
         .environmentObject(CalendarService())
+        .environmentObject(AppState())
         .frame(width: 320, height: 800)
         .background(Color(hex: "0F172A"))
 }
