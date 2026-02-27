@@ -5,6 +5,19 @@ All notable changes to Task Scheduler will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.10] - 2026-02-27
+
+### Added
+
+- Drag-and-drop event rescheduling in the Timeline with visual previews
+- Undo/redo support for event moves with history tracking
+- Time snapping for precise event placement
+
+### Changed
+
+- Enhanced scheduling messages with clearer status based on session configuration
+- Improved quota tracking in the scheduling engine
+
 ## [1.9] - 2026-02-26
 
 ### Added
