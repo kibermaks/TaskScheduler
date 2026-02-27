@@ -1,5 +1,6 @@
 import SwiftUI
 import Combine
+import AppKit
 
 struct TimelineView: View {
     let selectedDate: Date
@@ -40,11 +41,28 @@ struct TimelineView: View {
     // Width tracking for adaptive UI - default to 0 to start compact
     @State private var containerWidth: CGFloat = 0
     @State private var showingLegendPopover = false
-    
+
     // Timeline intro bar dismissal
     @AppStorage("timelineIntroBarDismissed") private var introBarDismissed = false
     @State private var showNod = false
     @State private var currentTime = Date()
+
+    // MARK: - Drag Interaction State
+    @State private var dragSlotId: String? = nil
+    @State private var dragPreviewStartTime: Date? = nil
+    @State private var dragPreviewEndTime: Date? = nil
+    @State private var dragMode: DragMode = .none
+    @State private var isShiftHeld: Bool = false
+    @State private var flagsMonitor: Any? = nil
+    @State private var keyDownMonitor: Any? = nil
+    @StateObject private var eventUndoManager = EventUndoManager()
+
+    private enum DragMode: Equatable {
+        case none
+        case move
+        case resizeTop
+        case resizeBottom
+    }
     
     private var isNarrow: Bool {
         // Use a reasonable threshold for narrow width
@@ -78,9 +96,46 @@ struct TimelineView: View {
             }
             .onAppear {
                 containerWidth = geo.size.width
+                flagsMonitor = NSEvent.addLocalMonitorForEvents(matching: .flagsChanged) { event in
+                    isShiftHeld = event.modifierFlags.contains(.shift)
+                    return event
+                }
+                // Use keyDown monitor for undo/redo so it works regardless of keyboard layout.
+                // Physical key code 6 = Z key on any layout.
+                keyDownMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
+                    guard event.modifierFlags.contains(.command), event.keyCode == 6 else {
+                        return event
+                    }
+                    // Don't intercept when a text field is active (let system undo handle it)
+                    if let responder = NSApp.keyWindow?.firstResponder,
+                       responder is NSTextView {
+                        return event
+                    }
+                    if event.modifierFlags.contains(.shift) {
+                        guard eventUndoManager.canRedo else { return event }
+                        performRedo()
+                    } else {
+                        guard eventUndoManager.canUndo else { return event }
+                        performUndo()
+                    }
+                    return nil
+                }
+            }
+            .onDisappear {
+                if let monitor = flagsMonitor {
+                    NSEvent.removeMonitor(monitor)
+                    flagsMonitor = nil
+                }
+                if let monitor = keyDownMonitor {
+                    NSEvent.removeMonitor(monitor)
+                    keyDownMonitor = nil
+                }
             }
             .onChange(of: geo.size.width) { _, newWidth in
                 containerWidth = newWidth
+            }
+            .onChange(of: selectedDate) { _, _ in
+                eventUndoManager.clear()
             }
             .onReceive(currentTimeTimer) { date in
                 currentTime = date
@@ -217,9 +272,78 @@ struct TimelineView: View {
                 ForEach(filteredProjectedSessions) { session in
                     projectedSessionBlock(for: session, containerWidth: geometry.size.width)
                 }
+
+                // Drag preview overlay
+                if dragMode != .none,
+                   let newStart = dragPreviewStartTime,
+                   let newEnd = dragPreviewEndTime,
+                   let slotId = dragSlotId,
+                   let slot = filteredBusySlots.first(where: { $0.id == slotId }) {
+
+                    // Snap indicator line
+                    let snapY = calculateYPosition(for: newStart)
+                    Path { path in
+                        path.move(to: CGPoint(x: 0, y: snapY))
+                        path.addLine(to: CGPoint(x: geometry.size.width, y: snapY))
+                    }
+                    .stroke(style: StrokeStyle(lineWidth: 1, dash: [4, 4]))
+                    .foregroundColor(Color.blue.opacity(0.4))
+                    .allowsHitTesting(false)
+
+                    // Preview block at new position
+                    dragPreviewBlock(
+                        slot: slot,
+                        newStart: newStart,
+                        newEnd: newEnd,
+                        containerWidth: geometry.size.width
+                    )
+                }
             }
             .clipped()
         }
+    }
+
+    private func dragPreviewBlock(
+        slot: BusyTimeSlot,
+        newStart: Date,
+        newEnd: Date,
+        containerWidth: CGFloat
+    ) -> some View {
+        let yPos = calculateYPosition(for: newStart)
+        let height = calculateHeight(from: newStart, to: newEnd)
+        let blockHeight = max(height, 8)
+        let blockWidth = max((containerWidth / 2) - 16, 10)
+        let centerX = 8 + blockWidth / 2
+        let centerY = yPos + blockHeight / 2
+
+        return ZStack(alignment: .topLeading) {
+            RoundedRectangle(cornerRadius: 4)
+                .fill(slot.calendarColor.opacity(0.5))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 4)
+                        .strokeBorder(Color.blue.opacity(0.8), lineWidth: 2)
+                )
+                .shadow(color: Color.blue.opacity(0.3), radius: 8, y: 2)
+
+            if blockHeight >= 16 {
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(slot.title)
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundColor(.white)
+                        .lineLimit(1)
+                    if blockHeight > 30 {
+                        Text(timeRangeString(start: newStart, end: newEnd))
+                            .font(.system(size: 10, weight: .bold))
+                            .foregroundColor(.white.opacity(0.9))
+                    }
+                }
+                .padding(4)
+            }
+        }
+        .frame(width: blockWidth, height: blockHeight)
+        .clipped()
+        .position(x: centerX, y: centerY)
+        .allowsHitTesting(false)
     }
     
     private var hourGridLines: some View {
@@ -521,6 +645,7 @@ extension TimelineView {
     
     private func eventBlock(for positionedSlot: PositionedBusySlot, containerWidth: CGFloat) -> some View {
         let slot = positionedSlot.slot
+        let isDragging = dragSlotId == slot.id && dragMode != .none
         let yPos = calculateYPosition(for: slot.startTime)
         let height = calculateHeight(from: slot.startTime, to: slot.endTime)
         let columns = max(1, positionedSlot.totalColumns)
@@ -530,11 +655,12 @@ extension TimelineView {
         let blockWidth = max((availableWidth - totalSpacing) / CGFloat(columns), 8)
         let blockHeight = max(height, 20)
         let columnOffset = CGFloat(positionedSlot.column) * (blockWidth + columnSpacing)
-        
+
         // Calculate center position for .position() modifier
         let centerX = 8 + blockWidth / 2 + columnOffset
         let centerY = yPos + blockHeight / 2
-        
+        let edgeZone: CGFloat = min(8, blockHeight / 3)
+
         return ZStack(alignment: .topLeading) {
             RoundedRectangle(cornerRadius: 4)
                 .fill(slot.calendarColor.opacity(0.3))
@@ -542,56 +668,116 @@ extension TimelineView {
                     RoundedRectangle(cornerRadius: 4)
                         .strokeBorder(slot.calendarColor.opacity(0.5), lineWidth: 1)
                 )
-            
+
             VStack(alignment: .leading, spacing: 1) {
                 Text(slot.title)
                     .font(.system(size: 12, weight: .medium))
                     .foregroundColor(.white)
                     .lineLimit(nil)
                     .fixedSize(horizontal: false, vertical: true)
-                
+
                 if height > 25 {
                     Text(timeRangeString(start: slot.startTime, end: slot.endTime))
                         .font(.system(size: 10))
                         .foregroundColor(.white.opacity(0.7))
                 }
-                
+
                 if let url = slot.url, height > 40 {
                     Text(url.absoluteString)
                         .font(.system(size: 9))
                         .foregroundColor(Color(hex: "3B82F6"))
                         .lineLimit(1)
                         .truncationMode(.middle)
-                        .contentShape(Rectangle())
-                        .onTapGesture(count: 2) {
-                            selectedSession = nil
-                            selectedBusySlot = slot
-                            autoFocusField = .url
-                        }
                 }
-                
+
                 if let notes = slot.notes, !notes.isEmpty, height > 45 {
                     Text(notes)
                         .font(.system(size: 9))
                         .foregroundColor(.white.opacity(0.8))
                         .lineLimit(nil)
                         .fixedSize(horizontal: false, vertical: false)
-                        .contentShape(Rectangle())
-                        .onTapGesture(count: 2) {
-                            selectedSession = nil
-                            selectedBusySlot = slot
-                            autoFocusField = .notes
-                        }
                 }
             }
             .padding(4)
         }
         .frame(width: blockWidth, height: blockHeight)
+        .contentShape(Rectangle())
+        .onContinuousHover { phase in
+            guard dragMode == .none else { return }
+            switch phase {
+            case .active(let location):
+                if location.y < edgeZone {
+                    NSCursor.resizeUp.set()
+                } else if location.y > blockHeight - edgeZone {
+                    NSCursor.resizeDown.set()
+                } else {
+                    NSCursor.openHand.set()
+                }
+            case .ended:
+                NSCursor.arrow.set()
+            }
+        }
+        .opacity(isDragging ? 0.3 : 1.0)
+        // Single unified drag gesture — determines mode from start location
+        .gesture(
+            DragGesture(minimumDistance: 4)
+                .onChanged { value in
+                    // Determine mode on first movement
+                    if dragMode == .none {
+                        let startY = value.startLocation.y
+                        if startY < edgeZone {
+                            dragMode = .resizeTop
+                        } else if startY > blockHeight - edgeZone {
+                            dragMode = .resizeBottom
+                        } else {
+                            dragMode = .move
+                            NSCursor.closedHand.push()
+                        }
+                        dragSlotId = slot.id
+                    }
+
+                    switch dragMode {
+                    case .move:
+                        let duration = slot.endTime.timeIntervalSince(slot.startTime)
+                        let originalY = calculateYPosition(for: slot.startTime)
+                        let newY = originalY + value.translation.height
+                        let rawDate = dateFromYOffset(newY)
+                        let newStart = isShiftHeld ? rawDate : snapToInterval(rawDate)
+                        dragPreviewStartTime = newStart
+                        dragPreviewEndTime = newStart.addingTimeInterval(duration)
+
+                    case .resizeTop:
+                        let originalY = calculateYPosition(for: slot.startTime)
+                        let newY = originalY + value.translation.height
+                        let rawDate = dateFromYOffset(newY)
+                        let newStart = isShiftHeld ? rawDate : snapToInterval(rawDate)
+                        let maxStart = slot.endTime.addingTimeInterval(-5 * 60)
+                        dragPreviewStartTime = min(newStart, maxStart)
+                        dragPreviewEndTime = slot.endTime
+
+                    case .resizeBottom:
+                        let originalY = calculateYPosition(for: slot.endTime)
+                        let newY = originalY + value.translation.height
+                        let rawDate = dateFromYOffset(newY)
+                        let newEnd = isShiftHeld ? rawDate : snapToInterval(rawDate)
+                        let minEnd = slot.startTime.addingTimeInterval(5 * 60)
+                        dragPreviewStartTime = slot.startTime
+                        dragPreviewEndTime = max(newEnd, minEnd)
+
+                    case .none:
+                        break
+                    }
+                }
+                .onEnded { _ in
+                    if dragMode == .move { NSCursor.pop() }
+                    commitDrag(for: slot)
+                }
+        )
         .position(x: centerX, y: centerY)
         .onTapGesture(count: 2) {
             selectedSession = nil
             selectedBusySlot = slot
-            autoFocusField = nil // Regular double-click, no auto-focus
+            autoFocusField = nil
         }
         .contextMenu {
             Button("View & Edit Event Details") {
@@ -1027,19 +1213,30 @@ extension TimelineView {
     }
     
     // MARK: - Position Calculations
-    
+
     private func calculateYPosition(for date: Date) -> CGFloat {
         let calendar = Calendar.current
         let dayStart = calendar.startOfDay(for: selectedDate)
         let secondsSinceStart = date.timeIntervalSince(dayStart)
         let hours = secondsSinceStart / 3600
-        
+
         let finalHours = hours - (schedulingEngine.hideNightHours ? CGFloat(schedulingEngine.dayStartHour) : 0)
         return finalHours * hourHeight
     }
-    
-    
-    
+
+    /// Inverse of calculateYPosition — converts a Y offset back to a Date.
+    private func dateFromYOffset(_ yPosition: CGFloat) -> Date {
+        let calendar = Calendar.current
+        let dayStart = calendar.startOfDay(for: selectedDate)
+        let offsetHours = schedulingEngine.hideNightHours ? CGFloat(schedulingEngine.dayStartHour) : 0
+        let hours = yPosition / hourHeight + offsetHours
+        return dayStart.addingTimeInterval(Double(hours) * 3600)
+    }
+
+    private func snapToInterval(_ date: Date) -> Date {
+        TimeSnapping.snapToNearest(date, intervalMinutes: 5)
+    }
+
     private func calculateHeight(from start: Date, to end: Date) -> CGFloat {
         let duration = end.timeIntervalSince(start)
         let hours = duration / 3600
@@ -1234,6 +1431,81 @@ extension TimelineView {
         originalURL = ""
         focusedField = nil
         isCanceling = false
+    }
+
+    // MARK: - Drag Commit
+
+    private func commitDrag(for slot: BusyTimeSlot) {
+        guard let newStart = dragPreviewStartTime,
+              let newEnd = dragPreviewEndTime else {
+            resetDragState()
+            return
+        }
+
+        // Don't save if nothing changed
+        guard newStart != slot.startTime || newEnd != slot.endTime else {
+            resetDragState()
+            return
+        }
+
+        let description = dragMode == .move ? "Move \(slot.title)" : "Resize \(slot.title)"
+        eventUndoManager.record(EventUndoManager.EventTimeChange(
+            eventId: slot.id,
+            oldStartTime: slot.startTime,
+            oldEndTime: slot.endTime,
+            newStartTime: newStart,
+            newEndTime: newEnd,
+            description: description
+        ))
+
+        let success = calendarService.updateEventTime(
+            eventId: slot.id,
+            newStart: newStart,
+            newEnd: newEnd
+        )
+
+        if !success {
+            _ = eventUndoManager.undo()
+        }
+
+        Task {
+            await calendarService.fetchEvents(for: selectedDate)
+        }
+
+        resetDragState()
+    }
+
+    private func resetDragState() {
+        dragMode = .none
+        dragSlotId = nil
+        dragPreviewStartTime = nil
+        dragPreviewEndTime = nil
+    }
+
+    // MARK: - Undo / Redo
+
+    private func performUndo() {
+        guard let change = eventUndoManager.undo() else { return }
+        let success = calendarService.updateEventTime(
+            eventId: change.eventId,
+            newStart: change.newStartTime,
+            newEnd: change.newEndTime
+        )
+        if success {
+            Task { await calendarService.fetchEvents(for: selectedDate) }
+        }
+    }
+
+    private func performRedo() {
+        guard let change = eventUndoManager.redo() else { return }
+        let success = calendarService.updateEventTime(
+            eventId: change.eventId,
+            newStart: change.newStartTime,
+            newEnd: change.newEndTime
+        )
+        if success {
+            Task { await calendarService.fetchEvents(for: selectedDate) }
+        }
     }
 }
 

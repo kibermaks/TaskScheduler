@@ -374,6 +374,27 @@ class CalendarService: ObservableObject {
         }
     }
     
+    // MARK: - Event Time Update
+
+    /// Updates the start and end time of an existing calendar event.
+    func updateEventTime(eventId: String, newStart: Date, newEnd: Date) -> Bool {
+        guard let event = eventStore.event(withIdentifier: eventId) else {
+            errorMessage = "Event not found"
+            return false
+        }
+
+        event.startDate = newStart
+        event.endDate = newEnd
+
+        do {
+            try eventStore.save(event, span: .thisEvent)
+            return true
+        } catch {
+            errorMessage = "Failed to update event time: \(error.localizedDescription)"
+            return false
+        }
+    }
+
     // MARK: - Count Existing Sessions
     
     func countExistingSessions(
