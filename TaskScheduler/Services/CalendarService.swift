@@ -26,6 +26,20 @@ class CalendarService: ObservableObject {
     
     // Store the current date for auto-refresh
     private var currentFetchDate: Date?
+
+    /// Set from ContentView to match SchedulingEngine.scheduleEndHour.
+    /// When > 24, fetches/counts/deletes extend into the next calendar day.
+    var scheduleEndHour: Int = 24
+
+    /// Calculates effective end-of-day for a given date, respecting scheduleEndHour.
+    private func effectiveEndOfDay(for date: Date) -> Date {
+        let calendar = Calendar.current
+        let nextMidnight = calendar.startOfDay(for: calendar.date(byAdding: .day, value: 1, to: date)!)
+        if scheduleEndHour <= 24 {
+            return nextMidnight
+        }
+        return calendar.date(byAdding: .hour, value: scheduleEndHour - 24, to: nextMidnight)!
+    }
     
     init() {
         excludedCalendarIDs = Set(
@@ -246,8 +260,8 @@ class CalendarService: ObservableObject {
         
         let calendar = Calendar.current
         let startOfDay = calendar.startOfDay(for: date)
-        guard let endOfDay = calendar.date(byAdding: .day, value: 1, to: startOfDay) else { return }
-        
+        let endOfDay = effectiveEndOfDay(for: date)
+
         let calendars = includedEventCalendars()
         if calendars.isEmpty {
             await MainActor.run {
@@ -307,6 +321,44 @@ class CalendarService: ObservableObject {
         }
     }
     
+    func copyEventToDay(eventId: String, targetDate: Date) -> Bool {
+        guard let source = eventStore.event(withIdentifier: eventId) else {
+            errorMessage = "Event not found"
+            return false
+        }
+
+        let calendar = Calendar.current
+        let sourceStart = source.startDate!
+        let sourceEnd = source.endDate!
+        let duration = sourceEnd.timeIntervalSince(sourceStart)
+
+        let startComps = calendar.dateComponents([.hour, .minute, .second], from: sourceStart)
+        guard let newStart = calendar.date(bySettingHour: startComps.hour ?? 0,
+                                           minute: startComps.minute ?? 0,
+                                           second: startComps.second ?? 0,
+                                           of: targetDate) else {
+            errorMessage = "Failed to calculate target date"
+            return false
+        }
+        let newEnd = newStart.addingTimeInterval(duration)
+
+        let copy = EKEvent(eventStore: eventStore)
+        copy.title = source.title
+        copy.startDate = newStart
+        copy.endDate = newEnd
+        copy.calendar = source.calendar
+        copy.notes = source.notes
+        copy.url = source.url
+
+        do {
+            try eventStore.save(copy, span: .thisEvent)
+            return true
+        } catch {
+            errorMessage = "Failed to copy event: \(error.localizedDescription)"
+            return false
+        }
+    }
+
     func createSessions(_ sessions: [ScheduledSession]) -> (success: Int, failed: Int) {
         var successCount = 0
         var failCount = 0
@@ -405,10 +457,8 @@ class CalendarService: ObservableObject {
     ) -> (work: Int, side: Int, deep: Int, titles: Set<String>) {
         let calendar = Calendar.current
         let startOfDay = calendar.startOfDay(for: date)
-        guard let endOfDay = calendar.date(byAdding: .day, value: 1, to: startOfDay) else {
-            return (0, 0, 0, [])
-        }
-        
+        let endOfDay = effectiveEndOfDay(for: date)
+
         var calendarsToFetch: [CalendarDescriptor] = [workCalendar, sideCalendar]
         if let deep = deepConfig, deep.enabled {
             calendarsToFetch.append(CalendarDescriptor(name: deep.calendarName, identifier: deep.calendarIdentifier))
@@ -454,7 +504,7 @@ class CalendarService: ObservableObject {
     func hasPlanningSession(for date: Date, planningEventName: String = "Planning") -> Bool {
         let calendar = Calendar.current
         let startOfDay = calendar.startOfDay(for: date)
-        guard let endOfDay = calendar.date(byAdding: .day, value: 1, to: startOfDay) else { return false }
+        let endOfDay = effectiveEndOfDay(for: date)
         
         let calendars = includedEventCalendars()
         if calendars.isEmpty { return false }
@@ -507,10 +557,8 @@ class CalendarService: ObservableObject {
     func deleteEvents(for date: Date, fromCalendars calendarsToDelete: [CalendarDescriptor]) -> (deleted: Int, failed: Int) {
         let calendar = Calendar.current
         let startOfDay = calendar.startOfDay(for: date)
-        guard let endOfDay = calendar.date(byAdding: .day, value: 1, to: startOfDay) else {
-            return (0, 0)
-        }
-        
+        let endOfDay = effectiveEndOfDay(for: date)
+
         let calendars = calendars(from: calendarsToDelete)
         
         guard !calendars.isEmpty else {
@@ -545,16 +593,14 @@ class CalendarService: ObservableObject {
     ) -> (deleted: Int, failed: Int) {
         let calendar = Calendar.current
         let startOfDay = calendar.startOfDay(for: date)
-        guard let endOfDay = calendar.date(byAdding: .day, value: 1, to: startOfDay) else {
-            return (0, 0)
-        }
-        
+        let endOfDay = effectiveEndOfDay(for: date)
+
         let calendars = calendars(from: calendarsToDelete)
-        
+
         guard !calendars.isEmpty else {
             return (0, 0)
         }
-        
+
         let predicate = eventStore.predicateForEvents(withStart: startOfDay, end: endOfDay, calendars: calendars)
         let events = eventStore.events(matching: predicate)
         
@@ -594,16 +640,14 @@ class CalendarService: ObservableObject {
     ) -> (deleted: Int, failed: Int) {
         let calendar = Calendar.current
         let startOfDay = calendar.startOfDay(for: date)
-        guard let endOfDay = calendar.date(byAdding: .day, value: 1, to: startOfDay) else {
-            return (0, 0)
-        }
-        
+        let endOfDay = effectiveEndOfDay(for: date)
+
         let calendars = calendars(from: calendarsToDelete)
-        
+
         guard !calendars.isEmpty else {
             return (0, 0)
         }
-        
+
         let predicate = eventStore.predicateForEvents(withStart: startOfDay, end: endOfDay, calendars: calendars)
         let events = eventStore.events(matching: predicate)
         

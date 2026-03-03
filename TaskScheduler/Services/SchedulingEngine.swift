@@ -38,6 +38,9 @@ class SchedulingEngine: ObservableObject {
     @Published var dayEndHour: Int = (UserDefaults.standard.object(forKey: "TaskScheduler.DayEndHour") as? Int) ?? 24 {
         didSet { UserDefaults.standard.set(dayEndHour, forKey: "TaskScheduler.DayEndHour") }
     }
+    @Published var scheduleEndHour: Int = (UserDefaults.standard.object(forKey: "TaskScheduler.ScheduleEndHour") as? Int) ?? 24 {
+        didSet { UserDefaults.standard.set(scheduleEndHour, forKey: "TaskScheduler.ScheduleEndHour") }
+    }
     @Published var flexibleSideScheduling: Bool = UserDefaults.standard.object(forKey: "TaskScheduler.FlexibleSideScheduling") as? Bool ?? true {
         didSet {
             UserDefaults.standard.set(flexibleSideScheduling, forKey: "TaskScheduler.FlexibleSideScheduling")
@@ -88,6 +91,7 @@ class SchedulingEngine: ObservableObject {
     @Published var projectedSessions: [ScheduledSession] = []
     @Published var schedulingMessage: String = ""
     @Published var quotasSatisfied: Bool = false
+    @Published var sessionsFrozen: Bool = false
 
     var hasNoSessionTargets: Bool {
         workSessions == 0 && sideSessions == 0 && (!deepSessionConfig.enabled || deepSessionConfig.sessionCount == 0) && !schedulePlanning
@@ -172,6 +176,17 @@ class SchedulingEngine: ObservableObject {
     }
     
 
+    /// Calculates the effective end-of-day based on scheduleEndHour.
+    /// If scheduleEndHour > 24, extends into the next calendar day (e.g. 26 = 2 AM next day).
+    func effectiveEndOfDay(for baseDate: Date) -> Date {
+        let calendar = Calendar.current
+        let nextMidnight = calendar.startOfDay(for: calendar.date(byAdding: .day, value: 1, to: baseDate)!)
+        if scheduleEndHour <= 24 {
+            return nextMidnight
+        }
+        return calendar.date(byAdding: .hour, value: scheduleEndHour - 24, to: nextMidnight)!
+    }
+
     // MARK: - Core Scheduling Algorithm
     
     func generateSchedule(
@@ -182,10 +197,13 @@ class SchedulingEngine: ObservableObject {
         existingSessions: (work: Int, side: Int, deep: Int)? = nil,
         existingTitles: Set<String>? = nil
     ) -> [ScheduledSession] {
+        // Don't regenerate if sessions are frozen (manual alignment in progress)
+        if sessionsFrozen { return projectedSessions }
+
         var sessions: [ScheduledSession] = []
         let calendar = Calendar.current
         let startOfDay = calendar.startOfDay(for: baseDate)
-        let endOfDay = calendar.startOfDay(for: calendar.date(byAdding: .day, value: 1, to: baseDate)!)
+        let endOfDay = effectiveEndOfDay(for: baseDate)
         
         let roundedStart = roundToNextInterval(startTime)
         var currentTime = max(roundedStart, startOfDay)
@@ -261,20 +279,23 @@ class SchedulingEngine: ObservableObject {
                 calendarIdentifier = workCalendarIdentifier
                 sessionTag = "#plan"
             } else {
-                // Special handling for injectAfterEvery == 0: inject immediately
+                let sessionsSinceLastDeep = regularSessionsScheduled - regularCountAtLastDeep
+
+                // For the first deep session, use injectAfterEvery; for 2nd+, use andThenGap
+                let requiredSlots = deepCount == 0 ? deepSessionConfig.injectAfterEvery : deepSessionConfig.andThenGap
+
+                // Special handling for requiredSlots == 0: inject immediately
                 let shouldInjectDeepImmediately = deepSessionConfig.enabled
                     && deepCount < deepSessionConfig.sessionCount
-                    && deepSessionConfig.injectAfterEvery == 0
-                
+                    && requiredSlots == 0
+
                 // Normal injection logic: inject after N regular sessions
                 let shouldInjectDeep = deepSessionConfig.enabled
                     && deepCount < deepSessionConfig.sessionCount
                     && regularSessionsScheduled > 0
-                    && deepSessionConfig.injectAfterEvery > 0
-                
-                let sessionsSinceLastDeep = regularSessionsScheduled - regularCountAtLastDeep
-                 
-                if shouldInjectDeepImmediately || (shouldInjectDeep && sessionsSinceLastDeep >= deepSessionConfig.injectAfterEvery) {
+                    && requiredSlots > 0
+
+                if shouldInjectDeepImmediately || (shouldInjectDeep && sessionsSinceLastDeep >= requiredSlots) {
                      sessionType = .deep
                      sessionDuration = deepSessionConfig.duration
                      
@@ -742,8 +763,7 @@ class SchedulingEngine: ObservableObject {
         baseDate: Date,
         busySlots: [BusyTimeSlot]
     ) -> ScheduledSession? {
-        let calendar = Calendar.current
-        let endOfDay = calendar.startOfDay(for: calendar.date(byAdding: .day, value: 1, to: baseDate)!)
+        let endOfDay = effectiveEndOfDay(for: baseDate)
         let bufferDuration = TimeInterval(existingEventBuffer * 60)
         
         var currentTime = roundToNextInterval(startTime)
@@ -842,7 +862,7 @@ class SchedulingEngine: ObservableObject {
     ) -> (availableMinutes: Int, possibleWorkSessions: Int, possibleSideSessions: Int, possibleDeepSessions: Int) {
         let calendar = Calendar.current
         let startOfDay = calendar.startOfDay(for: baseDate)
-        let endOfDay = calendar.startOfDay(for: calendar.date(byAdding: .day, value: 1, to: baseDate)!)
+        let endOfDay = effectiveEndOfDay(for: baseDate)
         
         let effectiveStart = max(startTime, startOfDay)
         

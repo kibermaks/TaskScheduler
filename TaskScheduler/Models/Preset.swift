@@ -40,16 +40,33 @@ struct DeepSessionConfig: Codable, Equatable {
     var duration: Int
     var calendarName: String
     var calendarIdentifier: String?
-    
-    static let `default` = DeepSessionConfig(
-        enabled: false,
-        sessionCount: 1,
-        injectAfterEvery: 3,
-        name: "Deep Session",
-        duration: 100, // 2.5x of standard 40 min work duration
-        calendarName: "Work",
-        calendarIdentifier: nil
-    )
+    var andThenGap: Int  // slots (regular sessions) between consecutive deep sessions
+
+    init(enabled: Bool = false, sessionCount: Int = 1, injectAfterEvery: Int = 3, name: String = "Deep Session", duration: Int = 100, calendarName: String = "Work", calendarIdentifier: String? = nil, andThenGap: Int = 2) {
+        self.enabled = enabled
+        self.sessionCount = sessionCount
+        self.injectAfterEvery = injectAfterEvery
+        self.name = name
+        self.duration = duration
+        self.calendarName = calendarName
+        self.calendarIdentifier = calendarIdentifier
+        self.andThenGap = andThenGap
+    }
+
+    // Support decoding presets saved before andThenGap existed
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        enabled = try container.decode(Bool.self, forKey: .enabled)
+        sessionCount = try container.decode(Int.self, forKey: .sessionCount)
+        injectAfterEvery = try container.decode(Int.self, forKey: .injectAfterEvery)
+        name = try container.decode(String.self, forKey: .name)
+        duration = try container.decode(Int.self, forKey: .duration)
+        calendarName = try container.decode(String.self, forKey: .calendarName)
+        calendarIdentifier = try container.decodeIfPresent(String.self, forKey: .calendarIdentifier)
+        andThenGap = try container.decodeIfPresent(Int.self, forKey: .andThenGap) ?? 2
+    }
+
+    static let `default` = DeepSessionConfig()
 }
 
 // MARK: - Preset Configuration

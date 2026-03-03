@@ -49,6 +49,7 @@ struct TimelineView: View {
 
     // MARK: - Drag Interaction State
     @State private var dragSlotId: String? = nil
+    @State private var dragSessionId: UUID? = nil
     @State private var dragPreviewStartTime: Date? = nil
     @State private var dragPreviewEndTime: Date? = nil
     @State private var dragMode: DragMode = .none
@@ -57,6 +58,12 @@ struct TimelineView: View {
     @State private var keyDownMonitor: Any? = nil
     @StateObject private var eventUndoManager = EventUndoManager()
     @State private var eventsLocked: Bool = false
+    @State private var showingUnfreezeConfirmation: Bool = false
+    @State private var showingCopyDatePicker: Bool = false
+    @State private var copyTargetDate: Date = Date()
+    @State private var copySlotId: String? = nil
+    @State private var renamingSessionId: UUID? = nil
+    @State private var renameText: String = ""
 
     private enum DragMode: Equatable {
         case none
@@ -101,9 +108,14 @@ struct TimelineView: View {
                     isShiftHeld = event.modifierFlags.contains(.shift)
                     return event
                 }
-                // Use keyDown monitor for undo/redo so it works regardless of keyboard layout.
-                // Physical key code 6 = Z key on any layout.
+                // Use keyDown monitor for Esc (cancel drag) and undo/redo.
                 keyDownMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
+                    // Esc cancels active drag/resize
+                    if event.keyCode == 53, dragMode != .none {
+                        resetDragState()
+                        return nil
+                    }
+                    // Physical key code 6 = Z key on any layout.
                     guard event.modifierFlags.contains(.command), event.keyCode == 6 else {
                         return event
                     }
@@ -141,9 +153,57 @@ struct TimelineView: View {
             .onReceive(currentTimeTimer) { date in
                 currentTime = date
             }
+            .sheet(isPresented: $showingCopyDatePicker) {
+                VStack(spacing: 16) {
+                    Text("Copy event to date")
+                        .font(.headline)
+                    DatePicker("Date", selection: $copyTargetDate, displayedComponents: .date)
+                        .datePickerStyle(.graphical)
+                        .labelsHidden()
+                    HStack {
+                        Button("Cancel") {
+                            showingCopyDatePicker = false
+                        }
+                        Spacer()
+                        Button("Copy") {
+                            if let slotId = copySlotId,
+                               let slot = filteredBusySlots.first(where: { $0.id == slotId }) {
+                                let formatter = DateFormatter()
+                                formatter.dateFormat = "EEE, MMM d"
+                                let label = formatter.string(from: copyTargetDate)
+                                if calendarService.copyEventToDay(eventId: slotId, targetDate: copyTargetDate) {
+                                    schedulingEngine.schedulingMessage = "Copied \"\(slot.title)\" to \(label)"
+                                    Task { await calendarService.fetchEvents(for: selectedDate) }
+                                } else {
+                                    schedulingEngine.schedulingMessage = "Failed to copy \"\(slot.title)\""
+                                }
+                            }
+                            showingCopyDatePicker = false
+                        }
+                        .buttonStyle(.borderedProminent)
+                    }
+                }
+                .padding(20)
+                .frame(width: 300)
+            }
+            .alert("Rename Session", isPresented: Binding(
+                get: { renamingSessionId != nil },
+                set: { if !$0 { renamingSessionId = nil } }
+            )) {
+                TextField("Session name", text: $renameText)
+                Button("Cancel", role: .cancel) { renamingSessionId = nil }
+                Button("Save") {
+                    if let id = renamingSessionId,
+                       let idx = schedulingEngine.projectedSessions.firstIndex(where: { $0.id == id }),
+                       !renameText.isEmpty {
+                        schedulingEngine.projectedSessions[idx].title = renameText
+                    }
+                    renamingSessionId = nil
+                }
+            }
         }
     }
-    
+
     private var headerView: some View {
         HStack(spacing: 12) {
             Text(formattedDate)
@@ -260,7 +320,7 @@ struct TimelineView: View {
             ZStack(alignment: .topLeading) {
                 hourGridLines
                 
-                if Calendar.current.isDateInToday(selectedDate) {
+                if shouldShowCurrentTimeIndicator {
                     currentTimeIndicator(currentTime: currentTime, width: geometry.size.width)
                 }
                 
@@ -274,7 +334,7 @@ struct TimelineView: View {
                     projectedSessionBlock(for: session, containerWidth: geometry.size.width)
                 }
 
-                // Drag preview overlay
+                // Drag preview overlay — busy slot
                 if dragMode != .none,
                    let newStart = dragPreviewStartTime,
                    let newEnd = dragPreviewEndTime,
@@ -294,6 +354,30 @@ struct TimelineView: View {
                     // Preview block at new position
                     dragPreviewBlock(
                         slot: slot,
+                        newStart: newStart,
+                        newEnd: newEnd,
+                        containerWidth: geometry.size.width
+                    )
+                }
+
+                // Drag preview overlay — projected session
+                if dragMode != .none,
+                   let newStart = dragPreviewStartTime,
+                   let newEnd = dragPreviewEndTime,
+                   let sessionId = dragSessionId,
+                   let session = filteredProjectedSessions.first(where: { $0.id == sessionId }) {
+
+                    let snapY = calculateYPosition(for: newStart)
+                    Path { path in
+                        path.move(to: CGPoint(x: 0, y: snapY))
+                        path.addLine(to: CGPoint(x: geometry.size.width, y: snapY))
+                    }
+                    .stroke(style: StrokeStyle(lineWidth: 1, dash: [4, 4]))
+                    .foregroundColor(Color.blue.opacity(0.4))
+                    .allowsHitTesting(false)
+
+                    sessionDragPreviewBlock(
+                        session: session,
                         newStart: newStart,
                         newEnd: newEnd,
                         containerWidth: geometry.size.width
@@ -347,13 +431,30 @@ struct TimelineView: View {
         .allowsHitTesting(false)
     }
     
+    private var nextDayLabel: String {
+        let cal = Calendar.current
+        if let nextDay = cal.date(byAdding: .day, value: 1, to: selectedDate) {
+            let formatter = DateFormatter()
+            formatter.dateFormat = "EEE, MMM d"
+            return formatter.string(from: nextDay)
+        }
+        return "NEXT DAY"
+    }
+
     private var hourGridLines: some View {
         VStack(spacing: 0) {
-            ForEach(visibleHours, id: \.self) { _ in
+            ForEach(visibleHours, id: \.self) { hour in
                 VStack(spacing: 0) {
-                    Rectangle()
-                        .fill(Color.white.opacity(0.1))
-                        .frame(height: 1)
+                    if hour == 24 && effectiveEndHour > 24 {
+                        // Midnight separator
+                        Rectangle()
+                            .fill(Color.orange.opacity(0.5))
+                            .frame(height: 2)
+                    } else {
+                        Rectangle()
+                            .fill(Color.white.opacity(0.1))
+                            .frame(height: 1)
+                    }
                     Spacer()
                 }
                 .frame(height: hourHeight)
@@ -426,7 +527,7 @@ struct TimelineView: View {
                     .foregroundColor(eventsLocked ? .white.opacity(0.35) : .white)
             }
             .buttonStyle(.plain)
-            .help(eventsLocked ? "Click to drag & resize calendar events" : "Click to lock calendar event positions")
+            .help(eventsLocked ? "Unlock dragging & resizing events and sessions" : "Lock all event and session positions")
 
             // Toggle night button
             Button(action: {
@@ -527,10 +628,17 @@ extension TimelineView {
         VStack(spacing: 0) {
             ForEach(visibleHours, id: \.self) { hour in
                 HStack {
-                    Text(formattedHour(hour))
-                        .font(.system(size: 12, weight: .medium, design: .monospaced))
-                        .foregroundColor(.white.opacity(0.5))
-                        .offset(y: -7)
+                    if hour == 24 && effectiveEndHour > 24 {
+                        Text("next day")
+                            .font(.system(size: 10, weight: .bold))
+                            .foregroundColor(.orange.opacity(0.6))
+                            .offset(y: -7)
+                    } else {
+                        Text(formattedHour(hour))
+                            .font(.system(size: 12, weight: .medium, design: .monospaced))
+                            .foregroundColor(hour >= 24 ? .orange.opacity(0.5) : .white.opacity(0.5))
+                            .offset(y: -7)
+                    }
                 }
                 .frame(width: timeColumnWidth, height: hourHeight, alignment: .topTrailing)
                 .padding(.trailing, 8)
@@ -539,10 +647,9 @@ extension TimelineView {
             
             // End of day mark
             HStack {
-                let endHour = schedulingEngine.hideNightHours ? schedulingEngine.dayEndHour : 24
-                Text(formattedHour(endHour))
+                Text(formattedHour(effectiveEndHour))
                     .font(.system(size: 12, weight: .medium, design: .monospaced))
-                    .foregroundColor(.white.opacity(0.5))
+                    .foregroundColor(effectiveEndHour >= 24 ? .orange.opacity(0.5) : .white.opacity(0.5))
                     .offset(y: -7)
             }
             .frame(width: timeColumnWidth, height: 0, alignment: .topTrailing)
@@ -577,12 +684,36 @@ extension TimelineView {
         return "\(hour):00"
     }
     
+    /// The upper bound for visible hours — driven by Schedule Until.
+    private var effectiveEndHour: Int {
+        if schedulingEngine.hideNightHours {
+            return schedulingEngine.scheduleEndHour
+        } else {
+            return max(24, schedulingEngine.scheduleEndHour)
+        }
+    }
+
     private var visibleHours: [Int] {
         if schedulingEngine.hideNightHours {
-            return Array(schedulingEngine.dayStartHour..<schedulingEngine.dayEndHour)
+            return Array(schedulingEngine.dayStartHour..<effectiveEndHour)
         } else {
-            return Array(0..<24)
+            return Array(0..<effectiveEndHour)
         }
+    }
+
+    /// Show current-time indicator when viewing today, or when viewing yesterday
+    /// and the current time falls within the extended hours (past midnight).
+    private var shouldShowCurrentTimeIndicator: Bool {
+        let cal = Calendar.current
+        if cal.isDateInToday(selectedDate) { return true }
+        if effectiveEndHour > 24,
+           let yesterday = cal.date(byAdding: .day, value: -1, to: Date()),
+           cal.isDate(selectedDate, inSameDayAs: yesterday) {
+            let dayStart = cal.startOfDay(for: selectedDate)
+            let hoursFromStart = Date().timeIntervalSince(dayStart) / 3600
+            return hoursFromStart < Double(effectiveEndHour)
+        }
+        return false
     }
     
     private func layoutBusySlots(_ slots: [BusyTimeSlot]) -> [PositionedBusySlot] {
@@ -800,6 +931,25 @@ extension TimelineView {
                 selectedSession = nil
                 selectedBusySlot = slot
             }
+            Divider()
+            Menu("Copy to...") {
+                ForEach(copyTargetDays(), id: \.label) { target in
+                    Button(target.label) {
+                        if calendarService.copyEventToDay(eventId: slot.id, targetDate: target.date) {
+                            schedulingEngine.schedulingMessage = "Copied \"\(slot.title)\" to \(target.label)"
+                            Task { await calendarService.fetchEvents(for: selectedDate) }
+                        } else {
+                            schedulingEngine.schedulingMessage = "Failed to copy \"\(slot.title)\""
+                        }
+                    }
+                }
+                Divider()
+                Button("Custom...") {
+                    copySlotId = slot.id
+                    copyTargetDate = Date()
+                    showingCopyDatePicker = true
+                }
+            }
         }
     }
     
@@ -812,7 +962,9 @@ extension TimelineView {
         let blockWidth = (containerWidth / 2) - 24  // Extra space for scrollbar
         let xOffset = containerWidth / 2 + 8
         let isCompact = height < 25
-        
+        let isDraggingSession = dragSessionId == session.id && dragMode != .none
+        let edgeZone: CGFloat = min(8, blockHeight / 3)
+
         // Calculate center position for .position() modifier
         let centerX = xOffset + blockWidth / 2
         let centerY = yPos + blockHeight / 2
@@ -865,6 +1017,81 @@ extension TimelineView {
             }
         }
         .frame(width: blockWidth, height: blockHeight)
+        .contentShape(Rectangle())
+        .onContinuousHover { phase in
+            guard !eventsLocked, dragMode == .none else { return }
+            switch phase {
+            case .active(let location):
+                if location.y < edgeZone {
+                    NSCursor.resizeUp.set()
+                } else if location.y > blockHeight - edgeZone {
+                    NSCursor.resizeDown.set()
+                } else {
+                    NSCursor.openHand.set()
+                }
+            case .ended:
+                NSCursor.arrow.set()
+            }
+        }
+        .opacity(isDraggingSession ? 0.3 : 1.0)
+        .gesture(
+            DragGesture(minimumDistance: 4)
+                .onChanged { value in
+                    guard !eventsLocked else { return }
+                    if dragMode == .none {
+                        let startY = value.startLocation.y
+                        if startY < edgeZone {
+                            dragMode = .resizeTop
+                        } else if startY > blockHeight - edgeZone {
+                            dragMode = .resizeBottom
+                        } else {
+                            dragMode = .move
+                            NSCursor.closedHand.push()
+                        }
+                        dragSessionId = session.id
+                        // Auto-freeze on first drag
+                        if !schedulingEngine.sessionsFrozen {
+                            schedulingEngine.sessionsFrozen = true
+                        }
+                    }
+
+                    switch dragMode {
+                    case .move:
+                        let duration = session.endTime.timeIntervalSince(session.startTime)
+                        let originalY = calculateYPosition(for: session.startTime)
+                        let newY = originalY + value.translation.height
+                        let rawDate = dateFromYOffset(newY)
+                        let newStart = isShiftHeld ? rawDate : snapToInterval(rawDate)
+                        dragPreviewStartTime = newStart
+                        dragPreviewEndTime = newStart.addingTimeInterval(duration)
+
+                    case .resizeTop:
+                        let originalY = calculateYPosition(for: session.startTime)
+                        let newY = originalY + value.translation.height
+                        let rawDate = dateFromYOffset(newY)
+                        let newStart = isShiftHeld ? rawDate : snapToInterval(rawDate)
+                        let maxStart = session.endTime.addingTimeInterval(-5 * 60)
+                        dragPreviewStartTime = min(newStart, maxStart)
+                        dragPreviewEndTime = session.endTime
+
+                    case .resizeBottom:
+                        let originalY = calculateYPosition(for: session.endTime)
+                        let newY = originalY + value.translation.height
+                        let rawDate = dateFromYOffset(newY)
+                        let newEnd = isShiftHeld ? rawDate : snapToInterval(rawDate)
+                        let minEnd = session.startTime.addingTimeInterval(5 * 60)
+                        dragPreviewStartTime = session.startTime
+                        dragPreviewEndTime = max(newEnd, minEnd)
+
+                    case .none:
+                        break
+                    }
+                }
+                .onEnded { _ in
+                    if dragMode == .move { NSCursor.pop() }
+                    commitSessionDrag(for: session)
+                }
+        )
         .position(x: centerX, y: centerY)
         .onTapGesture(count: 2) {
             selectedBusySlot = nil
@@ -881,6 +1108,16 @@ extension TimelineView {
                 scheduleProjectedSession(session)
             } label: {
                 Label("Schedule Session", systemImage: "calendar.badge.plus")
+            }
+            Divider()
+            Button {
+                renameText = session.title
+                renamingSessionId = session.id
+                if !schedulingEngine.sessionsFrozen {
+                    schedulingEngine.sessionsFrozen = true
+                }
+            } label: {
+                Label("Rename", systemImage: "pencil")
             }
         }
     }
@@ -1228,6 +1465,36 @@ extension TimelineView {
         }
     }
     
+    // MARK: - Copy Target Days
+
+    private struct CopyTarget: Hashable {
+        let label: String
+        let date: Date
+        func hash(into hasher: inout Hasher) { hasher.combine(label) }
+        static func == (lhs: CopyTarget, rhs: CopyTarget) -> Bool { lhs.label == rhs.label }
+    }
+
+    private func copyTargetDays() -> [CopyTarget] {
+        let cal = Calendar.current
+        let today = Date()
+        var targets: [CopyTarget] = []
+        for offset in 0...6 {
+            let date = cal.date(byAdding: .day, value: offset, to: today) ?? today
+            if cal.isDate(date, inSameDayAs: selectedDate) { continue }
+            let label: String
+            switch offset {
+            case 0: label = "Today"
+            case 1: label = "Tomorrow"
+            default:
+                let formatter = DateFormatter()
+                formatter.dateFormat = "EEE, MMM d"
+                label = formatter.string(from: date)
+            }
+            targets.append(CopyTarget(label: label, date: date))
+        }
+        return targets
+    }
+
     // MARK: - Position Calculations
 
     private func calculateYPosition(for date: Date) -> CGFloat {
@@ -1482,6 +1749,8 @@ extension TimelineView {
 
         if !success {
             _ = eventUndoManager.undo()
+        } else {
+            optimisticallyUpdateSlot(id: slot.id, newStart: newStart, newEnd: newEnd)
         }
 
         Task {
@@ -1494,33 +1763,142 @@ extension TimelineView {
     private func resetDragState() {
         dragMode = .none
         dragSlotId = nil
+        dragSessionId = nil
         dragPreviewStartTime = nil
         dragPreviewEndTime = nil
+    }
+
+    private func commitSessionDrag(for session: ScheduledSession) {
+        guard let newStart = dragPreviewStartTime,
+              let newEnd = dragPreviewEndTime else {
+            resetDragState()
+            return
+        }
+        guard newStart != session.startTime || newEnd != session.endTime else {
+            resetDragState()
+            return
+        }
+
+        let description = dragMode == .move ? "Move \(session.title)" : "Resize \(session.title)"
+        eventUndoManager.record(EventUndoManager.EventTimeChange(
+            sessionId: session.id,
+            oldStartTime: session.startTime,
+            oldEndTime: session.endTime,
+            newStartTime: newStart,
+            newEndTime: newEnd,
+            description: description
+        ))
+
+        if let idx = schedulingEngine.projectedSessions.firstIndex(where: { $0.id == session.id }) {
+            schedulingEngine.projectedSessions[idx].startTime = newStart
+            schedulingEngine.projectedSessions[idx].endTime = newEnd
+        }
+        resetDragState()
+    }
+
+    private func sessionDragPreviewBlock(
+        session: ScheduledSession,
+        newStart: Date,
+        newEnd: Date,
+        containerWidth: CGFloat
+    ) -> some View {
+        let yPos = calculateYPosition(for: newStart)
+        let height = calculateHeight(from: newStart, to: newEnd)
+        let blockHeight = max(height, 8)
+        let blockWidth = (containerWidth / 2) - 24
+        let xOffset = containerWidth / 2 + 8
+        let centerX = xOffset + blockWidth / 2
+        let centerY = yPos + blockHeight / 2
+
+        return ZStack(alignment: .topLeading) {
+            RoundedRectangle(cornerRadius: 4)
+                .fill(session.type.color.opacity(0.5))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 4)
+                        .strokeBorder(Color.blue.opacity(0.8), lineWidth: 2)
+                )
+                .shadow(color: Color.blue.opacity(0.3), radius: 8, y: 2)
+
+            if blockHeight >= 16 {
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(session.title)
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundColor(.white)
+                        .lineLimit(1)
+                    if blockHeight > 30 {
+                        Text(timeRangeString(start: newStart, end: newEnd))
+                            .font(.system(size: 10, weight: .bold))
+                            .foregroundColor(.white.opacity(0.9))
+                    }
+                }
+                .padding(4)
+            }
+        }
+        .frame(width: blockWidth, height: blockHeight)
+        .clipped()
+        .position(x: centerX, y: centerY)
+        .allowsHitTesting(false)
     }
 
     // MARK: - Undo / Redo
 
     private func performUndo() {
         guard let change = eventUndoManager.undo() else { return }
-        let success = calendarService.updateEventTime(
-            eventId: change.eventId,
-            newStart: change.newStartTime,
-            newEnd: change.newEndTime
-        )
-        if success {
-            Task { await calendarService.fetchEvents(for: selectedDate) }
+        if let sessionId = change.sessionId {
+            // Undo projected session change
+            if let idx = schedulingEngine.projectedSessions.firstIndex(where: { $0.id == sessionId }) {
+                schedulingEngine.projectedSessions[idx].startTime = change.newStartTime
+                schedulingEngine.projectedSessions[idx].endTime = change.newEndTime
+            }
+            // Unfreeze if no more session changes in undo stack
+            if schedulingEngine.sessionsFrozen && !eventUndoManager.hasSessionChanges {
+                schedulingEngine.sessionsFrozen = false
+            }
+        } else {
+            let success = calendarService.updateEventTime(
+                eventId: change.eventId,
+                newStart: change.newStartTime,
+                newEnd: change.newEndTime
+            )
+            if success {
+                optimisticallyUpdateSlot(id: change.eventId, newStart: change.newStartTime, newEnd: change.newEndTime)
+                Task { await calendarService.fetchEvents(for: selectedDate) }
+            }
         }
     }
 
     private func performRedo() {
         guard let change = eventUndoManager.redo() else { return }
-        let success = calendarService.updateEventTime(
-            eventId: change.eventId,
-            newStart: change.newStartTime,
-            newEnd: change.newEndTime
-        )
-        if success {
-            Task { await calendarService.fetchEvents(for: selectedDate) }
+        if let sessionId = change.sessionId {
+            // Redo projected session change — re-freeze if needed
+            if !schedulingEngine.sessionsFrozen {
+                schedulingEngine.sessionsFrozen = true
+            }
+            if let idx = schedulingEngine.projectedSessions.firstIndex(where: { $0.id == sessionId }) {
+                schedulingEngine.projectedSessions[idx].startTime = change.newStartTime
+                schedulingEngine.projectedSessions[idx].endTime = change.newEndTime
+            }
+        } else {
+            let success = calendarService.updateEventTime(
+                eventId: change.eventId,
+                newStart: change.newStartTime,
+                newEnd: change.newEndTime
+            )
+            if success {
+                optimisticallyUpdateSlot(id: change.eventId, newStart: change.newStartTime, newEnd: change.newEndTime)
+                Task { await calendarService.fetchEvents(for: selectedDate) }
+            }
+        }
+    }
+
+    private func optimisticallyUpdateSlot(id: String, newStart: Date, newEnd: Date) {
+        if let idx = calendarService.busySlots.firstIndex(where: { $0.id == id }) {
+            let old = calendarService.busySlots[idx]
+            calendarService.busySlots[idx] = BusyTimeSlot(
+                id: old.id, title: old.title, startTime: newStart, endTime: newEnd,
+                notes: old.notes, url: old.url, calendarName: old.calendarName,
+                calendarColor: old.calendarColor, calendarIdentifier: old.calendarIdentifier
+            )
         }
     }
 }

@@ -57,8 +57,40 @@ struct AppSettingsView: View {
                         .foregroundColor(.secondary)
                 }
                 .padding(.top, 4)
+
+                LabeledContent("Schedule until:") {
+                    HStack {
+                        if schedulingEngine.scheduleEndHour > 24 {
+                            Text("+1d \(formattedHourForSettings(schedulingEngine.scheduleEndHour))")
+                                .font(.caption2)
+                                .fontWeight(.bold)
+                                .foregroundColor(.orange)
+                        }
+                        NumericInputField(value: $schedulingEngine.scheduleEndHour, range: 13...30, step: 1, unit: "h")
+                    }
+                }
+                Text("When to stop placing sessions. Values above 24 extend into the next day.")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
             }
-            
+
+            Section("Timeline Visibility") {
+                Toggle("Hide night hours", isOn: $schedulingEngine.hideNightHours)
+
+
+                LabeledContent("Morning Edge:") {
+                    HStack {
+                        NumericInputField(value: $schedulingEngine.dayStartHour, range: 0...12, step: 1, unit: "h")
+                    }
+                }
+                .padding(.leading, 10)
+                .disabled(!schedulingEngine.hideNightHours)
+
+                Text("Night edge is controlled by \"Schedule until\" above.")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+
             Section("Calendar Filters") {
                 if calendarService.authorizationStatus != .fullAccess {
                     Text("Grant calendar access to manage which calendars contribute busy events.")
@@ -101,30 +133,6 @@ struct AppSettingsView: View {
                 }
             }
             
-            Section("Timeline Visibility") {
-                Toggle("Hide night hours", isOn: $schedulingEngine.hideNightHours)
-
-                
-                LabeledContent("Morning Edge:") {
-                    HStack {
-                        NumericInputField(value: $schedulingEngine.dayStartHour, range: 0...12, step: 1, unit: "h")
-                    }
-                }
-                .padding(.leading, 10)
-                .disabled(!schedulingEngine.hideNightHours)
-                
-                LabeledContent("Night Edge:") {
-                    HStack {
-                        NumericInputField(value: $schedulingEngine.dayEndHour, range: 13...24, step: 1, unit: "h")
-                    }
-                }
-                .padding(.leading, 10)
-                .disabled(!schedulingEngine.hideNightHours)
-                Text("Adjust which hours are visible on the timeline. When enabled, you can set the visible range for morning and night edges.")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-            }
-
             Section("Tips") {
                 Toggle("Show \"Did you know?\" card", isOn: $schedulingEngine.showDidYouKnowCard)
                 Text("Displays rotating tips next of how to use the app.")
@@ -251,6 +259,18 @@ struct AppSettingsView: View {
         } catch {
             print("Failed to reset permissions: \(error)")
         }
+    }
+
+    private func formattedHourForSettings(_ hour: Int) -> String {
+        let formatter = DateFormatter()
+        formatter.dateStyle = .none
+        formatter.timeStyle = .short
+        var components = DateComponents()
+        components.hour = hour % 24
+        if let date = Calendar.current.date(from: components) {
+            return formatter.string(from: date)
+        }
+        return "\(hour % 24):00"
     }
 }
 

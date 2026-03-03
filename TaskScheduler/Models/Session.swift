@@ -42,7 +42,7 @@ enum SessionType: String, Codable, CaseIterable, Identifiable {
 struct ScheduledSession: Identifiable, Equatable {
     let id: UUID
     let type: SessionType
-    let title: String
+    var title: String
     var startTime: Date
     var endTime: Date
     let calendarName: String

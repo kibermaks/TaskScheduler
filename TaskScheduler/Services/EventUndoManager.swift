@@ -7,11 +7,37 @@ class EventUndoManager: ObservableObject {
 
     struct EventTimeChange: Equatable {
         let eventId: String
+        let sessionId: UUID?  // non-nil for projected session changes
         let oldStartTime: Date
         let oldEndTime: Date
         let newStartTime: Date
         let newEndTime: Date
         let description: String  // e.g. "Move Meeting" or "Resize Meeting"
+
+        init(eventId: String, oldStartTime: Date, oldEndTime: Date, newStartTime: Date, newEndTime: Date, description: String) {
+            self.eventId = eventId
+            self.sessionId = nil
+            self.oldStartTime = oldStartTime
+            self.oldEndTime = oldEndTime
+            self.newStartTime = newStartTime
+            self.newEndTime = newEndTime
+            self.description = description
+        }
+
+        init(sessionId: UUID, oldStartTime: Date, oldEndTime: Date, newStartTime: Date, newEndTime: Date, description: String) {
+            self.eventId = ""
+            self.sessionId = sessionId
+            self.oldStartTime = oldStartTime
+            self.oldEndTime = oldEndTime
+            self.newStartTime = newStartTime
+            self.newEndTime = newEndTime
+            self.description = description
+        }
+    }
+
+    /// Whether the undo stack contains any projected session changes (for unfreeze tracking)
+    var hasSessionChanges: Bool {
+        undoStack.contains(where: { $0.sessionId != nil })
     }
 
     @Published private(set) var canUndo = false
@@ -35,6 +61,16 @@ class EventUndoManager: ObservableObject {
         guard let change = undoStack.popLast() else { return nil }
         redoStack.append(change)
         updateState()
+        if let sid = change.sessionId {
+            return EventTimeChange(
+                sessionId: sid,
+                oldStartTime: change.newStartTime,
+                oldEndTime: change.newEndTime,
+                newStartTime: change.oldStartTime,
+                newEndTime: change.oldEndTime,
+                description: "Undo \(change.description)"
+            )
+        }
         return EventTimeChange(
             eventId: change.eventId,
             oldStartTime: change.newStartTime,

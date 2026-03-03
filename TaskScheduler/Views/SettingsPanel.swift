@@ -104,20 +104,20 @@ struct SettingsPanel: View {
                     .font(.headline)
                     .foregroundColor(.white)
             }
-            
+
             Toggle(isOn: $schedulingEngine.hideNightHours) {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Hide night hours")
                         .font(.system(size: 13))
                         .foregroundColor(.white.opacity(0.8))
-                    Text(schedulingEngine.hideNightHours ? "Showing \(formattedHour(schedulingEngine.dayStartHour)) - \(formattedHour(schedulingEngine.dayEndHour))" : "Showing full 24h")
+                    Text(schedulingEngine.hideNightHours ? "Showing \(formattedHour(schedulingEngine.dayStartHour)) - \(schedulingEngine.scheduleEndHour > 24 ? "+1d " : "")\(formattedHour(schedulingEngine.scheduleEndHour))" : "Showing full 24h")
                         .font(.system(size: 11))
                         .foregroundColor(.white.opacity(0.5))
                 }
             }
             .toggleStyle(.switch)
             .tint(Color(hex: "3B82F6"))
-            
+
             if schedulingEngine.hideNightHours {
                 VStack(spacing: 8) {
                     HStack {
@@ -127,20 +127,46 @@ struct SettingsPanel: View {
                         Spacer()
                         NumericInputField(value: $schedulingEngine.dayStartHour, range: 0...12, unit: "h")
                     }
-                    
-                    HStack {
-                        Text("Night Edge:")
-                            .font(.system(size: 12))
-                            .foregroundColor(.white.opacity(0.6))
-                        Spacer()
-                        NumericInputField(value: $schedulingEngine.dayEndHour, range: 13...24, unit: "h")
-                    }
+
+                    Text("Night edge controlled by Schedule Until in Settings")
+                        .font(.system(size: 11))
+                        .foregroundColor(.white.opacity(0.4))
+                        .italic()
                 }
                 .padding(.leading, 8)
             }
+
         }
     }
-    
+
+    // MARK: - Schedule Until Section
+
+    private var scheduleUntilSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Image(systemName: "moon.fill")
+                    .foregroundColor(.orange)
+                Text("Schedule Until")
+                    .font(.headline)
+                    .foregroundColor(.white)
+            }
+
+            HStack {
+                Text("End hour:")
+                    .font(.system(size: 13))
+                    .foregroundColor(.white.opacity(0.8))
+                Spacer()
+                if schedulingEngine.scheduleEndHour > 24 {
+                    Text("+1d \(formattedHour(schedulingEngine.scheduleEndHour))")
+                        .font(.system(size: 11, weight: .bold))
+                        .foregroundColor(.orange)
+                }
+                NumericInputField(value: $schedulingEngine.scheduleEndHour, range: 13...30, unit: "h")
+            }
+            .help("When to stop placing sessions. Values above 24 extend into the next day.")
+        }
+    }
+
     private func formattedHour(_ hour: Int) -> String {
         let calendar = Calendar.current
         var components = DateComponents()
@@ -359,7 +385,18 @@ struct SettingsPanel: View {
                     Spacer()
                     NumericInputField(value: $schedulingEngine.deepSessionConfig.injectAfterEvery, range: 0...10, unit: "slots")
                 }
- 
+
+                if schedulingEngine.deepSessionConfig.sessionCount > 1 {
+                    HStack {
+                        Text("And then after:")
+                            .font(.system(size: 13))
+                            .foregroundColor(.white.opacity(0.7))
+                        Spacer()
+                        NumericInputField(value: $schedulingEngine.deepSessionConfig.andThenGap, range: 0...10, unit: "slots")
+                    }
+                    .help("Regular sessions between consecutive deep sessions (0 = back to back)")
+                }
+
                  NameFieldWithHistory(
                      label: "Name:",
                      text: $schedulingEngine.deepSessionConfig.name,
