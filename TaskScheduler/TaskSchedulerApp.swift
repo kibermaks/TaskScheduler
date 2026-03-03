@@ -4,6 +4,7 @@ import AppKit
 @main
 struct TaskSchedulerApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
+    @Environment(\.openWindow) private var openWindow
     @StateObject private var calendarService = CalendarService()
     @StateObject private var schedulingEngine = SchedulingEngine()
     @StateObject private var updateService = UpdateService()
@@ -22,7 +23,10 @@ struct TaskSchedulerApp: App {
         .windowStyle(.hiddenTitleBar)
         .commands {
             CommandGroup(replacing: .newItem) { }
-            CommandGroup(after: .appInfo) {
+            CommandGroup(replacing: .appInfo) {
+                Button("About Task Scheduler") {
+                    openWindow(id: "about")
+                }
                 Button("Check for Updates...") {
                     updateService.userInitiatedCheck()
                 }
@@ -60,6 +64,11 @@ struct TaskSchedulerApp: App {
             }
         }
         
+        Window("About Task Scheduler", id: "about") {
+            AboutView()
+        }
+        .defaultSize(width: 320, height: 420)
+
         Settings {
             AppSettingsView()
                 .environmentObject(calendarService)

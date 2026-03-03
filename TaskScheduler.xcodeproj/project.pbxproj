@@ -38,6 +38,7 @@
 		025 /* Changelog.swift in Sources */ = {isa = PBXBuildFile; fileRef = 125 /* Changelog.swift */; };
 		026 /* WhatsNewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 126 /* WhatsNewView.swift */; };
 		027 /* UpdateAlertSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 127 /* UpdateAlertSheet.swift */; };
+		028 /* AboutView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 128 /* AboutView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -74,6 +75,7 @@
 		125 /* Changelog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Changelog.swift; sourceTree = "<group>"; };
 		126 /* WhatsNewView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WhatsNewView.swift; sourceTree = "<group>"; };
 		127 /* UpdateAlertSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UpdateAlertSheet.swift; sourceTree = "<group>"; };
+		128 /* AboutView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AboutView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -144,6 +146,7 @@
 				116 /* NumericInputField.swift */,
 				123 /* TimeInputField.swift */,
 				124 /* DateInputField.swift */,
+				128 /* AboutView.swift */,
 				117 /* CalendarPermissionView.swift */,
 				118 /* CalendarSetupView.swift */,
 				119 /* CalendarPickerPopover.swift */,
@@ -265,6 +268,7 @@
 				025 /* Changelog.swift in Sources */,
 				026 /* WhatsNewView.swift in Sources */,
 				027 /* UpdateAlertSheet.swift in Sources */,
+				028 /* AboutView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -402,7 +406,7 @@
 				CODE_SIGN_ENTITLEMENTS = TaskScheduler/TaskScheduler.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 398;
+				CURRENT_PROJECT_VERSION = 402;
 				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_ASSET_PATHS = "";
 				ENABLE_APP_SANDBOX = NO;
@@ -439,7 +443,7 @@
 				CODE_SIGN_ENTITLEMENTS = TaskScheduler/TaskScheduler.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 398;
+				CURRENT_PROJECT_VERSION = 402;
 				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_ASSET_PATHS = "";
 				ENABLE_APP_SANDBOX = NO;

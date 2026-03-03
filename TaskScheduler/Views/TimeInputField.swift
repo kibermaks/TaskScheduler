@@ -149,13 +149,14 @@ struct TimeInputField: View {
             }
             let cal = Calendar.current
             var comp = cal.dateComponents([.year, .month, .day, .hour, .minute], from: date)
-            comp.hour = (comp.hour ?? 0) + hourDelta
+            let rawHour = (comp.hour ?? 0) + hourDelta
+            comp.hour = ((rawHour % 24) + 24) % 24
             comp.minute = newM
             if let newDate = cal.date(from: comp) {
                 date = newDate
             }
             minuteText = String(format: "%02d", newM)
-            hourText = String(format: "%02d", (comp.hour ?? 0) % 24)
+            hourText = String(format: "%02d", comp.hour ?? 0)
         }
     }
     
