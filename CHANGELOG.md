@@ -5,6 +5,29 @@ All notable changes to Task Scheduler will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.11] - 2026-03-03
+
+### Added
+
+- Freeze & manual layout mode: freeze projected sessions and freely move/resize them by hand; preset panel dims with a lock overlay while frozen
+- "Copy to..." context menu on timeline events to duplicate an event (time, title, notes, URL) to a nearby day in one click
+- Day picker dropdown ("⋮" button) before the Today button for quick navigation to recent days
+- Extended night-owl scheduling beyond midnight (up to +6 h next day) with "+1d" markers on the timeline
+- Deep session "and then..." spacing parameter to control the gap between consecutive deep sessions
+- What's New view that fetches the changelog from GitHub on first launch after an update
+- About Task Scheduler window
+- Event locking toggle in the Timeline to prevent accidental drag moves
+- Custom date and time input fields
+
+### Changed
+
+- Schedule Sessions button no longer shows a confirmation modal
+- Schedule Sessions split-button now hosts the "Create just planning" option in its dropdown
+
+### Fixed
+
+- Negative hour display when stepping minutes below 00:00 in the time stepper
+
 ## [1.10] - 2026-02-27
 
 ### Added
