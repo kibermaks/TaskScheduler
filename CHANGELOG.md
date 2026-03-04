@@ -5,6 +5,20 @@ All notable changes to Task Scheduler will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.12] - 2026-03-04
+
+### Added
+
+- Real-time schedule recalculation during event drag — projected sessions shift live as you move calendar events
+- Projected session displacement in Manual mode — dragging/resizing a projected session pushes overlapping sessions out of the way, respecting busy slots and rest durations
+- Long Rest projected blocks with configurable threshold and count for deep recovery breaks between sessions
+- Code signing and notarization — the app now ships notarized, eliminating Gatekeeper warnings on install
+
+### Changed
+
+- Optimistic UI updates for drag-drop to eliminate flicker
+- Timeline visibility now unified with schedule boundary
+
 ## [1.11] - 2026-03-03
 
 ### Added
