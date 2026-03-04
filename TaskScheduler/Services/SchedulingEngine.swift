@@ -1036,4 +1036,68 @@ class SchedulingEngine: ObservableObject {
             }
         }
     }
+
+    // MARK: - Projected Session Displacement
+
+    /// Returns the rest duration (in seconds) that follows a given session type.
+    private func restAfterSession(_ type: SessionType) -> TimeInterval {
+        switch type {
+        case .side: return TimeInterval(sideRestDuration * 60)
+        case .deep: return TimeInterval(deepRestDuration * 60)
+        default: return TimeInterval(restDuration * 60)
+        }
+    }
+
+    /// Displaces projected sessions that overlap with the dragged session,
+    /// pushing them forward in time while respecting calendar busy slots,
+    /// rest durations between sessions, and the earliest allowed time boundary.
+    /// Rest is added after each displaced session but NOT around the dragged item.
+    func displaceProjectedSessions(
+        draggedSessionId: UUID,
+        draggedStart: Date,
+        draggedEnd: Date,
+        busySlots: [BusyTimeSlot],
+        earliestTime: Date
+    ) {
+        let bufferDuration = TimeInterval(existingEventBuffer * 60)
+
+        // Build immovable obstacles from busy slots (with buffer) + the dragged session
+        var obstacles: [(start: Date, end: Date)] = busySlots.map {
+            ($0.startTime.addingTimeInterval(-bufferDuration),
+             $0.endTime.addingTimeInterval(bufferDuration))
+        }
+        // Dragged session is an obstacle but without rest padding
+        obstacles.append((draggedStart, draggedEnd))
+        obstacles.sort { $0.start < $1.start }
+
+        // Collect non-dragged sessions sorted by start time
+        let otherIndices = projectedSessions.enumerated()
+            .filter { $0.element.id != draggedSessionId }
+            .sorted { $0.element.startTime < $1.element.startTime }
+
+        for (idx, session) in otherIndices {
+            let duration = session.endTime.timeIntervalSince(session.startTime)
+            var candidateStart = max(session.startTime, earliestTime)
+
+            // Push forward until no overlap with any obstacle
+            var settled = false
+            while !settled {
+                let candidateEnd = candidateStart.addingTimeInterval(duration)
+                if let blocker = obstacles.first(where: { candidateStart < $0.end && candidateEnd > $0.start }) {
+                    candidateStart = blocker.end
+                } else {
+                    settled = true
+                }
+            }
+
+            let newEnd = candidateStart.addingTimeInterval(duration)
+            projectedSessions[idx].startTime = candidateStart
+            projectedSessions[idx].endTime = newEnd
+
+            // This placed session + its rest becomes an obstacle for subsequent ones
+            let rest = restAfterSession(session.type)
+            obstacles.append((candidateStart, newEnd.addingTimeInterval(rest)))
+            obstacles.sort { $0.start < $1.start }
+        }
+    }
 }

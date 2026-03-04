@@ -13,6 +13,10 @@ class EventUndoManager: ObservableObject {
         let newStartTime: Date
         let newEndTime: Date
         let description: String  // e.g. "Move Meeting" or "Resize Meeting"
+        /// Full snapshot of all projected sessions before this change (for displacement undo).
+        let sessionsSnapshot: [ScheduledSession]?
+        /// Full snapshot of all projected sessions after this change (for displacement redo).
+        let postSnapshot: [ScheduledSession]?
 
         init(eventId: String, oldStartTime: Date, oldEndTime: Date, newStartTime: Date, newEndTime: Date, description: String) {
             self.eventId = eventId
@@ -22,9 +26,11 @@ class EventUndoManager: ObservableObject {
             self.newStartTime = newStartTime
             self.newEndTime = newEndTime
             self.description = description
+            self.sessionsSnapshot = nil
+            self.postSnapshot = nil
         }
 
-        init(sessionId: UUID, oldStartTime: Date, oldEndTime: Date, newStartTime: Date, newEndTime: Date, description: String) {
+        init(sessionId: UUID, oldStartTime: Date, oldEndTime: Date, newStartTime: Date, newEndTime: Date, description: String, sessionsSnapshot: [ScheduledSession]? = nil, postSnapshot: [ScheduledSession]? = nil) {
             self.eventId = ""
             self.sessionId = sessionId
             self.oldStartTime = oldStartTime
@@ -32,6 +38,8 @@ class EventUndoManager: ObservableObject {
             self.newStartTime = newStartTime
             self.newEndTime = newEndTime
             self.description = description
+            self.sessionsSnapshot = sessionsSnapshot
+            self.postSnapshot = postSnapshot
         }
     }
 
@@ -68,7 +76,9 @@ class EventUndoManager: ObservableObject {
                 oldEndTime: change.newEndTime,
                 newStartTime: change.oldStartTime,
                 newEndTime: change.oldEndTime,
-                description: "Undo \(change.description)"
+                description: "Undo \(change.description)",
+                sessionsSnapshot: change.sessionsSnapshot,
+                postSnapshot: change.postSnapshot
             )
         }
         return EventTimeChange(

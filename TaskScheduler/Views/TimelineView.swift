@@ -65,6 +65,14 @@ struct TimelineView: View {
     @State private var renamingSessionId: UUID? = nil
     @State private var renameText: String = ""
 
+    // Throttle for real-time recalculation during drag
+    @State private var lastDragRecalcTime: Date = .distantPast
+    private let dragRecalcInterval: TimeInterval = 0.15 // 150ms throttle
+    // Snapshot of sessions before displacement began (for clean displacement each frame)
+    @State private var preDisplacementSessions: [ScheduledSession]? = nil
+    // Prevents drag re-initialization after Esc while mouse button is still held
+    @State private var dragCancelled: Bool = false
+
     private enum DragMode: Equatable {
         case none
         case move
@@ -112,7 +120,7 @@ struct TimelineView: View {
                 keyDownMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
                     // Esc cancels active drag/resize
                     if event.keyCode == 53, dragMode != .none {
-                        resetDragState()
+                        cancelDrag()
                         return nil
                     }
                     // Physical key code 6 = Z key on any layout.
@@ -868,7 +876,7 @@ extension TimelineView {
         .gesture(
             DragGesture(minimumDistance: 4)
                 .onChanged { value in
-                    guard !eventsLocked else { return }
+                    guard !eventsLocked, !dragCancelled else { return }
                     // Determine mode on first movement
                     if dragMode == .none {
                         let startY = value.startLocation.y
@@ -914,8 +922,19 @@ extension TimelineView {
                     case .none:
                         break
                     }
+
+                    // Real-time recalculation with throttle
+                    if let previewStart = dragPreviewStartTime,
+                       let previewEnd = dragPreviewEndTime {
+                        let now = Date()
+                        if now.timeIntervalSince(lastDragRecalcTime) >= dragRecalcInterval {
+                            lastDragRecalcTime = now
+                            recalculateWithDraggedSlot(slot, newStart: previewStart, newEnd: previewEnd)
+                        }
+                    }
                 }
                 .onEnded { _ in
+                    guard !dragCancelled else { dragCancelled = false; return }
                     if dragMode == .move { NSCursor.pop() }
                     commitDrag(for: slot)
                 }
@@ -1037,7 +1056,7 @@ extension TimelineView {
         .gesture(
             DragGesture(minimumDistance: 4)
                 .onChanged { value in
-                    guard !eventsLocked else { return }
+                    guard !eventsLocked, !dragCancelled else { return }
                     if dragMode == .none {
                         let startY = value.startLocation.y
                         if startY < edgeZone {
@@ -1053,6 +1072,8 @@ extension TimelineView {
                         if !schedulingEngine.sessionsFrozen {
                             schedulingEngine.sessionsFrozen = true
                         }
+                        // Snapshot sessions before displacement
+                        preDisplacementSessions = schedulingEngine.projectedSessions
                     }
 
                     switch dragMode {
@@ -1086,8 +1107,29 @@ extension TimelineView {
                     case .none:
                         break
                     }
+
+                    // Displacement with throttle
+                    if let previewStart = dragPreviewStartTime,
+                       let previewEnd = dragPreviewEndTime {
+                        let now = Date()
+                        if now.timeIntervalSince(lastDragRecalcTime) >= dragRecalcInterval {
+                            lastDragRecalcTime = now
+                            // Restore from snapshot before each displacement pass
+                            if let snapshot = preDisplacementSessions {
+                                schedulingEngine.projectedSessions = snapshot
+                            }
+                            schedulingEngine.displaceProjectedSessions(
+                                draggedSessionId: session.id,
+                                draggedStart: previewStart,
+                                draggedEnd: previewEnd,
+                                busySlots: calendarService.busySlots,
+                                earliestTime: startTime
+                            )
+                        }
+                    }
                 }
                 .onEnded { _ in
+                    guard !dragCancelled else { dragCancelled = false; return }
                     if dragMode == .move { NSCursor.pop() }
                     commitSessionDrag(for: session)
                 }
@@ -1751,6 +1793,8 @@ extension TimelineView {
             _ = eventUndoManager.undo()
         } else {
             optimisticallyUpdateSlot(id: slot.id, newStart: newStart, newEnd: newEnd)
+            // Final recalculation with committed position
+            recalculateWithDraggedSlot(slot, newStart: newStart, newEnd: newEnd)
         }
 
         Task {
@@ -1761,24 +1805,131 @@ extension TimelineView {
     }
 
     private func resetDragState() {
+        if dragMode == .move { NSCursor.pop() }
         dragMode = .none
         dragSlotId = nil
         dragSessionId = nil
         dragPreviewStartTime = nil
         dragPreviewEndTime = nil
+        preDisplacementSessions = nil
+    }
+
+    /// Cancel drag and revert all changes (called on Escape).
+    private func cancelDrag() {
+        // Revert displaced projected sessions
+        if let snapshot = preDisplacementSessions {
+            schedulingEngine.projectedSessions = snapshot
+        }
+        // Revert real-time schedule recalculation (calendar event drag)
+        if dragSlotId != nil, !schedulingEngine.sessionsFrozen {
+            recalculateWithOriginalSlots()
+        }
+        dragCancelled = true
+        resetDragState()
+    }
+
+    /// Recalculates schedule using the original (unmodified) busy slots.
+    private func recalculateWithOriginalSlots() {
+        let planningExists = calendarService.hasPlanningSession(for: selectedDate)
+        let existing = calendarService.countExistingSessions(
+            for: selectedDate,
+            workCalendar: CalendarDescriptor(
+                name: schedulingEngine.workCalendarName,
+                identifier: schedulingEngine.workCalendarIdentifier
+            ),
+            sideCalendar: CalendarDescriptor(
+                name: schedulingEngine.sideCalendarName,
+                identifier: schedulingEngine.sideCalendarIdentifier
+            ),
+            deepConfig: schedulingEngine.deepSessionConfig
+        )
+        _ = schedulingEngine.generateSchedule(
+            startTime: startTime,
+            baseDate: selectedDate,
+            busySlots: calendarService.busySlots,
+            includePlanning: !planningExists,
+            existingSessions: (work: existing.work, side: existing.side, deep: existing.deep),
+            existingTitles: existing.titles
+        )
+    }
+
+    /// Recalculates projected schedule using modified busy slots (during calendar event drag).
+    private func recalculateWithDraggedSlot(_ slot: BusyTimeSlot, newStart: Date, newEnd: Date) {
+        guard !schedulingEngine.sessionsFrozen else { return }
+
+        // Build modified busy slots with the dragged event at its new position
+        var modifiedSlots = calendarService.busySlots
+        if let idx = modifiedSlots.firstIndex(where: { $0.id == slot.id }) {
+            let old = modifiedSlots[idx]
+            modifiedSlots[idx] = BusyTimeSlot(
+                id: old.id, title: old.title, startTime: newStart, endTime: newEnd,
+                notes: old.notes, url: old.url, calendarName: old.calendarName,
+                calendarColor: old.calendarColor, calendarIdentifier: old.calendarIdentifier
+            )
+        }
+
+        let planningExists = calendarService.hasPlanningSession(for: selectedDate)
+        let existing = calendarService.countExistingSessions(
+            for: selectedDate,
+            workCalendar: CalendarDescriptor(
+                name: schedulingEngine.workCalendarName,
+                identifier: schedulingEngine.workCalendarIdentifier
+            ),
+            sideCalendar: CalendarDescriptor(
+                name: schedulingEngine.sideCalendarName,
+                identifier: schedulingEngine.sideCalendarIdentifier
+            ),
+            deepConfig: schedulingEngine.deepSessionConfig
+        )
+
+        _ = schedulingEngine.generateSchedule(
+            startTime: startTime,
+            baseDate: selectedDate,
+            busySlots: modifiedSlots,
+            includePlanning: !planningExists,
+            existingSessions: (work: existing.work, side: existing.side, deep: existing.deep),
+            existingTitles: existing.titles
+        )
     }
 
     private func commitSessionDrag(for session: ScheduledSession) {
         guard let newStart = dragPreviewStartTime,
               let newEnd = dragPreviewEndTime else {
+            // Restore original positions if drag was a no-op
+            if let snapshot = preDisplacementSessions {
+                schedulingEngine.projectedSessions = snapshot
+            }
             resetDragState()
             return
         }
         guard newStart != session.startTime || newEnd != session.endTime else {
+            // Restore original positions if nothing changed
+            if let snapshot = preDisplacementSessions {
+                schedulingEngine.projectedSessions = snapshot
+            }
             resetDragState()
             return
         }
 
+        // Restore from snapshot, commit dragged session, then do final displacement
+        if let snapshot = preDisplacementSessions {
+            schedulingEngine.projectedSessions = snapshot
+        }
+        if let idx = schedulingEngine.projectedSessions.firstIndex(where: { $0.id == session.id }) {
+            schedulingEngine.projectedSessions[idx].startTime = newStart
+            schedulingEngine.projectedSessions[idx].endTime = newEnd
+        }
+
+        // Final displacement pass
+        schedulingEngine.displaceProjectedSessions(
+            draggedSessionId: session.id,
+            draggedStart: newStart,
+            draggedEnd: newEnd,
+            busySlots: calendarService.busySlots,
+            earliestTime: startTime
+        )
+
+        // Record undo with pre-drag snapshot and post-displacement snapshot
         let description = dragMode == .move ? "Move \(session.title)" : "Resize \(session.title)"
         eventUndoManager.record(EventUndoManager.EventTimeChange(
             sessionId: session.id,
@@ -1786,13 +1937,11 @@ extension TimelineView {
             oldEndTime: session.endTime,
             newStartTime: newStart,
             newEndTime: newEnd,
-            description: description
+            description: description,
+            sessionsSnapshot: preDisplacementSessions,
+            postSnapshot: schedulingEngine.projectedSessions
         ))
 
-        if let idx = schedulingEngine.projectedSessions.firstIndex(where: { $0.id == session.id }) {
-            schedulingEngine.projectedSessions[idx].startTime = newStart
-            schedulingEngine.projectedSessions[idx].endTime = newEnd
-        }
         resetDragState()
     }
 
@@ -1810,6 +1959,8 @@ extension TimelineView {
         let centerX = xOffset + blockWidth / 2
         let centerY = yPos + blockHeight / 2
 
+        let isCompact = blockHeight < 25
+
         return ZStack(alignment: .topLeading) {
             RoundedRectangle(cornerRadius: 4)
                 .fill(session.type.color.opacity(0.5))
@@ -1819,12 +1970,27 @@ extension TimelineView {
                 )
                 .shadow(color: Color.blue.opacity(0.3), radius: 8, y: 2)
 
-            if blockHeight >= 16 {
-                VStack(alignment: .leading, spacing: 1) {
+            if isCompact {
+                HStack(spacing: 3) {
+                    Image(systemName: session.type.icon)
+                        .font(.system(size: 10))
                     Text(session.title)
-                        .font(.system(size: 12, weight: .medium))
-                        .foregroundColor(.white)
+                        .font(.system(size: 11, weight: .medium))
                         .lineLimit(1)
+                }
+                .foregroundColor(.white)
+                .padding(3)
+            } else if blockHeight >= 16 {
+                VStack(alignment: .leading, spacing: 1) {
+                    HStack(alignment: .top, spacing: 3) {
+                        Image(systemName: session.type.icon)
+                            .font(.system(size: 11))
+                            .padding(.top, 1)
+                        Text(session.title)
+                            .font(.system(size: 12, weight: .medium))
+                            .lineLimit(1)
+                    }
+                    .foregroundColor(.white)
                     if blockHeight > 30 {
                         Text(timeRangeString(start: newStart, end: newEnd))
                             .font(.system(size: 10, weight: .bold))
@@ -1844,9 +2010,12 @@ extension TimelineView {
 
     private func performUndo() {
         guard let change = eventUndoManager.undo() else { return }
-        if let sessionId = change.sessionId {
-            // Undo projected session change
-            if let idx = schedulingEngine.projectedSessions.firstIndex(where: { $0.id == sessionId }) {
+        if change.sessionId != nil {
+            // Undo projected session change — restore full snapshot if available
+            if let snapshot = change.sessionsSnapshot {
+                schedulingEngine.projectedSessions = snapshot
+            } else if let sessionId = change.sessionId,
+                      let idx = schedulingEngine.projectedSessions.firstIndex(where: { $0.id == sessionId }) {
                 schedulingEngine.projectedSessions[idx].startTime = change.newStartTime
                 schedulingEngine.projectedSessions[idx].endTime = change.newEndTime
             }
@@ -1869,12 +2038,16 @@ extension TimelineView {
 
     private func performRedo() {
         guard let change = eventUndoManager.redo() else { return }
-        if let sessionId = change.sessionId {
+        if change.sessionId != nil {
             // Redo projected session change — re-freeze if needed
             if !schedulingEngine.sessionsFrozen {
                 schedulingEngine.sessionsFrozen = true
             }
-            if let idx = schedulingEngine.projectedSessions.firstIndex(where: { $0.id == sessionId }) {
+            // Restore full post-change snapshot if available
+            if let postSnapshot = change.postSnapshot {
+                schedulingEngine.projectedSessions = postSnapshot
+            } else if let sessionId = change.sessionId,
+                      let idx = schedulingEngine.projectedSessions.firstIndex(where: { $0.id == sessionId }) {
                 schedulingEngine.projectedSessions[idx].startTime = change.newStartTime
                 schedulingEngine.projectedSessions[idx].endTime = change.newEndTime
             }
