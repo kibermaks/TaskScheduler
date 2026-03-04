@@ -72,6 +72,10 @@ struct TimelineView: View {
     @State private var preDisplacementSessions: [ScheduledSession]? = nil
     // Prevents drag re-initialization after Esc while mouse button is still held
     @State private var dragCancelled: Bool = false
+    // Auto-scroll during drag
+    @State private var scrollProxy: ScrollViewProxy? = nil
+    @State private var lastAutoScrollTime: Date = .distantPast
+    @State private var scrollViewFrame: CGRect = .zero
 
     private enum DragMode: Equatable {
         case none
@@ -315,11 +319,17 @@ struct TimelineView: View {
                 }
                 .padding(.vertical, 20)
                 .frame(height: CGFloat(visibleHours.count) * hourHeight + 40)
-                .onAppear { scrollToStartTime(proxy: proxy) }
+                .onAppear { scrollProxy = proxy; scrollToStartTime(proxy: proxy) }
                 .onChange(of: startTime) { _, _ in scrollToStartTime(proxy: proxy) }
             }
         }
-        .background(Color.white.opacity(0.02))
+        .background(
+            GeometryReader { geo in
+                Color.white.opacity(0.02)
+                    .onAppear { scrollViewFrame = geo.frame(in: .global) }
+                    .onChange(of: geo.frame(in: .global)) { _, newFrame in scrollViewFrame = newFrame }
+            }
+        )
         .cornerRadius(12)
         .simultaneousGesture(TapGesture().onEnded { _ in
             NSApp.keyWindow?.makeFirstResponder(nil)
@@ -482,6 +492,60 @@ struct TimelineView: View {
         let visibleStart = schedulingEngine.hideNightHours ? schedulingEngine.dayStartHour : 0
         let targetHour = max(visibleStart, hour)
         proxy.scrollTo("hour-\(targetHour)", anchor: .center)
+    }
+
+    /// During drag, scroll the timeline when the mouse is near the top/bottom edge of the scroll view.
+    private func autoScrollDuringDrag() {
+        guard dragMode != .none, let proxy = scrollProxy else { return }
+        let now = Date()
+        guard now.timeIntervalSince(lastAutoScrollTime) >= 0.12 else { return }
+
+        // Get mouse position in screen coordinates (flipped for AppKit → SwiftUI)
+        let mouseScreen = NSEvent.mouseLocation
+        guard let window = NSApp.keyWindow else { return }
+        let windowFrame = window.frame
+
+        // Convert from AppKit screen coords (origin bottom-left) to SwiftUI global (origin top-left)
+        let screenHeight = NSScreen.main?.frame.height ?? windowFrame.maxY
+        let mouseY = screenHeight - mouseScreen.y
+
+        // Check if mouse is within the edge zone (30pt from top/bottom of scroll view)
+        let edgeThreshold: CGFloat = 30
+        let distFromTop = mouseY - scrollViewFrame.minY
+        let distFromBottom = scrollViewFrame.maxY - mouseY
+
+        let targetTime: Date?
+        if distFromTop < edgeThreshold && distFromTop > 0 {
+            // Near top edge — scroll up: use preview start time minus 1 hour
+            if let t = dragPreviewStartTime {
+                targetTime = t.addingTimeInterval(-3600)
+            } else { targetTime = nil }
+        } else if distFromBottom < edgeThreshold && distFromBottom > 0 {
+            // Near bottom edge — scroll down: use preview end time plus 1 hour
+            if let t = dragPreviewEndTime {
+                targetTime = t.addingTimeInterval(3600)
+            } else { targetTime = nil }
+        } else {
+            return // Not near edge, no scrolling needed
+        }
+        guard let time = targetTime else { return }
+
+        let cal = Calendar.current
+        let hour: Int
+        if cal.isDate(time, inSameDayAs: selectedDate) {
+            hour = cal.component(.hour, from: time)
+        } else {
+            let startOfSelectedDay = cal.startOfDay(for: selectedDate)
+            let diff = time.timeIntervalSince(startOfSelectedDay)
+            hour = Int(diff / 3600)
+        }
+
+        let firstVisible = schedulingEngine.hideNightHours ? schedulingEngine.dayStartHour : 0
+        let clampedHour = max(firstVisible, min(hour, effectiveEndHour - 1))
+        withAnimation(.easeOut(duration: 0.2)) {
+            proxy.scrollTo("hour-\(clampedHour)", anchor: .center)
+        }
+        lastAutoScrollTime = now
     }
     
     private var formattedDate: String {
@@ -935,6 +999,7 @@ extension TimelineView {
                             recalculateWithDraggedSlot(slot, newStart: previewStart, newEnd: previewEnd)
                         }
                     }
+                    autoScrollDuringDrag()
                 }
                 .onEnded { _ in
                     guard !dragCancelled else { dragCancelled = false; return }
@@ -1144,6 +1209,7 @@ extension TimelineView {
                             )
                         }
                     }
+                    autoScrollDuringDrag()
                 }
                 .onEnded { _ in
                     guard !dragCancelled else { dragCancelled = false; return }
