@@ -1011,7 +1011,7 @@ struct RightPanel: View {
     @State private var showingProjectionHelp = false
     @State private var didYouKnowIndex = 0
     
-    private let availabilityHelp = "Shows calculated free time gaps in your calendar. 'Possible' counts indicate how many sessions of each type could fit into these gaps based on your duration settings."
+    private let availabilityHelpBase = "Shows calculated free time gaps in your calendar. 'Possible' counts indicate how many sessions of each type could fit into these gaps based on your duration settings."
     private let projectionHelp = "A live preview of how many sessions will be placed in your calendar and when you might be done for the day."
     private let didYouKnowFacts: [DidYouKnowFact] = [
         DidYouKnowFact(
@@ -1079,10 +1079,18 @@ struct RightPanel: View {
                 }
                 .buttonStyle(.plain)
                 .popover(isPresented: $showingAvailabilityHelp) {
-                    Text(availabilityHelp)
-                        .font(.system(size: 13))
-                        .padding()
-                        .frame(width: 250)
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text(availabilityHelpBase)
+                        if schedulingEngine.scheduleEndHour > 24 {
+                            Text("Includes +1d hours until \(formattedHourForCard(schedulingEngine.scheduleEndHour))")
+                                .font(.system(size: 12))
+                                .foregroundColor(.orange.opacity(0.9))
+                                .italic()
+                        }
+                    }
+                    .font(.system(size: 13))
+                    .padding()
+                    .frame(width: 250)
                 }
             }
             VStack(alignment: .leading, spacing: 8) {
@@ -1091,12 +1099,6 @@ struct RightPanel: View {
                 row("Possible Side:", "\(avail.possibleSideSessions) sessions", Color(hex: "3B82F6"))
                 if schedulingEngine.deepSessionConfig.enabled {
                     row("Possible Deep:", "\(avail.possibleDeepSessions) sessions", Color(hex: "10B981"))
-                }
-                if schedulingEngine.scheduleEndHour > 24 {
-                    Text("Includes +1d hours until \(formattedHourForCard(schedulingEngine.scheduleEndHour))")
-                        .font(.system(size: 11))
-                        .foregroundColor(.orange.opacity(0.7))
-                        .italic()
                 }
             }
             .font(.system(size: 13)).foregroundColor(.white.opacity(0.8))
@@ -1215,6 +1217,8 @@ struct RightPanel: View {
         let sc = sessions.filter { $0.type == .side }.count
         let pc = sessions.filter { $0.type == .planning }.count
         let dc = sessions.filter { $0.type == .deep }.count
+        let lrc = sessions.filter { $0.type == .bigRest }.count
+        let sessionCount = sessions.filter { $0.type != .bigRest }.count
         let formatter = DateFormatter()
         formatter.dateStyle = .none
         formatter.timeStyle = .short
@@ -1224,7 +1228,15 @@ struct RightPanel: View {
             countRow(.side, sc)
             if dc > 0 { countRow(.deep, dc) }
             Divider().background(Color.white.opacity(0.2))
-            HStack { Text("Total:").fontWeight(.medium); Spacer(); Text("\(sessions.count) sessions").fontWeight(.semibold) }
+            HStack { Text("Total:").fontWeight(.medium); Spacer(); Text("\(sessionCount) sessions").fontWeight(.semibold) }
+            if lrc > 0 {
+                HStack(spacing: 4) {
+                    Image(systemName: "pause.circle.fill").font(.system(size: 9)).foregroundColor(SessionType.bigRest.color.opacity(0.6))
+                    Text("\(lrc) long \(lrc == 1 ? "rest" : "rests") between sessions")
+                        .font(.system(size: 11))
+                        .foregroundColor(.white.opacity(0.4))
+                }
+            }
             if let last = sessions.last {
                 let isNextDay = !Calendar.current.isDate(last.endTime, inSameDayAs: selectedDate)
                 HStack {

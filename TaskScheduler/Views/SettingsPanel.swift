@@ -689,7 +689,7 @@ struct SettingsPanel: View {
                         .font(.system(size: 13))
                         .foregroundColor(.white.opacity(0.7))
                     Spacer()
-                    NumericInputField(value: $schedulingEngine.bigRestConfig.duration, range: 15...120, step: 15, unit: "min")
+                    NumericInputField(value: $schedulingEngine.bigRestConfig.duration, range: 15...120, step: 5, unit: "min")
                 }
 
                 HStack {
