@@ -304,12 +304,14 @@ class CalendarService: ObservableObject {
     
     // MARK: - Event Creation
     
+    @discardableResult
     func createEvent(
         title: String,
         startDate: Date,
         endDate: Date,
         calendar: CalendarDescriptor,
-        notes: String? = nil
+        notes: String? = nil,
+        url: URL? = nil
     ) -> Bool {
         guard let destination = self.calendar(from: calendar) else {
             errorMessage = "Calendar '\(calendar.name)' not found"
@@ -322,6 +324,7 @@ class CalendarService: ObservableObject {
         event.endDate = endDate
         event.calendar = destination
         event.notes = notes
+        event.url = url
         
         do {
             try eventStore.save(event, span: .thisEvent)
@@ -331,11 +334,33 @@ class CalendarService: ObservableObject {
             return false
         }
     }
+
+    /// Restores a deleted event from snapshot. Returns new event identifier on success.
+    func restoreEvent(_ snapshot: EventDeleteSnapshot) -> String? {
+        guard let destination = calendar(from: CalendarDescriptor(name: snapshot.calendarName, identifier: snapshot.calendarIdentifier)) else {
+            return nil
+        }
+        let event = EKEvent(eventStore: eventStore)
+        event.title = snapshot.title
+        event.startDate = snapshot.startDate
+        event.endDate = snapshot.endDate
+        event.calendar = destination
+        event.notes = snapshot.notes
+        event.url = snapshot.url
+        do {
+            try eventStore.save(event, span: .thisEvent)
+            return event.eventIdentifier
+        } catch {
+            errorMessage = "Failed to restore event: \(error.localizedDescription)"
+            return nil
+        }
+    }
     
-    func copyEventToDay(eventId: String, targetDate: Date) -> Bool {
+    /// Copies an event to a target date. Returns (success, newEventId, targetStartTime).
+    func copyEventToDay(eventId: String, targetDate: Date) -> (success: Bool, newEventId: String?, targetStartTime: Date?) {
         guard let source = eventStore.event(withIdentifier: eventId) else {
             errorMessage = "Event not found"
-            return false
+            return (false, nil, nil)
         }
 
         let calendar = Calendar.current
@@ -349,7 +374,7 @@ class CalendarService: ObservableObject {
                                            second: startComps.second ?? 0,
                                            of: targetDate) else {
             errorMessage = "Failed to calculate target date"
-            return false
+            return (false, nil, nil)
         }
         let newEnd = newStart.addingTimeInterval(duration)
 
@@ -363,9 +388,21 @@ class CalendarService: ObservableObject {
 
         do {
             try eventStore.save(copy, span: .thisEvent)
-            return true
+            return (true, copy.eventIdentifier, newStart)
         } catch {
             errorMessage = "Failed to copy event: \(error.localizedDescription)"
+            return (false, nil, nil)
+        }
+    }
+
+    /// Deletes a single event by identifier. Returns true if deleted successfully.
+    func deleteEvent(identifier: String) -> Bool {
+        guard let event = eventStore.event(withIdentifier: identifier) else { return false }
+        do {
+            try eventStore.remove(event, span: .thisEvent)
+            return true
+        } catch {
+            errorMessage = "Failed to delete event: \(error.localizedDescription)"
             return false
         }
     }

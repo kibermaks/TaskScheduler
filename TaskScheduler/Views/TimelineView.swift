@@ -5,7 +5,8 @@ import AppKit
 struct TimelineView: View {
     let selectedDate: Date
     let startTime: Date
-    
+    var onCopySuccess: ((CopyToastInfo) -> Void)? = nil
+
     @EnvironmentObject var calendarService: CalendarService
     @EnvironmentObject var schedulingEngine: SchedulingEngine
     
@@ -188,8 +189,9 @@ struct TimelineView: View {
                                 let formatter = DateFormatter()
                                 formatter.dateFormat = "EEE, MMM d"
                                 let label = formatter.string(from: copyTargetDate)
-                                if calendarService.copyEventToDay(eventId: slotId, targetDate: copyTargetDate) {
-                                    schedulingEngine.schedulingMessage = "Copied \"\(slot.title)\" to \(label)"
+                                let result = calendarService.copyEventToDay(eventId: slotId, targetDate: copyTargetDate)
+                                if result.success, let eventId = result.newEventId, let targetStart = result.targetStartTime {
+                                    onCopySuccess?(CopyToastInfo(title: slot.title, targetLabel: label, targetDate: copyTargetDate, targetStartTime: targetStart, newEventId: eventId))
                                     Task { await calendarService.fetchEvents(for: selectedDate) }
                                 } else {
                                     schedulingEngine.schedulingMessage = "Failed to copy \"\(slot.title)\""
@@ -514,33 +516,31 @@ struct TimelineView: View {
         let now = Date()
         guard now.timeIntervalSince(lastAutoScrollTime) >= 0.12 else { return }
 
-        // Get mouse position in screen coordinates (flipped for AppKit → SwiftUI)
-        let mouseScreen = NSEvent.mouseLocation
-        guard let window = NSApp.keyWindow else { return }
-        let windowFrame = window.frame
+        guard let window = NSApp.keyWindow,
+              let contentView = window.contentView else { return }
 
-        // Convert from AppKit screen coords (origin bottom-left) to SwiftUI global (origin top-left)
-        let screenHeight = NSScreen.main?.frame.height ?? windowFrame.maxY
-        let mouseY = screenHeight - mouseScreen.y
+        // Mouse in window coords (AppKit: origin bottom-left), flip to top-left
+        let mouseInWindow = window.mouseLocationOutsideOfEventStream
+        let mouseInView = contentView.convert(mouseInWindow, from: nil)
+        let flippedY = contentView.bounds.height - mouseInView.y
 
-        // Check if mouse is within the edge zone (30pt from top/bottom of scroll view)
-        let edgeThreshold: CGFloat = 30
-        let distFromTop = mouseY - scrollViewFrame.minY
-        let distFromBottom = scrollViewFrame.maxY - mouseY
+        // scrollViewFrame is in SwiftUI .global coords (origin = top-left of window content)
+        let topEdge: CGFloat = 50   // larger zone on top to account for title/header
+        let bottomEdge: CGFloat = 30
+        let distFromTop = flippedY - scrollViewFrame.minY
+        let distFromBottom = scrollViewFrame.maxY - flippedY
 
         let targetTime: Date?
-        if distFromTop < edgeThreshold && distFromTop > 0 {
-            // Near top edge — scroll up: use preview start time minus 1 hour
+        if distFromTop >= 0 && distFromTop < topEdge {
             if let t = dragPreviewStartTime {
                 targetTime = t.addingTimeInterval(-3600)
             } else { targetTime = nil }
-        } else if distFromBottom < edgeThreshold && distFromBottom > 0 {
-            // Near bottom edge — scroll down: use preview end time plus 1 hour
+        } else if distFromBottom >= 0 && distFromBottom < bottomEdge {
             if let t = dragPreviewEndTime {
                 targetTime = t.addingTimeInterval(3600)
             } else { targetTime = nil }
         } else {
-            return // Not near edge, no scrolling needed
+            return
         }
         guard let time = targetTime else { return }
 
@@ -1041,11 +1041,16 @@ extension TimelineView {
                 selectedBusySlot = slot
             }
             Divider()
+            Button("Delete", role: .destructive) {
+                deleteBusySlot(slot)
+            }
+            Divider()
             Menu("Copy to...") {
                 ForEach(copyTargetDays(), id: \.label) { target in
                     Button(target.label) {
-                        if calendarService.copyEventToDay(eventId: slot.id, targetDate: target.date) {
-                            schedulingEngine.schedulingMessage = "Copied \"\(slot.title)\" to \(target.label)"
+                        let result = calendarService.copyEventToDay(eventId: slot.id, targetDate: target.date)
+                        if result.success, let eventId = result.newEventId, let targetStart = result.targetStartTime {
+                            onCopySuccess?(CopyToastInfo(title: slot.title, targetLabel: target.label, targetDate: target.date, targetStartTime: targetStart, newEventId: eventId))
                             Task { await calendarService.fetchEvents(for: selectedDate) }
                         } else {
                             schedulingEngine.schedulingMessage = "Failed to copy \"\(slot.title)\""
@@ -1644,6 +1649,25 @@ extension TimelineView {
         return targets
     }
 
+    private func deleteBusySlot(_ slot: BusyTimeSlot) {
+        let snapshot = EventDeleteSnapshot(
+            eventId: slot.id,
+            title: slot.title,
+            notes: slot.notes,
+            url: slot.url,
+            startDate: slot.startTime,
+            endDate: slot.endTime,
+            calendarIdentifier: slot.calendarIdentifier,
+            calendarName: slot.calendarName
+        )
+        eventUndoManager.recordDelete(snapshot)
+        if calendarService.deleteEvent(identifier: slot.id) {
+            selectedBusySlot = nil
+            selectedSession = nil
+            Task { await calendarService.fetchEvents(for: selectedDate) }
+        }
+    }
+
     // MARK: - Position Calculations
 
     private func calculateYPosition(for date: Date) -> CGFloat {
@@ -2226,27 +2250,33 @@ extension TimelineView {
 
     private func performUndo() {
         guard let change = eventUndoManager.undo() else { return }
-        if change.sessionId != nil {
-            // Undo projected session change — restore full snapshot if available
-            if let snapshot = change.sessionsSnapshot {
-                schedulingEngine.projectedSessions = snapshot
-            } else if let sessionId = change.sessionId,
-                      let idx = schedulingEngine.projectedSessions.firstIndex(where: { $0.id == sessionId }) {
-                schedulingEngine.projectedSessions[idx].startTime = change.newStartTime
-                schedulingEngine.projectedSessions[idx].endTime = change.newEndTime
+        switch change {
+        case .time(let tc):
+            if tc.sessionId != nil {
+                if let snapshot = tc.sessionsSnapshot {
+                    schedulingEngine.projectedSessions = snapshot
+                } else if let sessionId = tc.sessionId,
+                          let idx = schedulingEngine.projectedSessions.firstIndex(where: { $0.id == sessionId }) {
+                    schedulingEngine.projectedSessions[idx].startTime = tc.newStartTime
+                    schedulingEngine.projectedSessions[idx].endTime = tc.newEndTime
+                }
+                if schedulingEngine.sessionsFrozen && !eventUndoManager.hasSessionChanges {
+                    schedulingEngine.sessionsFrozen = false
+                }
+            } else {
+                let success = calendarService.updateEventTime(
+                    eventId: tc.eventId,
+                    newStart: tc.newStartTime,
+                    newEnd: tc.newEndTime
+                )
+                if success {
+                    optimisticallyUpdateSlot(id: tc.eventId, newStart: tc.newStartTime, newEnd: tc.newEndTime)
+                    Task { await calendarService.fetchEvents(for: selectedDate) }
+                }
             }
-            // Unfreeze if no more session changes in undo stack
-            if schedulingEngine.sessionsFrozen && !eventUndoManager.hasSessionChanges {
-                schedulingEngine.sessionsFrozen = false
-            }
-        } else {
-            let success = calendarService.updateEventTime(
-                eventId: change.eventId,
-                newStart: change.newStartTime,
-                newEnd: change.newEndTime
-            )
-            if success {
-                optimisticallyUpdateSlot(id: change.eventId, newStart: change.newStartTime, newEnd: change.newEndTime)
+        case .delete(let snap):
+            if let newId = calendarService.restoreEvent(snap) {
+                eventUndoManager.pushRedoForRestoredDelete(original: snap, newEventId: newId)
                 Task { await calendarService.fetchEvents(for: selectedDate) }
             }
         }
@@ -2254,27 +2284,32 @@ extension TimelineView {
 
     private func performRedo() {
         guard let change = eventUndoManager.redo() else { return }
-        if change.sessionId != nil {
-            // Redo projected session change — re-freeze if needed
-            if !schedulingEngine.sessionsFrozen {
-                schedulingEngine.sessionsFrozen = true
+        switch change {
+        case .time(let tc):
+            if tc.sessionId != nil {
+                if !schedulingEngine.sessionsFrozen {
+                    schedulingEngine.sessionsFrozen = true
+                }
+                if let postSnapshot = tc.postSnapshot {
+                    schedulingEngine.projectedSessions = postSnapshot
+                } else if let sessionId = tc.sessionId,
+                          let idx = schedulingEngine.projectedSessions.firstIndex(where: { $0.id == sessionId }) {
+                    schedulingEngine.projectedSessions[idx].startTime = tc.newStartTime
+                    schedulingEngine.projectedSessions[idx].endTime = tc.newEndTime
+                }
+            } else {
+                let success = calendarService.updateEventTime(
+                    eventId: tc.eventId,
+                    newStart: tc.newStartTime,
+                    newEnd: tc.newEndTime
+                )
+                if success {
+                    optimisticallyUpdateSlot(id: tc.eventId, newStart: tc.newStartTime, newEnd: tc.newEndTime)
+                    Task { await calendarService.fetchEvents(for: selectedDate) }
+                }
             }
-            // Restore full post-change snapshot if available
-            if let postSnapshot = change.postSnapshot {
-                schedulingEngine.projectedSessions = postSnapshot
-            } else if let sessionId = change.sessionId,
-                      let idx = schedulingEngine.projectedSessions.firstIndex(where: { $0.id == sessionId }) {
-                schedulingEngine.projectedSessions[idx].startTime = change.newStartTime
-                schedulingEngine.projectedSessions[idx].endTime = change.newEndTime
-            }
-        } else {
-            let success = calendarService.updateEventTime(
-                eventId: change.eventId,
-                newStart: change.newStartTime,
-                newEnd: change.newEndTime
-            )
-            if success {
-                optimisticallyUpdateSlot(id: change.eventId, newStart: change.newStartTime, newEnd: change.newEndTime)
+        case .delete(let snap):
+            if calendarService.deleteEvent(identifier: snap.eventId) {
                 Task { await calendarService.fetchEvents(for: selectedDate) }
             }
         }

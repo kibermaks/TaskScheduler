@@ -1,9 +1,28 @@
 import Foundation
 import SwiftUI
 
-/// Tracks move/resize operations on calendar events for undo/redo.
+/// Snapshot for delete/restore. eventId is the calendar event identifier.
+/// When undoing a delete, we restore from title/notes/url/dates/calendar.
+/// When redoing a delete, we delete the event by eventId.
+struct EventDeleteSnapshot: Equatable {
+    let eventId: String
+    let title: String
+    let notes: String?
+    let url: URL?
+    let startDate: Date
+    let endDate: Date
+    let calendarIdentifier: String?
+    let calendarName: String
+}
+
+/// Tracks move/resize/delete operations on calendar events for undo/redo.
 /// Custom class to avoid conflicts with SwiftUI's text field UndoManager.
 class EventUndoManager: ObservableObject {
+
+    enum UndoableChange: Equatable {
+        case time(EventTimeChange)
+        case delete(EventDeleteSnapshot)
+    }
 
     struct EventTimeChange: Equatable {
         let eventId: String
@@ -45,18 +64,21 @@ class EventUndoManager: ObservableObject {
 
     /// Whether the undo stack contains any projected session changes (for unfreeze tracking)
     var hasSessionChanges: Bool {
-        undoStack.contains(where: { $0.sessionId != nil })
+        undoStack.contains { change in
+            if case .time(let tc) = change { return tc.sessionId != nil }
+            return false
+        }
     }
 
     @Published private(set) var canUndo = false
     @Published private(set) var canRedo = false
 
-    private var undoStack: [EventTimeChange] = []
-    private var redoStack: [EventTimeChange] = []
+    private var undoStack: [UndoableChange] = []
+    private var redoStack: [UndoableChange] = []
     private let maxStackSize = 50
 
     func record(_ change: EventTimeChange) {
-        undoStack.append(change)
+        undoStack.append(.time(change))
         if undoStack.count > maxStackSize {
             undoStack.removeFirst()
         }
@@ -64,39 +86,78 @@ class EventUndoManager: ObservableObject {
         updateState()
     }
 
-    /// Returns the inverse change to apply, or nil if stack is empty.
-    func undo() -> EventTimeChange? {
-        guard let change = undoStack.popLast() else { return nil }
-        redoStack.append(change)
-        updateState()
-        if let sid = change.sessionId {
-            return EventTimeChange(
-                sessionId: sid,
-                oldStartTime: change.newStartTime,
-                oldEndTime: change.newEndTime,
-                newStartTime: change.oldStartTime,
-                newEndTime: change.oldEndTime,
-                description: "Undo \(change.description)",
-                sessionsSnapshot: change.sessionsSnapshot,
-                postSnapshot: change.postSnapshot
-            )
+    func recordDelete(_ snapshot: EventDeleteSnapshot) {
+        undoStack.append(.delete(snapshot))
+        if undoStack.count > maxStackSize {
+            undoStack.removeFirst()
         }
-        return EventTimeChange(
-            eventId: change.eventId,
-            oldStartTime: change.newStartTime,
-            oldEndTime: change.newEndTime,
-            newStartTime: change.oldStartTime,
-            newEndTime: change.oldEndTime,
-            description: "Undo \(change.description)"
-        )
+        redoStack.removeAll()
+        updateState()
+    }
+
+    /// Returns the change to apply for undo, or nil if stack is empty.
+    func undo() -> UndoableChange? {
+        guard let change = undoStack.popLast() else { return nil }
+        switch change {
+        case .time:
+            redoStack.append(change)
+        case .delete:
+            break  // Caller will push redo after restore (needs new eventId)
+        }
+        updateState()
+        switch change {
+        case .time(let tc):
+            if let sid = tc.sessionId {
+                return .time(EventTimeChange(
+                    sessionId: sid,
+                    oldStartTime: tc.newStartTime,
+                    oldEndTime: tc.newEndTime,
+                    newStartTime: tc.oldStartTime,
+                    newEndTime: tc.oldEndTime,
+                    description: "Undo \(tc.description)",
+                    sessionsSnapshot: tc.sessionsSnapshot,
+                    postSnapshot: tc.postSnapshot
+                ))
+            }
+            return .time(EventTimeChange(
+                eventId: tc.eventId,
+                oldStartTime: tc.newStartTime,
+                oldEndTime: tc.newEndTime,
+                newStartTime: tc.oldStartTime,
+                newEndTime: tc.oldEndTime,
+                description: "Undo \(tc.description)"
+            ))
+        case .delete(let snap):
+            return .delete(snap)
+        }
+    }
+
+    /// Call after undoing a delete (restoring event). Pushes redo entry with the new event id.
+    func pushRedoForRestoredDelete(original: EventDeleteSnapshot, newEventId: String) {
+        redoStack.append(.delete(EventDeleteSnapshot(
+            eventId: newEventId,
+            title: original.title,
+            notes: original.notes,
+            url: original.url,
+            startDate: original.startDate,
+            endDate: original.endDate,
+            calendarIdentifier: original.calendarIdentifier,
+            calendarName: original.calendarName
+        )))
+        updateState()
     }
 
     /// Returns the change to re-apply, or nil if stack is empty.
-    func redo() -> EventTimeChange? {
+    func redo() -> UndoableChange? {
         guard let change = redoStack.popLast() else { return nil }
         undoStack.append(change)
         updateState()
-        return change
+        switch change {
+        case .time:
+            return change
+        case .delete(let snap):
+            return .delete(snap)
+        }
     }
 
     func clear() {

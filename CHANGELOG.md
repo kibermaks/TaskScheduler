@@ -5,6 +5,18 @@ All notable changes to Task Scheduler will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.13] - 2026-03-04
+
+### Added
+
+- Collapsible settings sections with persisted state; chevron tooltip previews hidden values on hover
+- Calendar visibility warnings when a selected calendar is hidden from timeline filters
+- Auto-scrolling when dragging events near timeline edges
+
+### Changed
+
+- Smarter Long Rest placement based on cumulative session time
+
 ## [1.12] - 2026-03-04
 
 ### Added

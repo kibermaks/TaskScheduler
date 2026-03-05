@@ -1,6 +1,56 @@
 import SwiftUI
 import AppKit
 
+/// Info for the Copy-toast shown after copying an event to another day.
+struct CopyToastInfo: Identifiable {
+    let id = UUID()
+    let title: String
+    let targetLabel: String
+    let targetDate: Date
+    let targetStartTime: Date
+    let newEventId: String
+}
+
+// MARK: - Copy Toast View
+
+private struct CopyToastView: View {
+    let toast: CopyToastInfo
+    let onUndo: () -> Void
+    let onJumpTo: () -> Void
+    let onDismiss: () -> Void
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Image(systemName: "checkmark.circle.fill")
+                .foregroundColor(Color(hex: "10B981"))
+            Text("Copied \"\(toast.title)\" to \(toast.targetLabel)")
+                .font(.system(size: 13))
+                .foregroundColor(.white)
+            Spacer(minLength: 8)
+            Button("Undo") {
+                onUndo()
+            }
+            .buttonStyle(.bordered)
+            .controlSize(.small)
+            Button("Jump to") {
+                onJumpTo()
+            }
+            .buttonStyle(.borderedProminent)
+            .controlSize(.small)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
+        .background(Color.black.opacity(0.85))
+        .cornerRadius(10)
+        .overlay(
+            RoundedRectangle(cornerRadius: 10)
+                .stroke(Color.white.opacity(0.15), lineWidth: 1)
+        )
+        .shadow(color: .black.opacity(0.4), radius: 12, y: 4)
+        .frame(maxWidth: 420)
+    }
+}
+
 // MARK: - Main Content View
 struct ContentView: View {
     @EnvironmentObject var calendarService: CalendarService
@@ -29,7 +79,8 @@ struct ContentView: View {
     @State private var updateAlert: UpdateService.UpdateAlert?
     @State private var showingWhatsNew = false
     @AppStorage("TaskScheduler.LastSeenVersion") private var lastSeenVersion = ""
-    
+    @State private var copyToast: CopyToastInfo? = nil
+
     enum DateSelection: String, CaseIterable {
         case today = "Today"
         case tomorrow = "Tomorrow"
@@ -70,7 +121,8 @@ struct ContentView: View {
                     hasSeenPatternsGuide: $hasSeenPatternsGuide,
                     showingPatternsGuide: $showingPatternsGuide,
                     hasSeenTasksGuide: $hasSeenTasksGuide,
-                    showingTasksGuide: $showingTasksGuide
+                    showingTasksGuide: $showingTasksGuide,
+                    copyToast: $copyToast
                 )
             }
         }
@@ -154,7 +206,11 @@ struct ContentViewBody: View {
     @Binding var showingPatternsGuide: Bool
     @Binding var hasSeenTasksGuide: Bool
     @Binding var showingTasksGuide: Bool
-    
+    @Binding var copyToast: CopyToastInfo?
+
+    /// Last date selected while in Custom mode. Restored when switching back to Custom.
+    @State private var lastCustomDate: Date?
+
     var body: some View {
         ZStack {
             backgroundGradient
@@ -172,6 +228,33 @@ struct ContentViewBody: View {
                 }
             }
         }
+        .overlay(alignment: .bottom) {
+            if let toast = copyToast {
+                CopyToastView(
+                    toast: toast,
+                    onUndo: {
+                        _ = calendarService.deleteEvent(identifier: toast.newEventId)
+                        Task { await calendarService.fetchEvents(for: toast.targetDate) }
+                        copyToast = nil
+                    },
+                    onJumpTo: {
+                        selectedDate = toast.targetDate
+                        startTime = toast.targetStartTime
+                        dateSelection = .custom
+                        copyToast = nil
+                    },
+                    onDismiss: { copyToast = nil }
+                )
+                .padding(.bottom, 24)
+                .transition(.move(edge: .bottom).combined(with: .opacity))
+                .zIndex(100)
+                .task(id: toast.id) {
+                    try? await Task.sleep(nanoseconds: 5_000_000_000)
+                    await MainActor.run { copyToast = nil }
+                }
+            }
+        }
+        .animation(.easeOut(duration: 0.25), value: copyToast?.id)
         .preferredColorScheme(.dark)
         .sheet(isPresented: $showingNewPresetSheet) {
             NewPresetSheet { preset in
@@ -215,6 +298,23 @@ struct ContentViewBody: View {
         }
         .onChange(of: selectedDate) { _, newDate in
             schedulingEngine.sessionsFrozen = false
+
+            // If we're on Custom and the new date is Today or Tomorrow, switch to the dedicated button
+            if dateSelection == .custom {
+                let calendar = Calendar.current
+                if calendar.isDateInToday(newDate) {
+                    dateSelection = .today
+                    return
+                }
+                if let tomorrow = calendar.date(byAdding: .day, value: 1, to: Date()),
+                   calendar.isDate(newDate, inSameDayAs: tomorrow) {
+                    dateSelection = .tomorrow
+                    return
+                }
+                // Remember this custom date for when user switches back to Custom
+                lastCustomDate = newDate
+            }
+
             Task {
                 // If we are in custom mode, we might want to update startTime's day to match selectedDate
                 // so that the scheduler doesn't look at a different day's 08:00
@@ -292,6 +392,12 @@ struct ContentViewBody: View {
             startTime = calendar.date(bySettingHour: 8, minute: 0, second: 0, of: selectedDate) ?? selectedDate
         case .custom:
             useNowTime = false
+            // Restore last custom date if we have one; else preset to day after tomorrow when coming from Today/Tomorrow
+            if let remembered = lastCustomDate {
+                selectedDate = remembered
+            } else if calendar.isDateInToday(selectedDate) || (calendar.date(byAdding: .day, value: 1, to: Date()).map { calendar.isDate(selectedDate, inSameDayAs: $0) } ?? false) {
+                selectedDate = calendar.date(byAdding: .day, value: 2, to: Date()) ?? selectedDate
+            }
             // Sync startTime day with selectedDate
             let hour = calendar.component(.hour, from: startTime)
             let minute = calendar.component(.minute, from: startTime)
@@ -327,8 +433,12 @@ struct ContentViewBody: View {
             
             Divider().background(Color.white.opacity(0.1))
             
-            TimelineView(selectedDate: selectedDate, startTime: effectiveStartTime)
-                .padding()
+            TimelineView(
+                selectedDate: selectedDate,
+                startTime: effectiveStartTime,
+                onCopySuccess: { info in copyToast = info }
+            )
+            .padding()
             
             Divider().background(Color.white.opacity(0.1))
             
@@ -678,6 +788,8 @@ struct HeaderView: View {
                 Button { dateSelection = sel } label: {
                     Text(sel.rawValue)
                         .font(.system(size: 14, weight: .medium))
+                        .lineLimit(1)
+                        .fixedSize(horizontal: true, vertical: false)
                         .padding(.horizontal, 16)
                         .padding(.vertical, 8)
                         .background(dateSelection == sel ? Color(hex: "8B5CF6") : Color.white.opacity(0.1))
