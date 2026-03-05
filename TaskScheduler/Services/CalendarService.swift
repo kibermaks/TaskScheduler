@@ -14,7 +14,18 @@ class CalendarService: ObservableObject {
     private static let excludedCalendarsDefaultsKey = "TaskScheduler.ExcludedCalendars"
     private let eventStore = EKEventStore()
     private var notificationObserver: NSObjectProtocol?
-    private let recognizedSessionTags = ["#work", "#side", "#deep", "#plan"]
+    private let recognizedSessionTags = ["#work", "#side", "#deep", "#plan", "#break"]
+
+    /// Resolves a session tag in notes to its corresponding SessionType.
+    static func sessionType(fromNotes notes: String?) -> SessionType? {
+        guard let notes = notes?.lowercased() else { return nil }
+        if notes.contains("#work") { return .work }
+        if notes.contains("#side") { return .side }
+        if notes.contains("#deep") { return .deep }
+        if notes.contains("#plan") { return .planning }
+        if notes.contains("#break") { return .bigRest }
+        return nil
+    }
     
     @Published var authorizationStatus: EKAuthorizationStatus = .notDetermined
     @Published var availableCalendars: [EKCalendar] = []

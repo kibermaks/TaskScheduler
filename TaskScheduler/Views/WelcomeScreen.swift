@@ -14,7 +14,7 @@ struct WelcomeScreen: View {
         ),
         WelcomePage(
             title: "Smart Concepts",
-            subtitle: "We protect your focus blocks (#work), prioritize your deep work (#deep), and handle your life admin (#side).",
+            subtitle: "We protect your focus blocks (#work), prioritize your deep work (#deep), and handle your life admin (#side). Name each session in the Tasks tab for specific accountability.",
             image: "brain.head.profile",
             color: Color(hex: "3B82F6")
         ),
@@ -32,7 +32,7 @@ struct WelcomeScreen: View {
         ),
         WelcomePage(
             title: "Plan with Clarity",
-            subtitle: "Each day starts with a Planning session. Visualize your productivity gains before you even start.",
+            subtitle: "Each day starts with a Planning session. Visualize your productivity gains, then track them live as sessions unfold.",
             image: "calendar.badge.clock",
             color: Color(hex: "EF4444")
         )

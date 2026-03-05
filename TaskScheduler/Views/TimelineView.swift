@@ -65,6 +65,9 @@ struct TimelineView: View {
     @State private var renamingSessionId: UUID? = nil
     @State private var renameText: String = ""
 
+    // Feedback badge
+    @State private var feedbackPopoverEventId: String? = nil
+
     // Throttle for real-time recalculation during drag
     @State private var lastDragRecalcTime: Date = .distantPast
     private let dragRecalcInterval: TimeInterval = 0.15 // 150ms throttle
@@ -920,6 +923,14 @@ extension TimelineView {
                 }
             }
             .padding(4)
+
+            // Feedback badge for past tagged events
+            if slot.endTime < Date(),
+               CalendarService.sessionType(fromNotes: slot.notes) != nil {
+                feedbackBadge(for: slot)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
+                    .padding(2)
+            }
         }
         .frame(width: blockWidth, height: blockHeight)
         .contentShape(Rectangle())
@@ -1660,6 +1671,115 @@ extension TimelineView {
         return "\(formatter.string(from: start)) - \(formatter.string(from: end))"
     }
     
+    // MARK: - Feedback Badge
+
+    @ViewBuilder
+    private func feedbackBadge(for slot: BusyTimeSlot) -> some View {
+        let entry = SessionFeedbackStore.shared.entry(forEventId: slot.id)
+        let isShowingPopover = Binding(
+            get: { feedbackPopoverEventId == slot.id },
+            set: { if !$0 { feedbackPopoverEventId = nil } }
+        )
+
+        Button {
+            feedbackPopoverEventId = (feedbackPopoverEventId == slot.id) ? nil : slot.id
+        } label: {
+            if let entry = entry {
+                feedbackBadgeIcon(for: entry.rating)
+            } else {
+                // No feedback yet — show subtle empty badge
+                Circle()
+                    .fill(Color.white.opacity(0.1))
+                    .frame(width: 14, height: 14)
+                    .overlay(
+                        Circle().stroke(Color.white.opacity(0.2), lineWidth: 1)
+                    )
+            }
+        }
+        .buttonStyle(.plain)
+        .popover(isPresented: isShowingPopover, arrowEdge: .trailing) {
+            feedbackPopoverContent(for: slot, existingEntry: entry)
+        }
+    }
+
+    private func feedbackBadgeIcon(for rating: SessionRating) -> some View {
+        let (color, icon): (Color, String) = {
+            switch rating {
+            case .completed: return (.green, "checkmark")
+            case .partial: return (.yellow, "circle.lefthalf.filled")
+            case .skipped: return (.red, "xmark")
+            }
+        }()
+
+        return Circle()
+            .fill(color.opacity(0.25))
+            .frame(width: 14, height: 14)
+            .overlay(
+                Image(systemName: icon)
+                    .font(.system(size: 7, weight: .bold))
+                    .foregroundColor(color)
+            )
+    }
+
+    private func feedbackPopoverContent(for slot: BusyTimeSlot, existingEntry: SessionFeedbackEntry?) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(existingEntry != nil ? "Update feedback" : "How was this session?")
+                .font(.system(size: 12, weight: .medium))
+                .foregroundColor(.primary)
+
+            HStack(spacing: 6) {
+                ForEach(SessionRating.allCases, id: \.rawValue) { rating in
+                    Button {
+                        let sessionType = CalendarService.sessionType(fromNotes: slot.notes)
+                        if existingEntry != nil {
+                            SessionFeedbackStore.shared.updateRating(eventId: slot.id, rating: rating)
+                        } else {
+                            let feedback = SessionFeedback(
+                                eventId: slot.id,
+                                sessionTitle: slot.title,
+                                sessionType: sessionType,
+                                startTime: slot.startTime,
+                                endTime: slot.endTime
+                            )
+                            let entry = SessionFeedbackEntry(from: feedback, rating: rating)
+                            SessionFeedbackStore.shared.saveEntry(entry)
+                        }
+                        feedbackPopoverEventId = nil
+                    } label: {
+                        HStack(spacing: 3) {
+                            Image(systemName: rating.icon)
+                                .font(.system(size: 10))
+                            Text(rating.label)
+                                .font(.system(size: 10, weight: .medium))
+                        }
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(existingEntry?.rating == rating
+                                    ? ratingColor(rating).opacity(0.2)
+                                    : Color.clear)
+                        .cornerRadius(4)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 4)
+                                .stroke(ratingColor(rating).opacity(0.3), lineWidth: 1)
+                        )
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundColor(ratingColor(rating))
+                }
+            }
+        }
+        .padding(10)
+        .frame(width: 220)
+    }
+
+    private func ratingColor(_ rating: SessionRating) -> Color {
+        switch rating {
+        case .completed: return .green
+        case .partial: return .yellow
+        case .skipped: return .red
+        }
+    }
+
     // MARK: - Inline Editing Helpers
     
     private func saveTitle(for slot: BusyTimeSlot) {

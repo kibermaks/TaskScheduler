@@ -8,16 +8,27 @@ struct TaskSchedulerApp: App {
     @StateObject private var calendarService = CalendarService()
     @StateObject private var schedulingEngine = SchedulingEngine()
     @StateObject private var updateService = UpdateService()
-    
+    @StateObject private var sessionAwarenessService = SessionAwarenessService()
+    @StateObject private var sessionAudioService = SessionAudioService()
+    @StateObject private var menuBarController = MenuBarController()
+    @StateObject private var miniPlayerController = MiniPlayerWindowController()
+    private let dockProgressController = DockProgressController()
+
     var body: some Scene {
         WindowGroup {
             ContentView()
                 .environmentObject(calendarService)
                 .environmentObject(schedulingEngine)
                 .environmentObject(updateService)
+                .environmentObject(sessionAwarenessService)
+                .environmentObject(sessionAudioService)
                 .frame(minWidth: 1000, minHeight: 700)
                 .onAppear {
                     updateService.startAutomaticChecks()
+                    sessionAwarenessService.start(calendarService: calendarService, audioService: sessionAudioService)
+                    menuBarController.setup(awarenessService: sessionAwarenessService)
+                    miniPlayerController.setup(awarenessService: sessionAwarenessService, audioService: sessionAudioService)
+                    dockProgressController.setup(awarenessService: sessionAwarenessService)
                 }
         }
         .windowStyle(.hiddenTitleBar)
@@ -73,6 +84,8 @@ struct TaskSchedulerApp: App {
             AppSettingsView()
                 .environmentObject(calendarService)
                 .environmentObject(schedulingEngine)
+                .environmentObject(sessionAwarenessService)
+                .environmentObject(sessionAudioService)
         }
         .windowResizability(.contentSize)
     }
@@ -80,7 +93,9 @@ struct TaskSchedulerApp: App {
 
 class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
-        return true
+        // Don't quit when main window is hidden for mini-player
+        let hasVisiblePanel = NSApp.windows.contains { $0 is NSPanel && $0.isVisible }
+        return !hasVisiblePanel
     }
 }
 
