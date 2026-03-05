@@ -134,6 +134,8 @@ struct ContentView: View {
 struct ContentViewBody: View {
     @EnvironmentObject var calendarService: CalendarService
     @EnvironmentObject var schedulingEngine: SchedulingEngine
+    @EnvironmentObject var sessionAwarenessService: SessionAwarenessService
+    @EnvironmentObject var sessionAudioService: SessionAudioService
     
     @Binding var selectedDate: Date
     @Binding var startTime: Date
@@ -165,6 +167,9 @@ struct ContentViewBody: View {
                     autoPreview: $autoPreview
                 )
                 mainHStack
+                if sessionAwarenessService.config.enabled && !sessionAwarenessService.isCollapsed {
+                    SessionAwarenessPanel()
+                }
             }
         }
         .preferredColorScheme(.dark)
