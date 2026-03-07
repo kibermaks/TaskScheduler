@@ -6,13 +6,14 @@ struct SessionSoundConfig: Codable, Equatable {
     var sound: String           // Built-in ambient name, "Off", or custom name
     var volume: Float           // 0.0–1.0
     var customSoundPath: String? = nil
+    var enabled: Bool = true
 
-    static let off = SessionSoundConfig(sound: "Off", volume: 0.0)
+    static let off = SessionSoundConfig(sound: "Off", volume: 0.0, enabled: false)
 
     static let availableSounds = [
-        "Off",
         "Clock Ticking",
         "Clock Ticking Slow",
+        "Kitchen Timer",
         "Duskfall on a River",
         "Light Rain",
         "Mountain Atmosphere",
@@ -20,6 +21,25 @@ struct SessionSoundConfig: Codable, Equatable {
         "Peaceful Wind",
         "Thunder in the Woods",
     ]
+
+    var isPlayable: Bool {
+        enabled && sound != "Off"
+    }
+
+    init(sound: String, volume: Float, customSoundPath: String? = nil, enabled: Bool = true) {
+        self.sound = sound
+        self.volume = volume
+        self.customSoundPath = customSoundPath
+        self.enabled = enabled
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        sound = try container.decodeIfPresent(String.self, forKey: .sound) ?? "Off"
+        volume = try container.decodeIfPresent(Float.self, forKey: .volume) ?? 0
+        customSoundPath = try container.decodeIfPresent(String.self, forKey: .customSoundPath)
+        enabled = try container.decodeIfPresent(Bool.self, forKey: .enabled) ?? (sound != "Off")
+    }
 }
 
 // MARK: - Start/End transition sound settings
@@ -28,10 +48,30 @@ struct TransitionSoundConfig: Codable, Equatable {
     var sound: String           // Built-in transition name, "Off", or custom name
     var volume: Float           // 0.0–1.0
     var customSoundPath: String? = nil
+    var enabled: Bool = true
 
-    static let off = TransitionSoundConfig(sound: "Off", volume: 0.0)
+    static let off = TransitionSoundConfig(sound: "Off", volume: 0.0, enabled: false)
 
-    static let availableSounds = ["Off", "Kitchen Timer", "Gong"]
+    static let availableSounds = ["Hero", "Morse", "Glass", "Submarine", "Purr", "Gong", "Kitchen Timer"]
+
+    var isPlayable: Bool {
+        enabled && sound != "Off"
+    }
+
+    init(sound: String, volume: Float, customSoundPath: String? = nil, enabled: Bool = true) {
+        self.sound = sound
+        self.volume = volume
+        self.customSoundPath = customSoundPath
+        self.enabled = enabled
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        sound = try container.decodeIfPresent(String.self, forKey: .sound) ?? "Off"
+        volume = try container.decodeIfPresent(Float.self, forKey: .volume) ?? 0
+        customSoundPath = try container.decodeIfPresent(String.self, forKey: .customSoundPath)
+        enabled = try container.decodeIfPresent(Bool.self, forKey: .enabled) ?? (sound != "Off")
+    }
 }
 
 // MARK: - Time display mode
@@ -45,9 +85,9 @@ enum TimeDisplayMode: String, Codable, CaseIterable {
 
 struct AccelerandoConfig: Codable, Equatable {
     var enabled: Bool = false
-    var maxMultiplier: Double = 1.5
+    var maxMultiplier: Double = 1.0
 
-    static let multiplierOptions: [Double] = [1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 1.8, 1.9, 2.0]
+    static let multiplierOptions: [Double] = [0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 1.8, 1.9, 2.0]
 }
 
 // MARK: - Codable rect for window position persistence
@@ -116,43 +156,44 @@ class CustomSoundStore {
 
 struct SessionAwarenessConfig: Codable, Equatable {
     var enabled: Bool = true
+    var masterVolume: Float = 1.0           // 0.0–1.0, scales all audio output
     var outputDeviceUID: String? = nil      // nil = system default
 
     // Per-type ambient sound settings
-    var workSound: SessionSoundConfig = .init(sound: "Clock Ticking", volume: 0.5)
-    var sideSound: SessionSoundConfig = .init(sound: "Clock Ticking Slow", volume: 0.5)
+    var workSound: SessionSoundConfig = .init(sound: "Clock Ticking", volume: 0.6)
+    var sideSound: SessionSoundConfig = .init(sound: "Clock Ticking", volume: 0.4)
     var deepSound: SessionSoundConfig = .init(sound: "Mountain Atmosphere", volume: 0.4)
     var planningSound: SessionSoundConfig = .init(sound: "Peaceful Wind", volume: 0.3)
     var breakSound: SessionSoundConfig = .init(sound: "Ocean Waves", volume: 0.3)
 
     // Non-tagged calendar events (busy slots without our tags)
     var trackOtherEvents: Bool = false
-    var otherEventsSound: SessionSoundConfig = .init(sound: "Off", volume: 0.0)
+    var otherEventsSound: SessionSoundConfig = .init(sound: "Clock Ticking Slow", volume: 0.5)
 
     // Start/End session transition sounds
-    var startSound: TransitionSoundConfig = .init(sound: "Kitchen Timer", volume: 0.6)
+    var startSound: TransitionSoundConfig = .init(sound: "Hero", volume: 0.6)
     var endSound: TransitionSoundConfig = .init(sound: "Gong", volume: 0.6)
 
     // Phase 2: Time display mode
     var timeDisplayMode: TimeDisplayMode = .remaining
 
     // Phase 3: Ending soon transition
-    var endingSoonSound: TransitionSoundConfig = .off
+    var endingSoonSound: TransitionSoundConfig = .init(sound: "Submarine", volume: 0.5)
 
     // Phase 3: Presence reminder
     var presenceReminderEnabled: Bool = true
     var presenceReminderIntervalMinutes: Int = 10
-    var presenceReminderSound: TransitionSoundConfig = .init(sound: "Gong", volume: 0.4)
+    var presenceReminderSound: TransitionSoundConfig = .init(sound: "Glass", volume: 0.4)
 
     // Phase 3: Accelerando per type
-    var workSoundAccelerando: AccelerandoConfig = .init()
-    var sideSoundAccelerando: AccelerandoConfig = .init()
+    var workSoundAccelerando: AccelerandoConfig = .init(enabled: true, maxMultiplier: 1.2)
+    var sideSoundAccelerando: AccelerandoConfig = .init(enabled: true, maxMultiplier: 1.2)
     var deepSoundAccelerando: AccelerandoConfig = .init()
     var planningSoundAccelerando: AccelerandoConfig = .init()
-    var otherEventsSoundAccelerando: AccelerandoConfig = .init()
+    var otherEventsSoundAccelerando: AccelerandoConfig = .init(enabled: true, maxMultiplier: 1.2)
 
     // Phase 5: Menu bar & Dock
-    var showMenuBarItem: Bool = false
+    var showMenuBarItem: Bool = true
     var showDockProgress: Bool = true
 
     // Phase 6: Mini-player & main window frames
@@ -184,34 +225,35 @@ struct SessionAwarenessConfig: Codable, Equatable {
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         enabled = try c.decodeIfPresent(Bool.self, forKey: .enabled) ?? true
+        masterVolume = try c.decodeIfPresent(Float.self, forKey: .masterVolume) ?? 1.0
         outputDeviceUID = try c.decodeIfPresent(String.self, forKey: .outputDeviceUID)
 
-        workSound = try c.decodeIfPresent(SessionSoundConfig.self, forKey: .workSound) ?? .init(sound: "Clock Ticking", volume: 0.5)
-        sideSound = try c.decodeIfPresent(SessionSoundConfig.self, forKey: .sideSound) ?? .init(sound: "Clock Ticking Slow", volume: 0.5)
+        workSound = try c.decodeIfPresent(SessionSoundConfig.self, forKey: .workSound) ?? .init(sound: "Clock Ticking", volume: 0.6)
+        sideSound = try c.decodeIfPresent(SessionSoundConfig.self, forKey: .sideSound) ?? .init(sound: "Clock Ticking", volume: 0.4)
         deepSound = try c.decodeIfPresent(SessionSoundConfig.self, forKey: .deepSound) ?? .init(sound: "Mountain Atmosphere", volume: 0.4)
         planningSound = try c.decodeIfPresent(SessionSoundConfig.self, forKey: .planningSound) ?? .init(sound: "Peaceful Wind", volume: 0.3)
         breakSound = try c.decodeIfPresent(SessionSoundConfig.self, forKey: .breakSound) ?? .off
 
         trackOtherEvents = try c.decodeIfPresent(Bool.self, forKey: .trackOtherEvents) ?? false
-        otherEventsSound = try c.decodeIfPresent(SessionSoundConfig.self, forKey: .otherEventsSound) ?? .off
+        otherEventsSound = try c.decodeIfPresent(SessionSoundConfig.self, forKey: .otherEventsSound) ?? .init(sound: "Clock Ticking Slow", volume: 0.5)
 
-        startSound = try c.decodeIfPresent(TransitionSoundConfig.self, forKey: .startSound) ?? .init(sound: "Kitchen Timer", volume: 0.6)
+        startSound = try c.decodeIfPresent(TransitionSoundConfig.self, forKey: .startSound) ?? .init(sound: "Hero", volume: 0.6)
         endSound = try c.decodeIfPresent(TransitionSoundConfig.self, forKey: .endSound) ?? .init(sound: "Gong", volume: 0.6)
 
         timeDisplayMode = try c.decodeIfPresent(TimeDisplayMode.self, forKey: .timeDisplayMode) ?? .remaining
-        endingSoonSound = try c.decodeIfPresent(TransitionSoundConfig.self, forKey: .endingSoonSound) ?? .off
+        endingSoonSound = try c.decodeIfPresent(TransitionSoundConfig.self, forKey: .endingSoonSound) ?? .init(sound: "Submarine", volume: 0.5)
 
         presenceReminderEnabled = try c.decodeIfPresent(Bool.self, forKey: .presenceReminderEnabled) ?? true
         presenceReminderIntervalMinutes = try c.decodeIfPresent(Int.self, forKey: .presenceReminderIntervalMinutes) ?? 10
-        presenceReminderSound = try c.decodeIfPresent(TransitionSoundConfig.self, forKey: .presenceReminderSound) ?? .init(sound: "Gong", volume: 0.4)
+        presenceReminderSound = try c.decodeIfPresent(TransitionSoundConfig.self, forKey: .presenceReminderSound) ?? .init(sound: "Glass", volume: 0.4)
 
-        workSoundAccelerando = try c.decodeIfPresent(AccelerandoConfig.self, forKey: .workSoundAccelerando) ?? .init()
-        sideSoundAccelerando = try c.decodeIfPresent(AccelerandoConfig.self, forKey: .sideSoundAccelerando) ?? .init()
+        workSoundAccelerando = try c.decodeIfPresent(AccelerandoConfig.self, forKey: .workSoundAccelerando) ?? .init(enabled: true, maxMultiplier: 1.2)
+        sideSoundAccelerando = try c.decodeIfPresent(AccelerandoConfig.self, forKey: .sideSoundAccelerando) ?? .init(enabled: true, maxMultiplier: 1.2)
         deepSoundAccelerando = try c.decodeIfPresent(AccelerandoConfig.self, forKey: .deepSoundAccelerando) ?? .init()
         planningSoundAccelerando = try c.decodeIfPresent(AccelerandoConfig.self, forKey: .planningSoundAccelerando) ?? .init()
-        otherEventsSoundAccelerando = try c.decodeIfPresent(AccelerandoConfig.self, forKey: .otherEventsSoundAccelerando) ?? .init()
+        otherEventsSoundAccelerando = try c.decodeIfPresent(AccelerandoConfig.self, forKey: .otherEventsSoundAccelerando) ?? .init(enabled: true, maxMultiplier: 1.2)
 
-        showMenuBarItem = try c.decodeIfPresent(Bool.self, forKey: .showMenuBarItem) ?? false
+        showMenuBarItem = try c.decodeIfPresent(Bool.self, forKey: .showMenuBarItem) ?? true
         showDockProgress = try c.decodeIfPresent(Bool.self, forKey: .showDockProgress) ?? true
         miniPlayerFrame = try c.decodeIfPresent(CodableRect.self, forKey: .miniPlayerFrame)
         mainWindowFrame = try c.decodeIfPresent(CodableRect.self, forKey: .mainWindowFrame)

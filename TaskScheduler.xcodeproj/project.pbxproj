@@ -55,6 +55,11 @@
 		AA08B2C3D4E5F6A7B8C9D0E8 /* Ocean Waves.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = BB08C2D3E4F5A6B7C8D9E0F8 /* Ocean Waves.mp3 */; };
 		AA09B2C3D4E5F6A7B8C9D0E9 /* Peaceful Wind Atop a Hill.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = BB09C2D3E4F5A6B7C8D9E0F9 /* Peaceful Wind Atop a Hill.mp3 */; };
 		AA10B2C3D4E5F6A7B8C9D010 /* Thunder in the Woods.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = BB10C2D3E4F5A6B7C8D9E010 /* Thunder in the Woods.mp3 */; };
+		AA11B2C3D4E5F6A7B8C9D011 /* Hero.aiff in Resources */ = {isa = PBXBuildFile; fileRef = BB11C2D3E4F5A6B7C8D9E011 /* Hero.aiff */; };
+		AA12B2C3D4E5F6A7B8C9D012 /* Morse.aiff in Resources */ = {isa = PBXBuildFile; fileRef = BB12C2D3E4F5A6B7C8D9E012 /* Morse.aiff */; };
+		AA13B2C3D4E5F6A7B8C9D013 /* Glass.aiff in Resources */ = {isa = PBXBuildFile; fileRef = BB13C2D3E4F5A6B7C8D9E013 /* Glass.aiff */; };
+		AA14B2C3D4E5F6A7B8C9D014 /* Submarine.aiff in Resources */ = {isa = PBXBuildFile; fileRef = BB14C2D3E4F5A6B7C8D9E014 /* Submarine.aiff */; };
+		AA15B2C3D4E5F6A7B8C9D015 /* Purr.aiff in Resources */ = {isa = PBXBuildFile; fileRef = BB15C2D3E4F5A6B7C8D9E015 /* Purr.aiff */; };
 		D1A1B2C3D4E5F6A7B8C9D0E1 /* DockProgressController.swift in Sources */ = {isa = PBXBuildFile; fileRef = E1F2A3B4C5D6E7F8A9B0C1D2 /* DockProgressController.swift */; };
 		D2B2C3D4E5F6A7B8C9D0E1F2 /* MenuBarController.swift in Sources */ = {isa = PBXBuildFile; fileRef = E2F3A4B5C6D7E8F9A0B1C2D3 /* MenuBarController.swift */; };
 		D3C3D4E5F6A7B8C9D0E1F2A3 /* MiniPlayerWindowController.swift in Sources */ = {isa = PBXBuildFile; fileRef = E3F4A5B6C7D8E9F0A1B2C3D4 /* MiniPlayerWindowController.swift */; };
@@ -112,6 +117,11 @@
 		BB08C2D3E4F5A6B7C8D9E0F8 /* Ocean Waves.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = "Ocean Waves.mp3"; sourceTree = "<group>"; };
 		BB09C2D3E4F5A6B7C8D9E0F9 /* Peaceful Wind Atop a Hill.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = "Peaceful Wind Atop a Hill.mp3"; sourceTree = "<group>"; };
 		BB10C2D3E4F5A6B7C8D9E010 /* Thunder in the Woods.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = "Thunder in the Woods.mp3"; sourceTree = "<group>"; };
+		BB11C2D3E4F5A6B7C8D9E011 /* Hero.aiff */ = {isa = PBXFileReference; lastKnownFileType = audio.aiff; path = Hero.aiff; sourceTree = "<group>"; };
+		BB12C2D3E4F5A6B7C8D9E012 /* Morse.aiff */ = {isa = PBXFileReference; lastKnownFileType = audio.aiff; path = Morse.aiff; sourceTree = "<group>"; };
+		BB13C2D3E4F5A6B7C8D9E013 /* Glass.aiff */ = {isa = PBXFileReference; lastKnownFileType = audio.aiff; path = Glass.aiff; sourceTree = "<group>"; };
+		BB14C2D3E4F5A6B7C8D9E014 /* Submarine.aiff */ = {isa = PBXFileReference; lastKnownFileType = audio.aiff; path = Submarine.aiff; sourceTree = "<group>"; };
+		BB15C2D3E4F5A6B7C8D9E015 /* Purr.aiff */ = {isa = PBXFileReference; lastKnownFileType = audio.aiff; path = Purr.aiff; sourceTree = "<group>"; };
 		E1F2A3B4C5D6E7F8A9B0C1D2 /* DockProgressController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DockProgressController.swift; sourceTree = "<group>"; };
 		E2F3A4B5C6D7E8F9A0B1C2D3 /* MenuBarController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuBarController.swift; sourceTree = "<group>"; };
 		E3F4A5B6C7D8E9F0A1B2C3D4 /* MiniPlayerWindowController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MiniPlayerWindowController.swift; sourceTree = "<group>"; };
@@ -241,6 +251,11 @@
 				BB08C2D3E4F5A6B7C8D9E0F8 /* Ocean Waves.mp3 */,
 				BB09C2D3E4F5A6B7C8D9E0F9 /* Peaceful Wind Atop a Hill.mp3 */,
 				BB10C2D3E4F5A6B7C8D9E010 /* Thunder in the Woods.mp3 */,
+				BB13C2D3E4F5A6B7C8D9E013 /* Glass.aiff */,
+				BB11C2D3E4F5A6B7C8D9E011 /* Hero.aiff */,
+				BB12C2D3E4F5A6B7C8D9E012 /* Morse.aiff */,
+				BB15C2D3E4F5A6B7C8D9E015 /* Purr.aiff */,
+				BB14C2D3E4F5A6B7C8D9E014 /* Submarine.aiff */,
 			);
 			path = Sounds;
 			sourceTree = "<group>";
@@ -315,6 +330,11 @@
 				AA08B2C3D4E5F6A7B8C9D0E8 /* Ocean Waves.mp3 in Resources */,
 				AA09B2C3D4E5F6A7B8C9D0E9 /* Peaceful Wind Atop a Hill.mp3 in Resources */,
 				AA10B2C3D4E5F6A7B8C9D010 /* Thunder in the Woods.mp3 in Resources */,
+				AA11B2C3D4E5F6A7B8C9D011 /* Hero.aiff in Resources */,
+				AA12B2C3D4E5F6A7B8C9D012 /* Morse.aiff in Resources */,
+				AA13B2C3D4E5F6A7B8C9D013 /* Glass.aiff in Resources */,
+				AA14B2C3D4E5F6A7B8C9D014 /* Submarine.aiff in Resources */,
+				AA15B2C3D4E5F6A7B8C9D015 /* Purr.aiff in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -432,6 +452,7 @@
 				SDKROOT = macosx;
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
+				SWIFT_COMPILATION_MODE = singlefile;
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 			};
 			name = Debug;
@@ -502,7 +523,7 @@
 				CODE_SIGN_ENTITLEMENTS = TaskScheduler/TaskScheduler.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 451;
+				CURRENT_PROJECT_VERSION = 501;
 				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_ASSET_PATHS = "";
 				ENABLE_APP_SANDBOX = NO;
@@ -539,7 +560,7 @@
 				CODE_SIGN_ENTITLEMENTS = TaskScheduler/TaskScheduler.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 451;
+				CURRENT_PROJECT_VERSION = 501;
 				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_ASSET_PATHS = "";
 				ENABLE_APP_SANDBOX = NO;

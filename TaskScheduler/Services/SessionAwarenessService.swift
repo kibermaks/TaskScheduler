@@ -84,6 +84,7 @@ class SessionAwarenessService: ObservableObject {
     private var timer: Timer?
     private var wasActive: Bool = false
     private var previousEventId: String? = nil
+    private var previousSessionEndTime: Date? = nil
     private var feedbackDismissTimer: Timer?
 
     // Phase 3: Presence reminder tracking
@@ -91,6 +92,11 @@ class SessionAwarenessService: ObservableObject {
 
     // Phase 3: Ending soon tracking
     private var hasPlayedEndingSoon: Bool = false
+
+    // Tracking state preservation for calendar refresh gaps
+    private var lastEndedEventId: String? = nil
+    private var savedPresenceReminderTime: Date? = nil
+    private var savedEndingSoonPlayed: Bool = false
 
     // MARK: - Init
 
@@ -106,6 +112,9 @@ class SessionAwarenessService: ObservableObject {
     func start(calendarService: CalendarService, audioService: SessionAudioService) {
         self.calendarService = calendarService
         self.audioService = audioService
+
+        // Apply saved master volume
+        audioService.setMasterVolume(config.masterVolume)
 
         // Clean old feedback entries
         SessionFeedbackStore.shared.clearOldEntries(keepingDate: Date())
@@ -180,8 +189,15 @@ class SessionAwarenessService: ObservableObject {
         // 3. No active session
         else {
             if wasActive, let prevId = previousEventId {
-                // Session just ended — trigger feedback + end sound
-                triggerSessionEnd(eventId: prevId)
+                // Save tracking state so we can restore if same event reappears (calendar refresh gap)
+                lastEndedEventId = currentEventId
+                savedPresenceReminderTime = lastPresenceReminderTime
+                savedEndingSoonPlayed = hasPlayedEndingSoon
+
+                // Only play end sound + feedback if the session ended naturally
+                // (Now passed the end time), not if event was moved away
+                let isNaturalEnd = previousSessionEndTime.map { now >= $0 } ?? false
+                triggerSessionEnd(eventId: prevId, isNaturalEnd: isNaturalEnd)
             }
             clearActiveState()
         }
@@ -192,7 +208,7 @@ class SessionAwarenessService: ObservableObject {
         }
 
         // Phase 3: Ending soon
-        if isActive && !hasPlayedEndingSoon && config.endingSoonSound.sound != "Off" {
+        if isActive && !hasPlayedEndingSoon && config.endingSoonSound.isPlayable {
             if remaining <= 120 && remaining > 0 {
                 audioService?.playTransition(config: config.endingSoonSound)
                 hasPlayedEndingSoon = true
@@ -218,6 +234,7 @@ class SessionAwarenessService: ObservableObject {
 
         wasActive = isActive
         previousEventId = currentEventId
+        previousSessionEndTime = sessionEndTime
     }
 
     // MARK: - Presence reminder
@@ -297,9 +314,39 @@ class SessionAwarenessService: ObservableObject {
 
         // Audio: start sound + ambient on new session
         if isNewSession && !wasActiveBeforeThisTick {
-            lastPresenceReminderTime = nil
-            hasPlayedEndingSoon = false
-            playSessionStartAudio(sessionType: sessionType)
+            // Check if this is the same event re-appearing after a brief gap (calendar refresh)
+            if slot.id == lastEndedEventId {
+                // Restore tracking state — don't re-trigger presence/ending sounds
+                lastPresenceReminderTime = savedPresenceReminderTime
+                hasPlayedEndingSoon = savedEndingSoonPlayed
+            } else {
+                lastPresenceReminderTime = nil
+                hasPlayedEndingSoon = false
+            }
+            lastEndedEventId = nil
+            savedPresenceReminderTime = nil
+            savedEndingSoonPlayed = false
+
+            // If we're joining mid-event (elapsed > 10s), skip start transition — just play ambient
+            let isJoiningMidEvent = elapsed > 10
+
+            // When joining mid-event, suppress immediate presence/ending triggers
+            // (only fire when DateTime Now naturally crosses the next interval boundary)
+            if isJoiningMidEvent {
+                if lastPresenceReminderTime == nil {
+                    // Anchor to last interval boundary so next reminder fires at a clean multiple
+                    let intervalSeconds = TimeInterval(config.presenceReminderIntervalMinutes * 60)
+                    let completedIntervals = Int(elapsed / intervalSeconds)
+                    if completedIntervals > 0 {
+                        lastPresenceReminderTime = slot.startTime.addingTimeInterval(Double(completedIntervals) * intervalSeconds)
+                    }
+                }
+                if remaining <= 120 {
+                    hasPlayedEndingSoon = true
+                }
+            }
+
+            playSessionStartAudio(sessionType: sessionType, skipTransition: isJoiningMidEvent)
         }
     }
 
@@ -323,16 +370,17 @@ class SessionAwarenessService: ObservableObject {
 
     // MARK: - Session transitions
 
-    private func triggerSessionEnd(eventId: String) {
+    private func triggerSessionEnd(eventId: String, isNaturalEnd: Bool) {
         audioService?.stopAmbient()
 
-        // Play end sound
-        if config.endSound.sound != "Off" {
+        // Only play end sound if session ended naturally (Now passed end time)
+        if isNaturalEnd && config.endSound.isPlayable {
             audioService?.playTransition(config: config.endSound)
         }
 
-        // Create feedback prompt from the session that just ended
-        if let calendarService = calendarService,
+        // Create feedback prompt from the session that just ended (only for natural ends)
+        if isNaturalEnd,
+           let calendarService = calendarService,
            let slot = calendarService.busySlots.first(where: { $0.id == eventId }),
            CalendarService.sessionType(fromNotes: slot.notes) != nil {
             sessionFeedbackPending = SessionFeedback(
@@ -353,15 +401,16 @@ class SessionAwarenessService: ObservableObject {
         }
     }
 
-    private func playSessionStartAudio(sessionType: SessionType?) {
+    private func playSessionStartAudio(sessionType: SessionType?, skipTransition: Bool = false) {
         guard let audioService = audioService else { return }
 
-        // Play start transition sound
-        if config.startSound.sound != "Off" {
+        // Play start transition sound (skip if joining mid-event)
+        let playTransition = !skipTransition && config.startSound.isPlayable
+        if playTransition {
             audioService.playTransition(config: config.startSound)
         }
 
-        // Start ambient sound (delayed slightly if start sound is playing)
+        // Determine ambient sound config
         let soundConfig: SessionSoundConfig
         if let type = sessionType {
             soundConfig = config.soundConfig(for: type)
@@ -369,11 +418,49 @@ class SessionAwarenessService: ObservableObject {
             soundConfig = config.otherEventsSound
         }
 
-        if soundConfig.sound != "Off" {
-            let delay: TimeInterval = config.startSound.sound != "Off" ? 3.0 : 0
+        // Determine accelerando config for initial speed
+        let accelConfig: AccelerandoConfig
+        if let type = sessionType {
+            accelConfig = config.accelerandoConfig(for: type)
+        } else {
+            accelConfig = config.otherEventsSoundAccelerando
+        }
+
+        if soundConfig.isPlayable {
+            let delay: TimeInterval = playTransition ? 3.0 : 0
+            let currentProgress = self.progress
             DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
                 audioService.playAmbient(config: soundConfig)
+                // Apply speed/accelerando immediately so the first sound is already modified
+                audioService.updatePlaybackRate(progress: currentProgress, accelerando: accelConfig)
             }
+        }
+    }
+
+    // MARK: - Audio state refresh (e.g. after settings demo playback)
+
+    func refreshAudioState() {
+        guard let audioService = audioService, isActive else { return }
+
+        let soundConfig: SessionSoundConfig
+        if let type = currentSessionType {
+            soundConfig = config.soundConfig(for: type)
+        } else if isBusySlotMode {
+            soundConfig = config.otherEventsSound
+        } else {
+            return
+        }
+
+        if soundConfig.isPlayable && !audioService.isMuted {
+            audioService.playAmbient(config: soundConfig)
+            // Re-apply current accelerando/speed
+            let accelConfig: AccelerandoConfig
+            if let type = currentSessionType {
+                accelConfig = config.accelerandoConfig(for: type)
+            } else {
+                accelConfig = config.otherEventsSoundAccelerando
+            }
+            audioService.updatePlaybackRate(progress: progress, accelerando: accelConfig)
         }
     }
 
@@ -392,11 +479,23 @@ class SessionAwarenessService: ObservableObject {
         sessionFeedbackPending = nil
     }
 
+    // MARK: - Debug simulation
+
+    func simulatePresenceReminder() {
+        audioService?.playTransition(config: config.presenceReminderSound)
+        triggerFlash(.presenceReminder)
+    }
+
+    func simulateEndingSoon() {
+        audioService?.playTransition(config: config.endingSoonSound)
+        triggerFlash(.endingSoon)
+    }
+
     // MARK: - Flash
 
     private func triggerFlash(_ type: FlashType) {
         flashTrigger = type
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) { [weak self] in
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [weak self] in
             self?.flashTrigger = nil
         }
     }
