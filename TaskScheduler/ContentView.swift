@@ -1150,6 +1150,38 @@ struct RightPanel: View {
         DidYouKnowFact(
             title: "Preset shortcuts",
             message: "Save Workday, Focus, Weekend, or any custom preset once and keep it one click away."
+        ),
+        DidYouKnowFact(
+            title: "Session Awareness",
+            message: "Get a live panel with timer, progress bar, and ambient audio to keep you in the zone."
+        ),
+        DidYouKnowFact(
+            title: "Ambient sounds",
+            message: "Each session type can have its own ambient sound, speed, and accelerando — configure them in Settings → Awareness."
+        ),
+        DidYouKnowFact(
+            title: "Mini player mode",
+            message: "Click the collapse button on the awareness panel to switch to a compact mini player that floats on your desktop."
+        ),
+        DidYouKnowFact(
+            title: "Presence reminder",
+            message: "Enable a periodic sound reminder in Settings → Awareness to stay focused during long sessions."
+        ),
+        DidYouKnowFact(
+            title: "Manual layout mode",
+            message: "Freeze projected sessions to freely drag and resize them by hand — overlapping sessions push out of the way automatically."
+        ),
+        DidYouKnowFact(
+            title: "Drag to reschedule",
+            message: "Drag any calendar event on the timeline to move it — projected sessions shift in real time to fill the gaps."
+        ),
+        DidYouKnowFact(
+            title: "Undo & redo",
+            message: "Moved an event to the wrong spot? Use ⌘Z to undo and ⇧⌘Z to redo any drag or resize on the timeline."
+        ),
+        DidYouKnowFact(
+            title: "Resize events",
+            message: "Drag the bottom edge of a calendar event to resize it. Hold ⌥ Option to snap to 5-minute increments."
         )
     ]
     
