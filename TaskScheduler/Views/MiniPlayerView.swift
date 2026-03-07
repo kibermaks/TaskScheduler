@@ -8,35 +8,45 @@ struct MiniPlayerView: View {
     @State private var flashColor: Color = .clear
     @State private var showingEventInfo = false
 
+    private let progressVisibleWidthThreshold: CGFloat = 620
+
     var body: some View {
-        HStack(spacing: 0) {
-            // Left: Expand + Session info (icon + title + notes)
-            HStack(spacing: 8) {
-                expandButton
-                sessionInfoSection
+        GeometryReader { geo in
+            let showProgress = geo.size.width >= progressVisibleWidthThreshold
+
+            HStack(spacing: 0) {
+                // Left: Expand + Session info (icon + title + notes)
+                HStack(spacing: 8) {
+                    expandButton
+                    sessionInfoSection
+                }
+                .frame(minWidth: 200, maxWidth: 280, alignment: .leading)
+
+                divider
+
+                // Time slot + Calendar/Type
+                sessionMetaColumn
+                    .frame(width: 110, alignment: .leading)
+
+                if showProgress {
+                    divider
+
+                    // Progress bar (spring — fills remaining space)
+                    progressSection
+                        .padding(.horizontal, 12)
+
+                    divider
+                } else {
+                    Spacer(minLength: 0)
+                }
+
+                // Right: Time metric + Mute
+                HStack(spacing: 12) {
+                    clickableTimeDisplay
+                    muteButton
+                }
+                .frame(width: 150, alignment: .trailing)
             }
-            .frame(minWidth: 200, maxWidth: 280, alignment: .leading)
-
-            divider
-
-            // Time slot + Calendar/Type
-            sessionMetaColumn
-                .frame(width: 110, alignment: .leading)
-
-            divider
-
-            // Progress bar (spring — fills remaining space)
-            progressSection
-                .padding(.horizontal, 12)
-
-            divider
-
-            // Right: Time metric + Mute
-            HStack(spacing: 12) {
-                clickableTimeDisplay
-                muteButton
-            }
-            .frame(width: 150, alignment: .trailing)
         }
         .padding(.horizontal, 20)
         .padding(.vertical, 12)
@@ -62,8 +72,14 @@ struct MiniPlayerView: View {
         .onChange(of: awarenessService.flashTrigger != nil) { _, isFlashing in
             if isFlashing, let trigger = awarenessService.flashTrigger {
                 flashColor = trigger == .endingSoon ? .red : .orange
+                // Flash 1
                 withAnimation(.easeIn(duration: 0.15)) { flashOpacity = 0.25 }
-                withAnimation(.easeOut(duration: 0.6).delay(0.2)) { flashOpacity = 0 }
+                withAnimation(.easeOut(duration: 0.35).delay(0.2)) { flashOpacity = 0 }
+                // Flash 2
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.55) {
+                    withAnimation(.easeIn(duration: 0.15)) { flashOpacity = 0.25 }
+                    withAnimation(.easeOut(duration: 0.35).delay(0.2)) { flashOpacity = 0 }
+                }
             }
         }
     }
@@ -110,7 +126,8 @@ struct MiniPlayerView: View {
                 Text(awarenessService.currentSessionTitle)
                     .font(.system(size: 15, weight: .semibold))
                     .foregroundColor(.white)
-                    .lineLimit(1)
+                    .lineLimit(2)
+                    .truncationMode(.tail)
 
                 if let notes = SessionAwarenessService.strippedNotes(awarenessService.currentEventNotes) {
                     HStack(alignment: .top, spacing: 4) {

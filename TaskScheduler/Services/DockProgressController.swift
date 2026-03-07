@@ -78,32 +78,52 @@ private class DockTileProgressView: NSView {
             appIcon.draw(in: bounds)
         }
 
-        // Thick donut in top-right corner
-        let donutSize: CGFloat = bounds.width * 0.38
-        let lineWidth: CGFloat = donutSize * 0.28
-        let radius: CGFloat = (donutSize - lineWidth) / 2
+        // Progress donut (top-left) with a white round background.
+        // The background is intentionally a few pixels larger than the donut ("skirt"),
+        // so you see a white rim around the ring.
+        let donutDiameter: CGFloat = bounds.width * 0.32
+        let ringLineWidth: CGFloat = donutDiameter * 0.22
+        let donutOuterRadius: CGFloat = donutDiameter / 2
+        let skirtOutset: CGFloat = max(3, bounds.width * 0.025) // ~3–4 px at typical dock tile sizes
+        let badgeRadius: CGFloat = donutOuterRadius + skirtOutset
+        let badgeDiameter: CGFloat = badgeRadius * 2
+        let padding: CGFloat = 5
         let center = NSPoint(
-            x: bounds.maxX - donutSize / 2 - 4,
-            y: bounds.maxY - donutSize / 2 - 4
+            x: bounds.minX + badgeRadius + padding,
+            y: bounds.maxY - badgeRadius - padding
         )
 
-        // Semi-transparent backdrop circle
-        let backdropPath = NSBezierPath(
-            ovalIn: NSRect(
-                x: center.x - donutSize / 2,
-                y: center.y - donutSize / 2,
-                width: donutSize,
-                height: donutSize
-            )
+        // White round background
+        let badgeRect = NSRect(
+            x: center.x - badgeDiameter / 2,
+            y: center.y - badgeDiameter / 2,
+            width: badgeDiameter,
+            height: badgeDiameter
         )
-        NSColor.black.withAlphaComponent(0.5).setFill()
-        backdropPath.fill()
+
+        let badgePath = NSBezierPath(ovalIn: badgeRect)
+        NSGraphicsContext.current?.saveGraphicsState()
+        NSShadow().apply {
+            $0.shadowOffset = NSSize(width: 0, height: -1)
+            $0.shadowBlurRadius = 2.5
+            $0.shadowColor = NSColor.black.withAlphaComponent(0.25)
+            $0.set()
+        }
+        NSColor.white.withAlphaComponent(0.95).setFill()
+        badgePath.fill()
+        NSGraphicsContext.current?.restoreGraphicsState()
+
+        NSColor.black.withAlphaComponent(0.12).setStroke()
+        badgePath.lineWidth = 1
+        badgePath.stroke()
+
+        let ringRadius: CGFloat = donutOuterRadius - ringLineWidth / 2
 
         // Background track
         let trackPath = NSBezierPath()
-        trackPath.appendArc(withCenter: center, radius: radius, startAngle: 0, endAngle: 360)
-        trackPath.lineWidth = lineWidth
-        NSColor.white.withAlphaComponent(0.2).setStroke()
+        trackPath.appendArc(withCenter: center, radius: ringRadius, startAngle: 0, endAngle: 360)
+        trackPath.lineWidth = ringLineWidth
+        NSColor.black.withAlphaComponent(0.14).setStroke()
         trackPath.stroke()
 
         // Progress arc
@@ -117,8 +137,8 @@ private class DockTileProgressView: NSView {
             let endAngle: CGFloat = startAngle - CGFloat(remainingFraction) * 360
 
             let progressPath = NSBezierPath()
-            progressPath.appendArc(withCenter: center, radius: radius, startAngle: startAngle, endAngle: endAngle, clockwise: true)
-            progressPath.lineWidth = lineWidth
+            progressPath.appendArc(withCenter: center, radius: ringRadius, startAngle: startAngle, endAngle: endAngle, clockwise: true)
+            progressPath.lineWidth = ringLineWidth
             progressPath.lineCapStyle = .round
             progressColor.withAlphaComponent(0.95).setStroke()
             progressPath.stroke()
@@ -128,11 +148,17 @@ private class DockTileProgressView: NSView {
             let endAngle: CGFloat = startAngle - CGFloat(progress) * 360
 
             let progressPath = NSBezierPath()
-            progressPath.appendArc(withCenter: center, radius: radius, startAngle: startAngle, endAngle: endAngle, clockwise: true)
-            progressPath.lineWidth = lineWidth
+            progressPath.appendArc(withCenter: center, radius: ringRadius, startAngle: startAngle, endAngle: endAngle, clockwise: true)
+            progressPath.lineWidth = ringLineWidth
             progressPath.lineCapStyle = .round
             progressColor.withAlphaComponent(0.95).setStroke()
             progressPath.stroke()
         }
+    }
+}
+
+private extension NSShadow {
+    func apply(_ configure: (NSShadow) -> Void) {
+        configure(self)
     }
 }

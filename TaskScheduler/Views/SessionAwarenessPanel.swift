@@ -83,8 +83,14 @@ struct SessionAwarenessPanel: View {
         .onChange(of: awarenessService.flashTrigger != nil) { _, isFlashing in
             if isFlashing, let trigger = awarenessService.flashTrigger {
                 flashColor = trigger == .endingSoon ? .red : .orange
+                // Flash 1
                 withAnimation(.easeIn(duration: 0.15)) { flashOpacity = 0.25 }
-                withAnimation(.easeOut(duration: 0.6).delay(0.2)) { flashOpacity = 0 }
+                withAnimation(.easeOut(duration: 0.35).delay(0.2)) { flashOpacity = 0 }
+                // Flash 2
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.55) {
+                    withAnimation(.easeIn(duration: 0.15)) { flashOpacity = 0.25 }
+                    withAnimation(.easeOut(duration: 0.35).delay(0.2)) { flashOpacity = 0 }
+                }
             }
         }
     }
@@ -127,7 +133,8 @@ struct SessionAwarenessPanel: View {
                 Text(awarenessService.currentSessionTitle)
                     .font(.system(size: 15, weight: .semibold))
                     .foregroundColor(.white)
-                    .lineLimit(1)
+                    .lineLimit(2)
+                    .truncationMode(.tail)
 
                 // Event notes (stripped of hashtags), up to 2 lines with (i) popover
                 if let notes = SessionAwarenessService.strippedNotes(awarenessService.currentEventNotes) {
@@ -454,10 +461,10 @@ struct SessionAwarenessPanel: View {
 
     private var currentSoundIsOff: Bool {
         if let type = awarenessService.currentSessionType {
-            return awarenessService.config.soundConfig(for: type).sound == "Off"
+            return !awarenessService.config.soundConfig(for: type).isPlayable
         }
         if awarenessService.isBusySlotMode {
-            return awarenessService.config.otherEventsSound.sound == "Off"
+            return !awarenessService.config.otherEventsSound.isPlayable
         }
         return true
     }

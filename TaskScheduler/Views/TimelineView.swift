@@ -12,7 +12,7 @@ struct TimelineView: View {
     
     private let hourHeight: CGFloat = 90 // Zoomed in from 60
     private let timeColumnWidth: CGFloat = 55
-    private let currentTimeTimer = Timer.publish(every: 30, on: .main, in: .common).autoconnect()
+    @State private var clockTimer: Timer? = nil
     
     
     // Detail Sheet State
@@ -92,7 +92,7 @@ struct TimelineView: View {
     
     private var isNarrow: Bool {
         // Use a reasonable threshold for narrow width
-        containerWidth < 650
+        containerWidth < 750
     }
 
     private var isExtraNarrow: Bool {
@@ -168,8 +168,17 @@ struct TimelineView: View {
             .onChange(of: selectedDate) { _, _ in
                 eventUndoManager.clear()
             }
-            .onReceive(currentTimeTimer) { date in
-                currentTime = date
+            .onAppear {
+                guard clockTimer == nil else { return }
+                clockTimer = Timer.scheduledTimer(withTimeInterval: 15, repeats: true) { _ in
+                    DispatchQueue.main.async {
+                        currentTime = Date()
+                    }
+                }
+            }
+            .onDisappear {
+                clockTimer?.invalidate()
+                clockTimer = nil
             }
             .sheet(isPresented: $showingCopyDatePicker) {
                 VStack(spacing: 16) {
@@ -859,7 +868,7 @@ extension TimelineView {
     
     private func currentTimeIndicator(currentTime: Date, width: CGFloat) -> some View {
         let yPos = calculateYPosition(for: currentTime)
-        
+
         return ZStack(alignment: .topLeading) {
             Circle()
                 .fill(Color.red)
@@ -1037,31 +1046,39 @@ extension TimelineView {
         }
         .contextMenu {
             Button("View & Edit Event Details") {
-                selectedSession = nil
-                selectedBusySlot = slot
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+                    selectedSession = nil
+                    selectedBusySlot = slot
+                }
             }
             Divider()
             Button("Delete", role: .destructive) {
-                deleteBusySlot(slot)
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+                    deleteBusySlot(slot)
+                }
             }
             Divider()
             Menu("Copy to...") {
                 ForEach(copyTargetDays(), id: \.label) { target in
                     Button(target.label) {
-                        let result = calendarService.copyEventToDay(eventId: slot.id, targetDate: target.date)
-                        if result.success, let eventId = result.newEventId, let targetStart = result.targetStartTime {
-                            onCopySuccess?(CopyToastInfo(title: slot.title, targetLabel: target.label, targetDate: target.date, targetStartTime: targetStart, newEventId: eventId))
-                            Task { await calendarService.fetchEvents(for: selectedDate) }
-                        } else {
-                            schedulingEngine.schedulingMessage = "Failed to copy \"\(slot.title)\""
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+                            let result = calendarService.copyEventToDay(eventId: slot.id, targetDate: target.date)
+                            if result.success, let eventId = result.newEventId, let targetStart = result.targetStartTime {
+                                onCopySuccess?(CopyToastInfo(title: slot.title, targetLabel: target.label, targetDate: target.date, targetStartTime: targetStart, newEventId: eventId))
+                                Task { await calendarService.fetchEvents(for: selectedDate) }
+                            } else {
+                                schedulingEngine.schedulingMessage = "Failed to copy \"\(slot.title)\""
+                            }
                         }
                     }
                 }
                 Divider()
                 Button("Custom...") {
-                    copySlotId = slot.id
-                    copyTargetDate = Date()
-                    showingCopyDatePicker = true
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+                        copySlotId = slot.id
+                        copyTargetDate = Date()
+                        showingCopyDatePicker = true
+                    }
                 }
             }
         }
@@ -1251,23 +1268,29 @@ extension TimelineView {
         }
         .contextMenu {
             Button {
-                selectedBusySlot = nil
-                selectedSession = session
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+                    selectedBusySlot = nil
+                    selectedSession = session
+                }
             } label: {
                 Label("View Details", systemImage: "info.circle")
             }
             if !isBigRest {
                 Button {
-                    scheduleProjectedSession(session)
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+                        scheduleProjectedSession(session)
+                    }
                 } label: {
                     Label("Schedule Session", systemImage: "calendar.badge.plus")
                 }
                 Divider()
                 Button {
-                    renameText = session.title
-                    renamingSessionId = session.id
-                    if !schedulingEngine.sessionsFrozen {
-                        schedulingEngine.sessionsFrozen = true
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+                        renameText = session.title
+                        renamingSessionId = session.id
+                        if !schedulingEngine.sessionsFrozen {
+                            schedulingEngine.sessionsFrozen = true
+                        }
                     }
                 } label: {
                     Label("Rename", systemImage: "pencil")
@@ -1757,12 +1780,12 @@ extension TimelineView {
     }
 
     private func feedbackPopoverContent(for slot: BusyTimeSlot, existingEntry: SessionFeedbackEntry?) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 12) {
             Text(existingEntry != nil ? "Update feedback" : "How was this session?")
-                .font(.system(size: 12, weight: .medium))
+                .font(.system(size: 13, weight: .semibold))
                 .foregroundColor(.primary)
 
-            HStack(spacing: 6) {
+            HStack(spacing: 8) {
                 ForEach(SessionRating.allCases, id: \.rawValue) { rating in
                     Button {
                         let sessionType = CalendarService.sessionType(fromNotes: slot.notes)
@@ -1781,21 +1804,22 @@ extension TimelineView {
                         }
                         feedbackPopoverEventId = nil
                     } label: {
-                        HStack(spacing: 3) {
+                        HStack(spacing: 5) {
                             Image(systemName: rating.icon)
-                                .font(.system(size: 10))
+                                .font(.system(size: 11, weight: .medium))
                             Text(rating.label)
-                                .font(.system(size: 10, weight: .medium))
+                                .font(.system(size: 11, weight: .medium))
+                                .lineLimit(1)
                         }
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 4)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 6)
                         .background(existingEntry?.rating == rating
                                     ? ratingColor(rating).opacity(0.2)
                                     : Color.clear)
-                        .cornerRadius(4)
+                        .cornerRadius(6)
                         .overlay(
-                            RoundedRectangle(cornerRadius: 4)
-                                .stroke(ratingColor(rating).opacity(0.3), lineWidth: 1)
+                            RoundedRectangle(cornerRadius: 6)
+                                .stroke(ratingColor(rating).opacity(existingEntry?.rating == rating ? 0.6 : 0.3), lineWidth: existingEntry?.rating == rating ? 1.5 : 1)
                         )
                     }
                     .buttonStyle(.plain)
@@ -1803,8 +1827,8 @@ extension TimelineView {
                 }
             }
         }
-        .padding(10)
-        .frame(width: 220)
+        .padding(14)
+        .frame(minWidth: 260)
     }
 
     private func ratingColor(_ rating: SessionRating) -> Color {

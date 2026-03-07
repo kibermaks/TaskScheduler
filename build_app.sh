@@ -131,11 +131,16 @@ set_build_number "$NEW_BUILD_NUMBER"
 echo "   New Build Number: $NEW_BUILD_NUMBER"
 
 # 5. Build
-echo "🚀 Starting Release Build for $SCHEME..."
+if [ "$RELEASE_BUILD" = true ]; then
+    BUILD_CONFIG="Release"
+else
+    BUILD_CONFIG="Debug"
+fi
+echo "🚀 Starting $BUILD_CONFIG Build for $SCHEME..."
 
 xcodebuild -project "$PROJECT" \
            -scheme "$SCHEME" \
-           -configuration Release \
+           -configuration "$BUILD_CONFIG" \
            -destination 'platform=macOS,arch=arm64' \
            clean build \
            DEVELOPMENT_TEAM="$TEAM_ID" \

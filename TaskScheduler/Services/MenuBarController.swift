@@ -10,9 +10,9 @@ class MenuBarController: ObservableObject {
     func setup(awarenessService: SessionAwarenessService) {
         self.awarenessService = awarenessService
 
-        // Observe config changes to show/hide
+        // Observe config changes to show/hide (both showMenuBarItem AND enabled)
         awarenessService.$config
-            .map(\.showMenuBarItem)
+            .map { $0.showMenuBarItem && $0.enabled }
             .removeDuplicates()
             .receive(on: DispatchQueue.main)
             .sink { [weak self] show in
@@ -35,7 +35,9 @@ class MenuBarController: ObservableObject {
         guard statusItem == nil else { return }
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         statusItem?.button?.target = self
-        statusItem?.button?.action = #selector(statusItemClicked)
+        statusItem?.button?.action = #selector(statusItemClicked(_:))
+        statusItem?.button?.sendAction(on: [.leftMouseUp, .rightMouseUp])
+        statusItem?.menu = nil
         updateStatusItem()
     }
 
@@ -45,11 +47,43 @@ class MenuBarController: ObservableObject {
         statusItem = nil
     }
 
-    @objc private func statusItemClicked() {
-        NSApp.activate(ignoringOtherApps: true)
-        if let window = NSApp.windows.first(where: { $0.isVisible && !($0 is NSPanel) }) {
-            window.makeKeyAndOrderFront(nil)
+    @objc private func statusItemClicked(_ sender: NSStatusBarButton) {
+        guard let event = NSApp.currentEvent else { return }
+
+        if event.type == .rightMouseUp {
+            showContextMenu()
+        } else {
+            NSApp.activate(ignoringOtherApps: true)
+            if let window = NSApp.windows.first(where: { $0.isVisible && !($0 is NSPanel) }) {
+                window.makeKeyAndOrderFront(nil)
+            }
         }
+    }
+
+    private func showContextMenu() {
+        let menu = NSMenu()
+
+        let appName = Bundle.main.object(forInfoDictionaryKey: "CFBundleDisplayName") as? String
+            ?? Bundle.main.object(forInfoDictionaryKey: "CFBundleName") as? String
+            ?? "Task Scheduler"
+        let headerItem = NSMenuItem(title: appName, action: nil, keyEquivalent: "")
+        headerItem.isEnabled = false
+        menu.addItem(headerItem)
+
+        menu.addItem(NSMenuItem.separator())
+
+        let quitItem = NSMenuItem(title: "Quit", action: #selector(quitApp), keyEquivalent: "q")
+        quitItem.target = self
+        menu.addItem(quitItem)
+
+        statusItem?.menu = menu
+        statusItem?.button?.performClick(nil)
+        // Reset menu so left-click works normally again
+        statusItem?.menu = nil
+    }
+
+    @objc private func quitApp() {
+        NSApp.terminate(nil)
     }
 
     private func updateStatusItem() {
