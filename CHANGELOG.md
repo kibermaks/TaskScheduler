@@ -5,6 +5,16 @@ All notable changes to Task Scheduler will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.15] - 2026-03-08
+
+### Added
+
+- Session Awareness — tracks active calendar events tagged with session types (#work, #deep, #break, etc.) with ambient sounds, transition effects, and accelerando as sessions approach end
+- Dock icon progress donut, menu bar session display, and collapsible floating mini-player
+- Awareness settings panel with per-type sound config, device selection, and custom sound import
+- Copy event to nearby day via context menu with undo support
+- "Did You Know" tips for awareness, drag/resize, and manual mode
+
 ## [1.13] - 2026-03-04
 
 ### Added

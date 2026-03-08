@@ -176,9 +176,17 @@ if [ -n "$APP_PATH" ]; then
     # Re-sign with Developer ID for distribution (--release flag)
     if [ "$RELEASE_BUILD" = true ]; then
         echo "🔏 Re-signing with Developer ID (hardened runtime + timestamp)..."
+
+        # Create release entitlements (extract current, strip get-task-allow)
+        RELEASE_ENT=$(mktemp /tmp/release-ent-XXXXXXXX).plist
+        codesign -d --entitlements "$RELEASE_ENT" --xml "./$APP_NAME" 2>/dev/null
+        /usr/libexec/PlistBuddy -c "Delete :com.apple.security.get-task-allow" "$RELEASE_ENT" 2>/dev/null || true
+
         codesign --deep --force --options runtime --timestamp \
             --sign "Developer ID Application: MaksymTW Grigorash ($TEAM_ID)" \
+            --entitlements "$RELEASE_ENT" \
             "./$APP_NAME"
+        rm -f "$RELEASE_ENT"
         echo "   ✓ Signed for distribution"
     fi
 
