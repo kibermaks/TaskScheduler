@@ -29,6 +29,15 @@ class MenuBarController: ObservableObject {
                 }
             }
             .store(in: &cancellables)
+
+        // Flash effect (single flash for menu bar)
+        awarenessService.$flashTrigger
+            .compactMap { $0 }
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] type in
+                self?.flashStatusItem(type: type)
+            }
+            .store(in: &cancellables)
     }
 
     func show() {
@@ -84,6 +93,23 @@ class MenuBarController: ObservableObject {
 
     @objc private func quitApp() {
         NSApp.terminate(nil)
+    }
+
+    private func flashStatusItem(type: SessionAwarenessService.FlashType) {
+        guard let button = statusItem?.button else { return }
+        let color = type == .endingSoon ? NSColor.systemRed : NSColor.orange
+        // Flash 1
+        button.contentTintColor = color
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.55) {
+            button.contentTintColor = nil
+            // Flash 2
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                button.contentTintColor = color
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.55) {
+                    button.contentTintColor = nil
+                }
+            }
+        }
     }
 
     private func updateStatusItem() {

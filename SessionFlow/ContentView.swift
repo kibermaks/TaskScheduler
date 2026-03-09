@@ -75,6 +75,7 @@ struct ContentView: View {
     @State private var showingWelcome = false
     @State private var showingPatternsGuide = false
     @State private var showingTasksGuide = false
+    @State private var showingSessionAwarenessGuide = false
     @State private var showingCalendarSetup = false
     @State private var updateAlert: UpdateService.UpdateAlert?
     @State private var showingWhatsNew = false
@@ -161,8 +162,14 @@ struct ContentView: View {
         .sheet(isPresented: $showingWhatsNew) {
             WhatsNewView(changelog: ChangelogService.shared)
         }
+        .sheet(isPresented: $showingSessionAwarenessGuide) {
+            SessionAwarenessGuide()
+        }
         .onReceive(NotificationCenter.default.publisher(for: Notification.Name("ShowWhatsNew"))) { _ in
             showingWhatsNew = true
+        }
+        .onReceive(NotificationCenter.default.publisher(for: Notification.Name("ShowSessionAwarenessGuide"))) { _ in
+            showingSessionAwarenessGuide = true
         }
         .onAppear {
             checkForWhatsNew()

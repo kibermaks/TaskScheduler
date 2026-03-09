@@ -231,12 +231,16 @@ struct SettingsPanel: View {
                             .frame(width: 250)
                     }
 
-                    SectionExpandButton(isExpanded: $planningExpanded, tooltip: planningSecondaryTooltip)
+                    if schedulingEngine.schedulePlanning {
+                        SectionExpandButton(isExpanded: $planningExpanded, tooltip: planningSecondaryTooltip)
+                    }
                 }
                 .contentShape(Rectangle())
                 .onTapGesture {
-                    withAnimation(.easeInOut(duration: 0.2)) {
-                        planningExpanded.toggle()
+                    if schedulingEngine.schedulePlanning {
+                        withAnimation(.easeInOut(duration: 0.2)) {
+                            planningExpanded.toggle()
+                        }
                     }
                 }
 
@@ -584,12 +588,16 @@ struct SettingsPanel: View {
                             .frame(width: 250)
                     }
 
-                    SectionExpandButton(isExpanded: $deepExpanded, tooltip: deepSecondaryTooltip)
+                    if schedulingEngine.deepSessionConfig.enabled {
+                        SectionExpandButton(isExpanded: $deepExpanded, tooltip: deepSecondaryTooltip)
+                    }
                 }
                 .contentShape(Rectangle())
                 .onTapGesture {
-                    withAnimation(.easeInOut(duration: 0.2)) {
-                        deepExpanded.toggle()
+                    if schedulingEngine.deepSessionConfig.enabled {
+                        withAnimation(.easeInOut(duration: 0.2)) {
+                            deepExpanded.toggle()
+                        }
                     }
                 }
 
@@ -765,12 +773,16 @@ struct SettingsPanel: View {
                             .frame(width: 260)
                     }
 
-                    SectionExpandButton(isExpanded: $longRestExpanded, tooltip: longRestSecondaryTooltip)
+                    if schedulingEngine.bigRestConfig.enabled {
+                        SectionExpandButton(isExpanded: $longRestExpanded, tooltip: longRestSecondaryTooltip)
+                    }
                 }
                 .contentShape(Rectangle())
                 .onTapGesture {
-                    withAnimation(.easeInOut(duration: 0.2)) {
-                        longRestExpanded.toggle()
+                    if schedulingEngine.bigRestConfig.enabled {
+                        withAnimation(.easeInOut(duration: 0.2)) {
+                            longRestExpanded.toggle()
+                        }
                     }
                 }
 

@@ -118,9 +118,7 @@ echo -e "${BLUE}📋 Copying app bundle...${NC}"
 cp -R "$SOURCE_APP" "$TEMP_DMG_FOLDER/$APP_FILE"
 
 echo -e "${BLUE}🔗 Creating Applications shortcut...${NC}"
-# Use a Finder alias instead of symlink so Finder shows the proper Applications folder icon
-osascript -e "tell application \"Finder\" to make alias file to POSIX file \"/Applications\" at POSIX file \"$(cd "$TEMP_DMG_FOLDER" && pwd)\"" > /dev/null 2>&1 \
-    || ln -s /Applications "$TEMP_DMG_FOLDER/Applications"
+ln -s /Applications "$TEMP_DMG_FOLDER/Applications"
 
 # Copy background (arrow-only) if it exists
 if [ -f "$BACKGROUND_FILE" ]; then

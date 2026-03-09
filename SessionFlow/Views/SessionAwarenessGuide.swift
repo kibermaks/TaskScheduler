@@ -1,9 +1,11 @@
 import SwiftUI
+import Combine
 
 struct SessionAwarenessGuide: View {
     @Environment(\.dismiss) var dismiss
     @State private var currentPage = 0
-    @State private var progressValue: CGFloat = 0.0
+    @State private var remainingMinutes: Int = 40
+    @State private var countdownCancellable: AnyCancellable?
     @State private var soundWavePhase: CGFloat = 0
     @State private var selectedFeedback: String? = nil
 
@@ -147,19 +149,23 @@ struct SessionAwarenessGuide: View {
         .focusEffectDisabled()
         .onChange(of: currentPage) { _, newPage in
             if newPage == 0 {
-                progressValue = 0
-                withAnimation(.linear(duration: 3).repeatForever(autoreverses: false)) {
-                    progressValue = 1.0
-                }
+                startCountdown()
+            } else {
+                countdownCancellable?.cancel()
+                countdownCancellable = nil
             }
             if newPage == 2 {
                 selectedFeedback = nil
             }
         }
         .onAppear {
-            withAnimation(.linear(duration: 3).repeatForever(autoreverses: false)) {
-                progressValue = 1.0
+            if currentPage == 0 {
+                startCountdown()
             }
+        }
+        .onDisappear {
+            countdownCancellable?.cancel()
+            countdownCancellable = nil
         }
     }
 
@@ -218,7 +224,8 @@ struct SessionAwarenessGuide: View {
 
                     RoundedRectangle(cornerRadius: 3)
                         .fill(Color(hex: "8B5CF6"))
-                        .frame(width: geo.size.width * progressValue)
+                        .frame(width: geo.size.width * (1 - CGFloat(remainingMinutes) / 40))
+                        .animation(.linear(duration: 1), value: remainingMinutes)
                 }
             }
             .frame(height: 6)
@@ -231,8 +238,21 @@ struct SessionAwarenessGuide: View {
     }
 
     private var timeRemainingText: String {
-        let remaining = Int((1.0 - progressValue) * 40)
-        return "\(remaining)m left"
+        "\(remainingMinutes)m left"
+    }
+
+    private func startCountdown() {
+        countdownCancellable?.cancel()
+        remainingMinutes = 40
+        countdownCancellable = Timer.publish(every: 1, on: .main, in: .common)
+            .autoconnect()
+            .sink { _ in
+                if remainingMinutes > 0 {
+                    remainingMinutes -= 1
+                } else {
+                    remainingMinutes = 40
+                }
+            }
     }
 
     // MARK: - Page 2: Sound Waves

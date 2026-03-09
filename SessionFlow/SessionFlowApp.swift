@@ -63,6 +63,10 @@ struct SessionFlowApp: App {
                     NotificationCenter.default.post(name: Notification.Name("ShowTasksGuide"), object: nil)
                 }
 
+                Button("Session Awareness...") {
+                    NotificationCenter.default.post(name: Notification.Name("ShowSessionAwarenessGuide"), object: nil)
+                }
+
                 Divider()
 
                 Button("What's New...") {

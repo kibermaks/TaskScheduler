@@ -1,16 +1,4 @@
 {
-  "hooks": {
-    "TaskCompleted": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "./build_app.sh"
-          }
-        ]
-      }
-    ]
-  },
   "permissions": {
     "allow": [
       "Bash(xcodebuild build:*)",
@@ -28,7 +16,27 @@
       "Bash(swift build)",
       "Bash(./build_app.sh patch)",
       "Bash(./create_dmg.sh)",
-      "Bash(xcodebuild -scheme SessionFlow -configuration Debug build -derivedDataPath /tmp/SessionFlowBuild)"
+      "Bash(xcodebuild -scheme SessionFlow -configuration Debug build -derivedDataPath /tmp/SessionFlowBuild)",
+      "Bash(for file in *)",
+      "Bash(do echo \"=== $file ===\")",
+      "Read(//Users/maks/Code-Projects/Antigravity - Task Scheduler/TaskScheduler/**)",
+      "Bash(done)",
+      "Bash(printf \"File\\\\t\\\\t\\\\t\\\\t\\\\tSize\\\\t\\\\tFormat\\\\n\")",
+      "Bash(ls -1 *.wav)",
+      "Bash(ls -1 *.mp3)",
+      "Bash(ls -1 *.aiff)"
+    ]
+  },
+  "hooks": {
+    "TaskCompleted": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "./build_app.sh"
+          }
+        ]
+      }
     ]
   }
 }
