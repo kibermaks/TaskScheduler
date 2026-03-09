@@ -7,15 +7,39 @@ struct MiniPlayerView: View {
     @State private var flashOpacity: Double = 0
     @State private var flashColor: Color = .clear
     @State private var showingEventInfo = false
+    @State private var feedbackConfirmation: SessionRating? = nil
 
     private let progressVisibleWidthThreshold: CGFloat = 620
 
     var body: some View {
+        Group {
+            if awarenessService.sessionFeedbackPending != nil {
+                miniFeedbackBar
+            } else if awarenessService.isActive {
+                miniActiveBar
+            } else if awarenessService.nextSessionTitle != nil {
+                miniNextUpBar
+            } else {
+                miniIdleBar
+            }
+        }
+        .background(miniBackground)
+        .overlay(
+            RoundedRectangle(cornerRadius: 10)
+                .stroke(Color.white.opacity(0.08), lineWidth: 1)
+        )
+        .animation(.easeInOut(duration: 0.3), value: awarenessService.isActive)
+        .animation(.easeInOut(duration: 0.3), value: awarenessService.sessionFeedbackPending?.id)
+        .animation(.easeInOut(duration: 0.3), value: awarenessService.nextSessionTitle)
+    }
+
+    // MARK: - Active session bar
+
+    private var miniActiveBar: some View {
         GeometryReader { geo in
             let showProgress = geo.size.width >= progressVisibleWidthThreshold
 
             HStack(spacing: 0) {
-                // Left: Expand + Session info (icon + title + notes)
                 HStack(spacing: 8) {
                     expandButton
                     sessionInfoSection
@@ -24,23 +48,18 @@ struct MiniPlayerView: View {
 
                 divider
 
-                // Time slot + Calendar/Type
                 sessionMetaColumn
                     .frame(width: 110, alignment: .leading)
 
                 if showProgress {
                     divider
-
-                    // Progress bar (spring — fills remaining space)
                     progressSection
                         .padding(.horizontal, 12)
-
                     divider
                 } else {
                     Spacer(minLength: 0)
                 }
 
-                // Right: Time metric + Mute
                 HStack(spacing: 12) {
                     clickableTimeDisplay
                     muteButton
@@ -50,37 +69,174 @@ struct MiniPlayerView: View {
         }
         .padding(.horizontal, 20)
         .padding(.vertical, 12)
-        .background(
-            ZStack {
-                RoundedRectangle(cornerRadius: 10)
-                    .fill(
-                        LinearGradient(
-                            colors: [Color(hex: "0F172A"), Color(hex: "1E293B")],
-                            startPoint: .leading,
-                            endPoint: .trailing
-                        )
-                    )
-                    .shadow(color: .black.opacity(0.5), radius: 8, x: 0, y: 2)
-                RoundedRectangle(cornerRadius: 10)
-                    .fill(flashColor.opacity(flashOpacity))
-            }
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 10)
-                .stroke(Color.white.opacity(0.08), lineWidth: 1)
-        )
         .onChange(of: awarenessService.flashTrigger != nil) { _, isFlashing in
             if isFlashing, let trigger = awarenessService.flashTrigger {
                 flashColor = trigger == .endingSoon ? .red : .orange
-                // Flash 1
                 withAnimation(.easeIn(duration: 0.15)) { flashOpacity = 0.25 }
                 withAnimation(.easeOut(duration: 0.35).delay(0.2)) { flashOpacity = 0 }
-                // Flash 2
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.55) {
                     withAnimation(.easeIn(duration: 0.15)) { flashOpacity = 0.25 }
                     withAnimation(.easeOut(duration: 0.35).delay(0.2)) { flashOpacity = 0 }
                 }
             }
+        }
+    }
+
+    // MARK: - Next Up bar
+
+    private var miniNextUpBar: some View {
+        HStack(spacing: 10) {
+            expandButton
+
+            if let type = awarenessService.nextSessionType {
+                Image(systemName: type.icon)
+                    .font(.system(size: 13))
+                    .foregroundColor(type.color.opacity(0.6))
+            }
+
+            Text("Next: \(awarenessService.nextSessionTitle ?? "")")
+                .font(.system(size: 12, weight: .medium))
+                .foregroundColor(.white.opacity(0.5))
+                .lineLimit(1)
+
+            Spacer()
+
+            if let startTime = awarenessService.nextSessionStartTime {
+                let minutesUntil = Int(startTime.timeIntervalSince(awarenessService.currentTime) / 60)
+                if minutesUntil > 0 {
+                    Text("in \(minutesUntil) min")
+                        .font(.system(size: 12, design: .monospaced))
+                        .foregroundColor(.white.opacity(0.4))
+                } else {
+                    Text("starting now")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundColor(.white.opacity(0.6))
+                }
+            }
+        }
+        .padding(.horizontal, 20)
+        .padding(.vertical, 12)
+    }
+
+    // MARK: - Idle bar
+
+    private var miniIdleBar: some View {
+        HStack(spacing: 8) {
+            expandButton
+
+            Image(systemName: "eye.circle")
+                .font(.system(size: 13))
+                .foregroundColor(.white.opacity(0.25))
+
+            Text("Session Awareness")
+                .font(.system(size: 12, weight: .medium))
+                .foregroundColor(.white.opacity(0.3))
+
+            Spacer()
+
+            Text("No sessions today")
+                .font(.system(size: 11))
+                .foregroundColor(.white.opacity(0.2))
+        }
+        .padding(.horizontal, 20)
+        .padding(.vertical, 12)
+    }
+
+    // MARK: - Feedback bar
+
+    private var miniFeedbackBar: some View {
+        HStack(spacing: 12) {
+            expandButton
+
+            if let feedback = awarenessService.sessionFeedbackPending {
+                if feedbackConfirmation != nil {
+                    HStack(spacing: 8) {
+                        Image(systemName: "checkmark.circle.fill")
+                            .foregroundColor(.green)
+                        Text("Logged!")
+                            .font(.system(size: 13, weight: .medium))
+                            .foregroundColor(.white.opacity(0.8))
+                    }
+                    .transition(.scale.combined(with: .opacity))
+                } else {
+                    Text("How was \"\(feedback.sessionTitle)\"?")
+                        .font(.system(size: 15, weight: .medium))
+                        .foregroundColor(.white.opacity(0.8))
+                        .lineLimit(1)
+
+                    Spacer()
+
+                    HStack(spacing: 6) {
+                        miniFeedbackButton(rating: .completed)
+                        miniFeedbackButton(rating: .partial)
+                        miniFeedbackButton(rating: .skipped)
+                    }
+
+                    Button {
+                        awarenessService.dismissFeedback()
+                    } label: {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 12))
+                            .foregroundColor(.white.opacity(0.3))
+                            .frame(width: 28, height: 28)
+                    }
+                    .buttonStyle(.plain)
+                    .help("Dismiss")
+                }
+            }
+        }
+        .padding(.horizontal, 20)
+        .padding(.vertical, 12)
+    }
+
+    private func miniFeedbackButton(rating: SessionRating) -> some View {
+        let color: Color = {
+            switch rating {
+            case .completed: return .green
+            case .partial: return .yellow
+            case .skipped: return .red
+            }
+        }()
+
+        return Button {
+            withAnimation(.easeInOut(duration: 0.2)) {
+                feedbackConfirmation = rating
+            }
+            awarenessService.submitFeedback(rating: rating)
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+                withAnimation { feedbackConfirmation = nil }
+            }
+        } label: {
+            Image(systemName: rating.icon)
+                .font(.system(size: 16))
+                .foregroundColor(color.opacity(0.9))
+                .frame(width: 40, height: 32)
+                .background(color.opacity(0.12))
+                .cornerRadius(6)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 6)
+                        .stroke(color.opacity(0.2), lineWidth: 1)
+                )
+        }
+        .buttonStyle(.plain)
+        .help(rating.label)
+    }
+
+    // MARK: - Shared background
+
+    private var miniBackground: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: 10)
+                .fill(
+                    LinearGradient(
+                        colors: [Color(hex: "0F172A"), Color(hex: "1E293B")],
+                        startPoint: .leading,
+                        endPoint: .trailing
+                    )
+                )
+                .shadow(color: .black.opacity(0.5), radius: 8, x: 0, y: 2)
+            RoundedRectangle(cornerRadius: 10)
+                .fill(flashColor.opacity(flashOpacity))
         }
     }
 

@@ -10,21 +10,14 @@ class MiniPlayerWindowController: NSObject, ObservableObject, NSWindowDelegate {
     func setup(awarenessService: SessionAwarenessService, audioService: SessionAudioService) {
         self.awarenessService = awarenessService
 
-        // React to both collapsed state and active session changes
+        // React to collapsed state changes
         awarenessService.$isCollapsed
-            .combineLatest(awarenessService.$isActive)
             .receive(on: DispatchQueue.main)
-            .sink { [weak self] collapsed, isActive in
-                if collapsed && isActive {
+            .sink { [weak self] collapsed in
+                if collapsed {
                     self?.showPanel(awarenessService: awarenessService, audioService: audioService)
-                } else {
-                    if self?.panel != nil {
-                        self?.hidePanel()
-                    }
-                    // Reset collapsed state when session ends
-                    if !isActive && collapsed {
-                        awarenessService.isCollapsed = false
-                    }
+                } else if self?.panel != nil {
+                    self?.hidePanel()
                 }
             }
             .store(in: &cancellables)

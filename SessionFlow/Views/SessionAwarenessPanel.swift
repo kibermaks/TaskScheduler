@@ -319,6 +319,8 @@ struct SessionAwarenessPanel: View {
 
     private var nextUpBar: some View {
         HStack(spacing: 10) {
+            collapseButton
+
             if let type = awarenessService.nextSessionType {
                 Image(systemName: type.icon)
                     .font(.system(size: 13))
@@ -356,6 +358,8 @@ struct SessionAwarenessPanel: View {
 
     private var idleBar: some View {
         HStack(spacing: 8) {
+            collapseButton
+
             Image(systemName: "eye.circle")
                 .font(.system(size: 13))
                 .foregroundColor(.white.opacity(0.25))
@@ -380,6 +384,8 @@ struct SessionAwarenessPanel: View {
 
     private var feedbackPromptBar: some View {
         HStack(spacing: 12) {
+            collapseButton
+
             if let feedback = awarenessService.sessionFeedbackPending {
                 if feedbackConfirmation != nil {
                     HStack(spacing: 8) {

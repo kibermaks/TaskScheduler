@@ -21,6 +21,7 @@ struct SettingsPanel: View {
     
     @StateObject private var nameHistory = SessionNameHistory.shared
 
+    @AppStorage("settings.planningExpanded") private var planningExpanded = true
     @AppStorage("settings.workExpanded") private var workExpanded = true
     @AppStorage("settings.sideExpanded") private var sideExpanded = true
     @AppStorage("settings.patternExpanded") private var patternExpanded = true
@@ -201,28 +202,42 @@ struct SettingsPanel: View {
     
     // MARK: - Planning Section
     
+    private var planningSecondaryTooltip: String {
+        "Duration: \(schedulingEngine.planningDuration) min"
+    }
+
     private var planningSection: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 8) {
-                Image(systemName: "calendar.badge.clock")
-                    .foregroundColor(Color(hex: "EF4444"))
-                Text("Planning Session")
-                    .font(.headline)
-                    .foregroundColor(.white)
+                HStack(spacing: 8) {
+                    Image(systemName: "calendar.badge.clock")
+                        .foregroundColor(Color(hex: "EF4444"))
+                    Text("Planning Session")
+                        .font(.headline)
+                        .foregroundColor(.white)
 
-                Button {
-                    showingPlanningHelp.toggle()
-                } label: {
-                    Image(systemName: "info.circle")
-                        .font(.system(size: 13))
-                        .foregroundColor(.white.opacity(0.4))
+                    Button {
+                        showingPlanningHelp.toggle()
+                    } label: {
+                        Image(systemName: "info.circle")
+                            .font(.system(size: 13))
+                            .foregroundColor(.white.opacity(0.4))
+                    }
+                    .buttonStyle(.plain)
+                    .popover(isPresented: $showingPlanningHelp) {
+                        Text(planningHelpText)
+                            .font(.system(size: 13))
+                            .padding()
+                            .frame(width: 250)
+                    }
+
+                    SectionExpandButton(isExpanded: $planningExpanded, tooltip: planningSecondaryTooltip)
                 }
-                .buttonStyle(.plain)
-                .popover(isPresented: $showingPlanningHelp) {
-                    Text(planningHelpText)
-                        .font(.system(size: 13))
-                        .padding()
-                        .frame(width: 250)
+                .contentShape(Rectangle())
+                .onTapGesture {
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        planningExpanded.toggle()
+                    }
                 }
 
                 Spacer()
@@ -232,7 +247,7 @@ struct SettingsPanel: View {
                     .tint(Color(hex: "EF4444"))
             }
 
-            if schedulingEngine.schedulePlanning {
+            if schedulingEngine.schedulePlanning && planningExpanded {
                 HStack {
                     Text("Duration:")
                         .font(.system(size: 13))
