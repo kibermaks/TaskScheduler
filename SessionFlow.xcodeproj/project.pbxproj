@@ -45,21 +45,21 @@
 		7720F7D61A0294F1C9C3877D /* SessionAudioService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1CD91FC56585DD1FADB6BF4C /* SessionAudioService.swift */; };
 		876B4DD1E37960D23C5EB40F /* SessionAwarenessPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1FD9FFA40C7AE29A7155AD5B /* SessionAwarenessPanel.swift */; };
 		8B24F98B098D2F129A31E399 /* SessionAwarenessGuide.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F803D7CAF9FE9B8D8EB743A /* SessionAwarenessGuide.swift */; };
-		AA01B2C3D4E5F6A7B8C9D0E1 /* Clock Ticking.wav in Resources */ = {isa = PBXBuildFile; fileRef = BB01C2D3E4F5A6B7C8D9E0F1 /* Clock Ticking.wav */; };
-		AA02B2C3D4E5F6A7B8C9D0E2 /* Clock Ticking Slow.wav in Resources */ = {isa = PBXBuildFile; fileRef = BB02C2D3E4F5A6B7C8D9E0F2 /* Clock Ticking Slow.wav */; };
+		AA01B2C3D4E5F6A7B8C9D0E1 /* Clock Ticking.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = BB01C2D3E4F5A6B7C8D9E0F1 /* Clock Ticking.mp3 */; };
+		AA02B2C3D4E5F6A7B8C9D0E2 /* Clock Ticking Slow.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = BB02C2D3E4F5A6B7C8D9E0F2 /* Clock Ticking Slow.mp3 */; };
 		AA03B2C3D4E5F6A7B8C9D0E3 /* Duskfall on a River.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = BB03C2D3E4F5A6B7C8D9E0F3 /* Duskfall on a River.mp3 */; };
 		AA04B2C3D4E5F6A7B8C9D0E4 /* Gong.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = BB04C2D3E4F5A6B7C8D9E0F4 /* Gong.mp3 */; };
-		AA05B2C3D4E5F6A7B8C9D0E5 /* Kitchen Timer.wav in Resources */ = {isa = PBXBuildFile; fileRef = BB05C2D3E4F5A6B7C8D9E0F5 /* Kitchen Timer.wav */; };
+		AA05B2C3D4E5F6A7B8C9D0E5 /* Kitchen Timer.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = BB05C2D3E4F5A6B7C8D9E0F5 /* Kitchen Timer.mp3 */; };
 		AA06B2C3D4E5F6A7B8C9D0E6 /* Light Rain Falling on Forest Floor.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = BB06C2D3E4F5A6B7C8D9E0F6 /* Light Rain Falling on Forest Floor.mp3 */; };
 		AA07B2C3D4E5F6A7B8C9D0E7 /* Mountain Atmosphere.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = BB07C2D3E4F5A6B7C8D9E0F7 /* Mountain Atmosphere.mp3 */; };
 		AA08B2C3D4E5F6A7B8C9D0E8 /* Ocean Waves.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = BB08C2D3E4F5A6B7C8D9E0F8 /* Ocean Waves.mp3 */; };
 		AA09B2C3D4E5F6A7B8C9D0E9 /* Peaceful Wind Atop a Hill.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = BB09C2D3E4F5A6B7C8D9E0F9 /* Peaceful Wind Atop a Hill.mp3 */; };
 		AA10B2C3D4E5F6A7B8C9D010 /* Thunder in the Woods.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = BB10C2D3E4F5A6B7C8D9E010 /* Thunder in the Woods.mp3 */; };
-		AA11B2C3D4E5F6A7B8C9D011 /* Hero.aiff in Resources */ = {isa = PBXBuildFile; fileRef = BB11C2D3E4F5A6B7C8D9E011 /* Hero.aiff */; };
-		AA12B2C3D4E5F6A7B8C9D012 /* Morse.aiff in Resources */ = {isa = PBXBuildFile; fileRef = BB12C2D3E4F5A6B7C8D9E012 /* Morse.aiff */; };
-		AA13B2C3D4E5F6A7B8C9D013 /* Glass.aiff in Resources */ = {isa = PBXBuildFile; fileRef = BB13C2D3E4F5A6B7C8D9E013 /* Glass.aiff */; };
-		AA14B2C3D4E5F6A7B8C9D014 /* Submarine.aiff in Resources */ = {isa = PBXBuildFile; fileRef = BB14C2D3E4F5A6B7C8D9E014 /* Submarine.aiff */; };
-		AA15B2C3D4E5F6A7B8C9D015 /* Purr.aiff in Resources */ = {isa = PBXBuildFile; fileRef = BB15C2D3E4F5A6B7C8D9E015 /* Purr.aiff */; };
+		AA11B2C3D4E5F6A7B8C9D011 /* Hero.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = BB11C2D3E4F5A6B7C8D9E011 /* Hero.mp3 */; };
+		AA12B2C3D4E5F6A7B8C9D012 /* Morse.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = BB12C2D3E4F5A6B7C8D9E012 /* Morse.mp3 */; };
+		AA13B2C3D4E5F6A7B8C9D013 /* Glass.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = BB13C2D3E4F5A6B7C8D9E013 /* Glass.mp3 */; };
+		AA14B2C3D4E5F6A7B8C9D014 /* Submarine.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = BB14C2D3E4F5A6B7C8D9E014 /* Submarine.mp3 */; };
+		AA15B2C3D4E5F6A7B8C9D015 /* Purr.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = BB15C2D3E4F5A6B7C8D9E015 /* Purr.mp3 */; };
 		D1A1B2C3D4E5F6A7B8C9D0E1 /* DockProgressController.swift in Sources */ = {isa = PBXBuildFile; fileRef = E1F2A3B4C5D6E7F8A9B0C1D2 /* DockProgressController.swift */; };
 		D2B2C3D4E5F6A7B8C9D0E1F2 /* MenuBarController.swift in Sources */ = {isa = PBXBuildFile; fileRef = E2F3A4B5C6D7E8F9A0B1C2D3 /* MenuBarController.swift */; };
 		D3C3D4E5F6A7B8C9D0E1F2A3 /* MiniPlayerWindowController.swift in Sources */ = {isa = PBXBuildFile; fileRef = E3F4A5B6C7D8E9F0A1B2C3D4 /* MiniPlayerWindowController.swift */; };
@@ -107,21 +107,21 @@
 		1CD91FC56585DD1FADB6BF4C /* SessionAudioService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionAudioService.swift; sourceTree = "<group>"; };
 		1FD9FFA40C7AE29A7155AD5B /* SessionAwarenessPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionAwarenessPanel.swift; sourceTree = "<group>"; };
 		2F803D7CAF9FE9B8D8EB743A /* SessionAwarenessGuide.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionAwarenessGuide.swift; sourceTree = "<group>"; };
-		BB01C2D3E4F5A6B7C8D9E0F1 /* Clock Ticking.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = "Clock Ticking.wav"; sourceTree = "<group>"; };
-		BB02C2D3E4F5A6B7C8D9E0F2 /* Clock Ticking Slow.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = "Clock Ticking Slow.wav"; sourceTree = "<group>"; };
+		BB01C2D3E4F5A6B7C8D9E0F1 /* Clock Ticking.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = "Clock Ticking.mp3"; sourceTree = "<group>"; };
+		BB02C2D3E4F5A6B7C8D9E0F2 /* Clock Ticking Slow.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = "Clock Ticking Slow.mp3"; sourceTree = "<group>"; };
 		BB03C2D3E4F5A6B7C8D9E0F3 /* Duskfall on a River.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = "Duskfall on a River.mp3"; sourceTree = "<group>"; };
 		BB04C2D3E4F5A6B7C8D9E0F4 /* Gong.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = Gong.mp3; sourceTree = "<group>"; };
-		BB05C2D3E4F5A6B7C8D9E0F5 /* Kitchen Timer.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = "Kitchen Timer.wav"; sourceTree = "<group>"; };
+		BB05C2D3E4F5A6B7C8D9E0F5 /* Kitchen Timer.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = "Kitchen Timer.mp3"; sourceTree = "<group>"; };
 		BB06C2D3E4F5A6B7C8D9E0F6 /* Light Rain Falling on Forest Floor.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = "Light Rain Falling on Forest Floor.mp3"; sourceTree = "<group>"; };
 		BB07C2D3E4F5A6B7C8D9E0F7 /* Mountain Atmosphere.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = "Mountain Atmosphere.mp3"; sourceTree = "<group>"; };
 		BB08C2D3E4F5A6B7C8D9E0F8 /* Ocean Waves.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = "Ocean Waves.mp3"; sourceTree = "<group>"; };
 		BB09C2D3E4F5A6B7C8D9E0F9 /* Peaceful Wind Atop a Hill.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = "Peaceful Wind Atop a Hill.mp3"; sourceTree = "<group>"; };
 		BB10C2D3E4F5A6B7C8D9E010 /* Thunder in the Woods.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = "Thunder in the Woods.mp3"; sourceTree = "<group>"; };
-		BB11C2D3E4F5A6B7C8D9E011 /* Hero.aiff */ = {isa = PBXFileReference; lastKnownFileType = audio.aiff; path = Hero.aiff; sourceTree = "<group>"; };
-		BB12C2D3E4F5A6B7C8D9E012 /* Morse.aiff */ = {isa = PBXFileReference; lastKnownFileType = audio.aiff; path = Morse.aiff; sourceTree = "<group>"; };
-		BB13C2D3E4F5A6B7C8D9E013 /* Glass.aiff */ = {isa = PBXFileReference; lastKnownFileType = audio.aiff; path = Glass.aiff; sourceTree = "<group>"; };
-		BB14C2D3E4F5A6B7C8D9E014 /* Submarine.aiff */ = {isa = PBXFileReference; lastKnownFileType = audio.aiff; path = Submarine.aiff; sourceTree = "<group>"; };
-		BB15C2D3E4F5A6B7C8D9E015 /* Purr.aiff */ = {isa = PBXFileReference; lastKnownFileType = audio.aiff; path = Purr.aiff; sourceTree = "<group>"; };
+		BB11C2D3E4F5A6B7C8D9E011 /* Hero.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = Hero.mp3; sourceTree = "<group>"; };
+		BB12C2D3E4F5A6B7C8D9E012 /* Morse.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = Morse.mp3; sourceTree = "<group>"; };
+		BB13C2D3E4F5A6B7C8D9E013 /* Glass.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = Glass.mp3; sourceTree = "<group>"; };
+		BB14C2D3E4F5A6B7C8D9E014 /* Submarine.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = Submarine.mp3; sourceTree = "<group>"; };
+		BB15C2D3E4F5A6B7C8D9E015 /* Purr.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = Purr.mp3; sourceTree = "<group>"; };
 		E1F2A3B4C5D6E7F8A9B0C1D2 /* DockProgressController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DockProgressController.swift; sourceTree = "<group>"; };
 		E2F3A4B5C6D7E8F9A0B1C2D3 /* MenuBarController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuBarController.swift; sourceTree = "<group>"; };
 		E3F4A5B6C7D8E9F0A1B2C3D4 /* MiniPlayerWindowController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MiniPlayerWindowController.swift; sourceTree = "<group>"; };
@@ -241,21 +241,21 @@
 		DB9FA0D4AF211849B3A47ED1 /* Sounds */ = {
 			isa = PBXGroup;
 			children = (
-				BB01C2D3E4F5A6B7C8D9E0F1 /* Clock Ticking.wav */,
-				BB02C2D3E4F5A6B7C8D9E0F2 /* Clock Ticking Slow.wav */,
+				BB01C2D3E4F5A6B7C8D9E0F1 /* Clock Ticking.mp3 */,
+				BB02C2D3E4F5A6B7C8D9E0F2 /* Clock Ticking Slow.mp3 */,
 				BB03C2D3E4F5A6B7C8D9E0F3 /* Duskfall on a River.mp3 */,
 				BB04C2D3E4F5A6B7C8D9E0F4 /* Gong.mp3 */,
-				BB05C2D3E4F5A6B7C8D9E0F5 /* Kitchen Timer.wav */,
+				BB05C2D3E4F5A6B7C8D9E0F5 /* Kitchen Timer.mp3 */,
 				BB06C2D3E4F5A6B7C8D9E0F6 /* Light Rain Falling on Forest Floor.mp3 */,
 				BB07C2D3E4F5A6B7C8D9E0F7 /* Mountain Atmosphere.mp3 */,
 				BB08C2D3E4F5A6B7C8D9E0F8 /* Ocean Waves.mp3 */,
 				BB09C2D3E4F5A6B7C8D9E0F9 /* Peaceful Wind Atop a Hill.mp3 */,
 				BB10C2D3E4F5A6B7C8D9E010 /* Thunder in the Woods.mp3 */,
-				BB13C2D3E4F5A6B7C8D9E013 /* Glass.aiff */,
-				BB11C2D3E4F5A6B7C8D9E011 /* Hero.aiff */,
-				BB12C2D3E4F5A6B7C8D9E012 /* Morse.aiff */,
-				BB15C2D3E4F5A6B7C8D9E015 /* Purr.aiff */,
-				BB14C2D3E4F5A6B7C8D9E014 /* Submarine.aiff */,
+				BB13C2D3E4F5A6B7C8D9E013 /* Glass.mp3 */,
+				BB11C2D3E4F5A6B7C8D9E011 /* Hero.mp3 */,
+				BB12C2D3E4F5A6B7C8D9E012 /* Morse.mp3 */,
+				BB15C2D3E4F5A6B7C8D9E015 /* Purr.mp3 */,
+				BB14C2D3E4F5A6B7C8D9E014 /* Submarine.mp3 */,
 			);
 			path = Sounds;
 			sourceTree = "<group>";
@@ -320,21 +320,21 @@
 			files = (
 				2DC4CFEA2EFA8E8700F7A35D /* Assets.xcassets in Resources */,
 				2DEBECAB2EF4136C002A9D7C /* Icon.icon in Resources */,
-				AA01B2C3D4E5F6A7B8C9D0E1 /* Clock Ticking.wav in Resources */,
-				AA02B2C3D4E5F6A7B8C9D0E2 /* Clock Ticking Slow.wav in Resources */,
+				AA01B2C3D4E5F6A7B8C9D0E1 /* Clock Ticking.mp3 in Resources */,
+				AA02B2C3D4E5F6A7B8C9D0E2 /* Clock Ticking Slow.mp3 in Resources */,
 				AA03B2C3D4E5F6A7B8C9D0E3 /* Duskfall on a River.mp3 in Resources */,
 				AA04B2C3D4E5F6A7B8C9D0E4 /* Gong.mp3 in Resources */,
-				AA05B2C3D4E5F6A7B8C9D0E5 /* Kitchen Timer.wav in Resources */,
+				AA05B2C3D4E5F6A7B8C9D0E5 /* Kitchen Timer.mp3 in Resources */,
 				AA06B2C3D4E5F6A7B8C9D0E6 /* Light Rain Falling on Forest Floor.mp3 in Resources */,
 				AA07B2C3D4E5F6A7B8C9D0E7 /* Mountain Atmosphere.mp3 in Resources */,
 				AA08B2C3D4E5F6A7B8C9D0E8 /* Ocean Waves.mp3 in Resources */,
 				AA09B2C3D4E5F6A7B8C9D0E9 /* Peaceful Wind Atop a Hill.mp3 in Resources */,
 				AA10B2C3D4E5F6A7B8C9D010 /* Thunder in the Woods.mp3 in Resources */,
-				AA11B2C3D4E5F6A7B8C9D011 /* Hero.aiff in Resources */,
-				AA12B2C3D4E5F6A7B8C9D012 /* Morse.aiff in Resources */,
-				AA13B2C3D4E5F6A7B8C9D013 /* Glass.aiff in Resources */,
-				AA14B2C3D4E5F6A7B8C9D014 /* Submarine.aiff in Resources */,
-				AA15B2C3D4E5F6A7B8C9D015 /* Purr.aiff in Resources */,
+				AA11B2C3D4E5F6A7B8C9D011 /* Hero.mp3 in Resources */,
+				AA12B2C3D4E5F6A7B8C9D012 /* Morse.mp3 in Resources */,
+				AA13B2C3D4E5F6A7B8C9D013 /* Glass.mp3 in Resources */,
+				AA14B2C3D4E5F6A7B8C9D014 /* Submarine.mp3 in Resources */,
+				AA15B2C3D4E5F6A7B8C9D015 /* Purr.mp3 in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -523,7 +523,7 @@
 				CODE_SIGN_ENTITLEMENTS = SessionFlow/SessionFlow.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 524;
+				CURRENT_PROJECT_VERSION = 527;
 				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_ASSET_PATHS = "";
 				ENABLE_APP_SANDBOX = NO;
@@ -560,7 +560,7 @@
 				CODE_SIGN_ENTITLEMENTS = SessionFlow/SessionFlow.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 524;
+				CURRENT_PROJECT_VERSION = 527;
 				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_ASSET_PATHS = "";
 				ENABLE_APP_SANDBOX = NO;

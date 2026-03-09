@@ -44,9 +44,9 @@ class SessionAudioService: ObservableObject {
     // MARK: - Sound file mapping
 
     private static let ambientFiles: [String: (name: String, ext: String)] = [
-        "Clock Ticking": ("Clock Ticking", "wav"),
-        "Clock Ticking Slow": ("Clock Ticking Slow", "wav"),
-        "Kitchen Timer": ("Kitchen Timer", "wav"),
+        "Clock Ticking": ("Clock Ticking", "mp3"),
+        "Clock Ticking Slow": ("Clock Ticking Slow", "mp3"),
+        "Kitchen Timer": ("Kitchen Timer", "mp3"),
         "Duskfall on a River": ("Duskfall on a River", "mp3"),
         "Light Rain": ("Light Rain Falling on Forest Floor", "mp3"),
         "Mountain Atmosphere": ("Mountain Atmosphere", "mp3"),
@@ -56,13 +56,13 @@ class SessionAudioService: ObservableObject {
     ]
 
     private static let transitionFiles: [String: (name: String, ext: String)] = [
-        "Kitchen Timer": ("Kitchen Timer", "wav"),
+        "Kitchen Timer": ("Kitchen Timer", "mp3"),
         "Gong": ("Gong", "mp3"),
-        "Hero": ("Hero", "aiff"),
-        "Morse": ("Morse", "aiff"),
-        "Glass": ("Glass", "aiff"),
-        "Submarine": ("Submarine", "aiff"),
-        "Purr": ("Purr", "aiff"),
+        "Hero": ("Hero", "mp3"),
+        "Morse": ("Morse", "mp3"),
+        "Glass": ("Glass", "mp3"),
+        "Submarine": ("Submarine", "mp3"),
+        "Purr": ("Purr", "mp3"),
     ]
 
     // MARK: - Init

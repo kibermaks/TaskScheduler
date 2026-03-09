@@ -5,6 +5,15 @@ All notable changes to SessionFlow will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0] - 2026-03-09
+
+### Added
+
+- Rebranded to **SessionFlow** — new name, bundle ID, and identity
+- Dynamic mini-player bars showing active session, next up, idle, and feedback states
+- Session feedback prompts in the mini-player after sessions end
+- Collapse buttons in awareness panel session bars
+
 ## [1.15] - 2026-03-08
 
 ### Added
