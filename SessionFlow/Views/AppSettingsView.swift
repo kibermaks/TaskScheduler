@@ -13,6 +13,9 @@ struct AppSettingsView: View {
     @AppStorage("hasSeenTasksGuide") var hasSeenTasksGuide = false
     @AppStorage("timelineIntroBarDismissed") var timelineIntroBarDismissed = false
     @AppStorage("showDevSettings") private var showDevSettings = false
+    @AppStorage("devNowLineOverrideEnabled") private var devNowLineOverrideEnabled = false
+    @AppStorage("devNowLineOverrideHour") private var devNowLineOverrideHour = 10
+    @AppStorage("devNowLineOverrideMinute") private var devNowLineOverrideMinute = 30
 
     @State private var showingResetPresetsConfirmation = false
     @State private var showingResetAwarenessConfirmation = false
@@ -264,6 +267,21 @@ struct AppSettingsView: View {
 
                     Divider()
 
+                    Toggle("Override now line for demos", isOn: $devNowLineOverrideEnabled)
+                    if devNowLineOverrideEnabled {
+                        HStack {
+                            Text("Time:")
+                            NumericInputField(value: $devNowLineOverrideHour, range: 0...23)
+                            Text(":")
+                            NumericInputField(value: $devNowLineOverrideMinute, range: 0...59, step: 5)
+                        }
+                    }
+                    Text("Moves the red \"now\" line to a fixed time for screenshots.")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+
+                    Divider()
+
                     Button(role: .destructive, action: resetCalendarPermissions) {
                         Label("Reset Calendar Permissions", systemImage: "lock.slash.fill")
                     }
@@ -374,6 +392,17 @@ struct AppSettingsView: View {
                 Text("Bottom panel tracks your current session with timer, progress, and ambient sound.")
                     .font(.caption)
                     .foregroundColor(.secondary)
+
+                if sessionAwarenessService.config.enabled {
+                    Toggle("Productivity Feedback", isOn: Binding(
+                        get: { sessionAwarenessService.config.productivityEnabled },
+                        set: { sessionAwarenessService.config.productivityEnabled = $0 }
+                    ))
+
+                    Text("Rate sessions after they end. Shows productivity stats in the right panel.")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
 
                 if sessionAwarenessService.config.enabled {
                     HStack(spacing: 10) {

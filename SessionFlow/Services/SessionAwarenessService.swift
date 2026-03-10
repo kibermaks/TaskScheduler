@@ -98,6 +98,12 @@ class SessionAwarenessService: ObservableObject {
     private var savedPresenceReminderTime: Date? = nil
     private var savedEndingSoonPlayed: Bool = false
 
+    // Cached slots — refreshed every 30s or immediately when calendar data changes
+    private var cachedNowSlots: [BusyTimeSlot] = []
+    private var lastSlotsFetch: Date = .distantPast
+    private let slotsFetchInterval: TimeInterval = 30
+    private var calendarCancellable: AnyCancellable?
+
     // MARK: - Init
 
     init() {
@@ -116,8 +122,10 @@ class SessionAwarenessService: ObservableObject {
         // Apply saved master volume
         audioService.setMasterVolume(config.masterVolume)
 
-        // Clean old feedback entries
-        SessionFeedbackStore.shared.clearOldEntries(keepingDate: Date())
+        // Invalidate slot cache whenever calendar data changes (drag, move, create, delete)
+        calendarCancellable = calendarService.$lastRefresh
+            .dropFirst()
+            .sink { [weak self] _ in self?.lastSlotsFetch = .distantPast }
 
         if isEnabled {
             startTimer()
@@ -143,7 +151,7 @@ class SessionAwarenessService: ObservableObject {
     static func strippedNotes(_ notes: String?) -> String? {
         guard let notes = notes, !notes.isEmpty else { return nil }
         var result = notes
-        for tag in ["#work", "#side", "#deep", "#plan", "#break"] {
+        for tag in ["#work", "#side", "#deep", "#plan", "#break"] + SessionRating.allTags {
             result = result.replacingOccurrences(of: tag, with: "", options: .caseInsensitive)
         }
         result = result.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -157,7 +165,7 @@ class SessionAwarenessService: ObservableObject {
         timer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
             DispatchQueue.main.async { self?.tick() }
         }
-        RunLoop.current.add(timer!, forMode: .common)
+        // Avoid .common — causes SwiftUI Menu submenus in contextMenu to flicker
         tick() // immediate first tick
     }
 
@@ -177,13 +185,20 @@ class SessionAwarenessService: ObservableObject {
             return
         }
 
+        // Refresh cached slots every 30s (not every tick)
+        if now.timeIntervalSince(lastSlotsFetch) >= slotsFetchInterval {
+            cachedNowSlots = calendarService.fetchNowSlots()
+            lastSlotsFetch = now
+        }
+        let todaySlots = cachedNowSlots
+
         // 1. Try to find active tagged session
-        if let slot = findActiveTaggedSession(in: calendarService.busySlots, at: now) {
+        if let slot = findActiveTaggedSession(in: todaySlots, at: now) {
             let sessionType = CalendarService.sessionType(fromNotes: slot.notes)
             activateSession(slot: slot, sessionType: sessionType, isBusySlot: false, at: now)
         }
         // 2. Try non-tagged event if enabled
-        else if config.trackOtherEvents, let slot = findActiveBusySlot(in: calendarService.busySlots, at: now) {
+        else if config.trackOtherEvents, let slot = findActiveBusySlot(in: todaySlots, at: now) {
             activateSession(slot: slot, sessionType: nil, isBusySlot: true, at: now)
         }
         // 3. No active session
@@ -230,7 +245,7 @@ class SessionAwarenessService: ObservableObject {
         }
 
         // Update next session
-        updateNextSession(in: calendarService.busySlots, at: now)
+        updateNextSession(in: todaySlots, at: now)
 
         wasActive = isActive
         previousEventId = currentEventId
@@ -384,10 +399,12 @@ class SessionAwarenessService: ObservableObject {
         }
 
         // Create feedback prompt from the session that just ended (only for natural ends)
+        // For non-session events, only prompt if trackOtherEvents is enabled
         if isNaturalEnd,
+           config.productivityEnabled,
            let calendarService = calendarService,
            let slot = calendarService.busySlots.first(where: { $0.id == eventId }),
-           CalendarService.sessionType(fromNotes: slot.notes) != nil {
+           CalendarService.sessionType(fromNotes: slot.notes) != nil || config.trackOtherEvents {
             sessionFeedbackPending = SessionFeedback(
                 eventId: slot.id,
                 sessionTitle: slot.title,
@@ -473,8 +490,8 @@ class SessionAwarenessService: ObservableObject {
 
     func submitFeedback(rating: SessionRating) {
         guard let feedback = sessionFeedbackPending else { return }
-        let entry = SessionFeedbackEntry(from: feedback, rating: rating)
-        SessionFeedbackStore.shared.saveEntry(entry)
+        calendarService?.setFeedbackTag(eventId: feedback.eventId, rating: rating)
+        if let cs = calendarService { Task { await cs.fetchEvents(for: Date()) } }
         feedbackDismissTimer?.invalidate()
         sessionFeedbackPending = nil
     }

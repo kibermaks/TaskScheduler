@@ -406,6 +406,7 @@ struct SessionAwarenessPanel: View {
                     Spacer()
 
                     HStack(spacing: 6) {
+                        feedbackButton(rating: .rocket)
                         feedbackButton(rating: .completed)
                         feedbackButton(rating: .partial)
                         feedbackButton(rating: .skipped)
@@ -435,6 +436,7 @@ struct SessionAwarenessPanel: View {
     private func feedbackButton(rating: SessionRating) -> some View {
         let color: Color = {
             switch rating {
+            case .rocket: return .orange
             case .completed: return .green
             case .partial: return .yellow
             case .skipped: return .red

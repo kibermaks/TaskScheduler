@@ -2,13 +2,45 @@ import SwiftUI
 import Combine
 import AppKit
 
+// MARK: - Diagonal Stripes Background
+
+/// Draws repeating diagonal stripes matching the screenshot reference:
+/// lighter bands over a base color, clipped to the parent shape.
+struct DiagonalStripesPattern: View {
+    var color: Color
+    var stripeWidth: CGFloat = 5
+    var gapWidth: CGFloat = 5
+    var angle: Double = 45
+
+    var body: some View {
+        Canvas { context, size in
+            let step = stripeWidth + gapWidth
+            let radians = angle * .pi / 180
+            let hyp = size.width + size.height // enough to cover rotated area
+
+            context.translateBy(x: size.width / 2, y: size.height / 2)
+            context.rotate(by: .radians(-radians))
+            context.translateBy(x: -hyp / 2, y: -hyp / 2)
+
+            var x: CGFloat = 0
+            while x < hyp {
+                let rect = CGRect(x: x, y: 0, width: stripeWidth, height: hyp)
+                context.fill(Path(rect), with: .color(color))
+                x += step
+            }
+        }
+    }
+}
+
 struct TimelineView: View {
     let selectedDate: Date
     let startTime: Date
     var onCopySuccess: ((CopyToastInfo) -> Void)? = nil
+    var onModeToast: ((String) -> Void)? = nil
 
     @EnvironmentObject var calendarService: CalendarService
     @EnvironmentObject var schedulingEngine: SchedulingEngine
+    @EnvironmentObject var sessionAwarenessService: SessionAwarenessService
     
     private let hourHeight: CGFloat = 90 // Zoomed in from 60
     private let timeColumnWidth: CGFloat = 55
@@ -45,6 +77,9 @@ struct TimelineView: View {
 
     // Timeline intro bar dismissal
     @AppStorage("timelineIntroBarDismissed") private var introBarDismissed = false
+    @AppStorage("devNowLineOverrideEnabled") private var devNowLineOverrideEnabled = false
+    @AppStorage("devNowLineOverrideHour") private var devNowLineOverrideHour = 10
+    @AppStorage("devNowLineOverrideMinute") private var devNowLineOverrideMinute = 30
     @State private var showNod = false
     @State private var currentTime = Date()
 
@@ -128,10 +163,20 @@ struct TimelineView: View {
                 }
                 // Use keyDown monitor for Esc (cancel drag) and undo/redo.
                 keyDownMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
-                    // Esc cancels active drag/resize
-                    if event.keyCode == 53, dragMode != .none {
-                        cancelDrag()
-                        return nil
+                    // Esc cancels active drag/resize or closes detail sheet
+                    if event.keyCode == 53 {
+                        if dragMode != .none {
+                            cancelDrag()
+                            return nil
+                        }
+                        if showingDetailSheet {
+                            withAnimation(.easeOut(duration: 0.2)) {
+                                selectedSession = nil
+                                selectedBusySlot = nil
+                                resetEditingState()
+                            }
+                            return nil
+                        }
                     }
                     // Physical key code 6 = Z key on any layout.
                     guard event.modifierFlags.contains(.command), event.keyCode == 6 else {
@@ -367,7 +412,7 @@ struct TimelineView: View {
                 hourGridLines
                 
                 if shouldShowCurrentTimeIndicator {
-                    currentTimeIndicator(currentTime: currentTime, width: geometry.size.width)
+                    currentTimeIndicator(currentTime: effectiveNowTimeForIndicator, width: geometry.size.width)
                 }
                 
                 // Existing events - left half
@@ -616,6 +661,7 @@ struct TimelineView: View {
             // Lock/unlock event dragging
             Button {
                 withAnimation { eventsLocked.toggle() }
+                onModeToast?(eventsLocked ? "Events locked" : "Events unlocked")
             } label: {
                 Image(systemName: eventsLocked ? "hand.raised.slash" : "hand.draw")
                     .frame(width: 16, height: 16)
@@ -632,6 +678,7 @@ struct TimelineView: View {
                 withAnimation {
                     schedulingEngine.hideNightHours.toggle()
                 }
+                onModeToast?(schedulingEngine.hideNightHours ? "Night hours hidden" : "Night hours visible")
             }) {
                 Image(systemName: schedulingEngine.hideNightHours ? "moon.stars.fill" : "moon.stars")
                     .padding(8)
@@ -799,9 +846,20 @@ extension TimelineView {
         }
     }
 
+    /// Effective "now" for the red line: real time or dev override.
+    private var effectiveNowTimeForIndicator: Date {
+        guard devNowLineOverrideEnabled else { return currentTime }
+        let cal = Calendar.current
+        let dayStart = cal.startOfDay(for: selectedDate)
+        return cal.date(byAdding: .hour, value: devNowLineOverrideHour, to: dayStart)
+            .flatMap { cal.date(byAdding: .minute, value: devNowLineOverrideMinute, to: $0) } ?? currentTime
+    }
+
     /// Show current-time indicator when viewing today, or when viewing yesterday
     /// and the current time falls within the extended hours (past midnight).
+    /// With dev override enabled, always show so screenshots can use any date.
     private var shouldShowCurrentTimeIndicator: Bool {
+        if devNowLineOverrideEnabled { return true }
         let cal = Calendar.current
         if cal.isDateInToday(selectedDate) { return true }
         if effectiveEndHour > 24,
@@ -934,7 +992,7 @@ extension TimelineView {
                         .truncationMode(.middle)
                 }
 
-                if let notes = slot.notes, !notes.isEmpty, height > 45 {
+                if let notes = SessionAwarenessService.strippedNotes(slot.notes), height > 45 {
                     Text(notes)
                         .font(.system(size: 9))
                         .foregroundColor(.white.opacity(0.8))
@@ -944,9 +1002,8 @@ extension TimelineView {
             }
             .padding(4)
 
-            // Feedback badge for past tagged events
-            if slot.endTime < Date(),
-               CalendarService.sessionType(fromNotes: slot.notes) != nil {
+            // Feedback badge for past events
+            if slot.endTime < Date() && sessionAwarenessService.config.enabled && sessionAwarenessService.config.productivityEnabled {
                 feedbackBadge(for: slot)
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
                     .padding(2)
@@ -1059,7 +1116,7 @@ extension TimelineView {
             }
             Divider()
             Menu("Copy to...") {
-                ForEach(copyTargetDays(), id: \.label) { target in
+                ForEach(copyTargetDays(), id: \.date) { target in
                     Button(target.label) {
                         DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
                             let result = calendarService.copyEventToDay(eventId: slot.id, targetDate: target.date)
@@ -1114,8 +1171,18 @@ extension TimelineView {
                             .foregroundColor(session.type.color.opacity(0.6))
                     )
             } else {
+                // Striped background for projected sessions
                 RoundedRectangle(cornerRadius: 4)
-                    .fill(session.type.color.opacity(0.8))
+                    .fill(session.type.color.opacity(0.55))
+                    .overlay(
+                        DiagonalStripesPattern(
+                            color: session.type.color.opacity(0.4),
+                            stripeWidth: 5,
+                            gapWidth: 5,
+                            angle: 45
+                        )
+                        .clipShape(RoundedRectangle(cornerRadius: 4))
+                    )
                     .overlay(
                         RoundedRectangle(cornerRadius: 4)
                             .stroke(style: StrokeStyle(lineWidth: 1.5, dash: [4, 2]))
@@ -1502,19 +1569,20 @@ extension TimelineView {
                                     return .ignored
                                 }
                         }
-                    } else if let notes = slot.notes, !notes.isEmpty {
+                    } else if let displayNotes = SessionRating.stripFeedbackTags(slot.notes), !displayNotes.isEmpty {
                         VStack(alignment: .leading, spacing: 4) {
                             Text("Notes:")
                                 .font(.system(size: 12, weight: .bold))
-                            Text(notes)
+                            Text(displayNotes)
                                 .font(.system(size: 12))
                                 .foregroundColor(.white.opacity(0.8))
                         }
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .contentShape(Rectangle())
                         .onTapGesture {
-                            originalNotes = notes
-                            editingNotes = notes
+                            let stripped = SessionRating.stripFeedbackTags(slot.notes) ?? ""
+                            originalNotes = stripped
+                            editingNotes = stripped
                             isEditingNotes = true
                             focusedField = .notes
                         }
@@ -1537,10 +1605,18 @@ extension TimelineView {
                     }
                 }
                 
+                // Feedback rating picker
+                if slot.endTime < Date() && sessionAwarenessService.config.enabled && sessionAwarenessService.config.productivityEnabled {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Divider().background(Color.white.opacity(0.1))
+                        feedbackPicker(for: slot)
+                    }
+                }
+
                 // URL section with inline editing
                 VStack(alignment: .leading, spacing: 4) {
                     Divider().background(Color.white.opacity(0.1))
-                    
+
                     if isEditingURL {
                         VStack(alignment: .leading, spacing: 4) {
                             Text("URL:")
@@ -1626,8 +1702,9 @@ extension TimelineView {
                     isEditingTitle = true
                     focusedField = .title
                 case .notes:
-                    originalNotes = slot.notes ?? ""
-                    editingNotes = slot.notes ?? ""
+                    let stripped = SessionRating.stripFeedbackTags(slot.notes) ?? ""
+                    originalNotes = stripped
+                    editingNotes = stripped
                     isEditingNotes = true
                     focusedField = .notes
                 case .url:
@@ -1733,7 +1810,7 @@ extension TimelineView {
 
     @ViewBuilder
     private func feedbackBadge(for slot: BusyTimeSlot) -> some View {
-        let entry = SessionFeedbackStore.shared.entry(forEventId: slot.id)
+        let rating = SessionRating.fromNotes(slot.notes)
         let isShowingPopover = Binding(
             get: { feedbackPopoverEventId == slot.id },
             set: { if !$0 { feedbackPopoverEventId = nil } }
@@ -1742,8 +1819,8 @@ extension TimelineView {
         Button {
             feedbackPopoverEventId = (feedbackPopoverEventId == slot.id) ? nil : slot.id
         } label: {
-            if let entry = entry {
-                feedbackBadgeIcon(for: entry.rating)
+            if let rating = rating {
+                feedbackBadgeIcon(for: rating)
             } else {
                 // No feedback yet — show subtle empty badge
                 Circle()
@@ -1756,13 +1833,14 @@ extension TimelineView {
         }
         .buttonStyle(.plain)
         .popover(isPresented: isShowingPopover, arrowEdge: .trailing) {
-            feedbackPopoverContent(for: slot, existingEntry: entry)
+            feedbackPopoverContent(for: slot, existingRating: rating)
         }
     }
 
     private func feedbackBadgeIcon(for rating: SessionRating) -> some View {
         let (color, icon): (Color, String) = {
             switch rating {
+            case .rocket: return (.orange, "flame.fill")
             case .completed: return (.green, "checkmark")
             case .partial: return (.yellow, "circle.lefthalf.filled")
             case .skipped: return (.red, "xmark")
@@ -1779,29 +1857,17 @@ extension TimelineView {
             )
     }
 
-    private func feedbackPopoverContent(for slot: BusyTimeSlot, existingEntry: SessionFeedbackEntry?) -> some View {
+    private func feedbackPopoverContent(for slot: BusyTimeSlot, existingRating: SessionRating?) -> some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text(existingEntry != nil ? "Update feedback" : "How was this session?")
+            Text(existingRating != nil ? "Update feedback" : "How was this session?")
                 .font(.system(size: 13, weight: .semibold))
                 .foregroundColor(.primary)
 
             HStack(spacing: 8) {
                 ForEach(SessionRating.allCases, id: \.rawValue) { rating in
                     Button {
-                        let sessionType = CalendarService.sessionType(fromNotes: slot.notes)
-                        if existingEntry != nil {
-                            SessionFeedbackStore.shared.updateRating(eventId: slot.id, rating: rating)
-                        } else {
-                            let feedback = SessionFeedback(
-                                eventId: slot.id,
-                                sessionTitle: slot.title,
-                                sessionType: sessionType,
-                                startTime: slot.startTime,
-                                endTime: slot.endTime
-                            )
-                            let entry = SessionFeedbackEntry(from: feedback, rating: rating)
-                            SessionFeedbackStore.shared.saveEntry(entry)
-                        }
+                        calendarService.setFeedbackTag(eventId: slot.id, rating: rating)
+                        Task { await calendarService.fetchEvents(for: selectedDate) }
                         feedbackPopoverEventId = nil
                     } label: {
                         HStack(spacing: 5) {
@@ -1813,14 +1879,15 @@ extension TimelineView {
                         }
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 6)
-                        .background(existingEntry?.rating == rating
-                                    ? ratingColor(rating).opacity(0.2)
+                        .background(existingRating == rating
+                                    ? ratingColor(rating).opacity(0.35)
                                     : Color.clear)
                         .cornerRadius(6)
                         .overlay(
                             RoundedRectangle(cornerRadius: 6)
-                                .stroke(ratingColor(rating).opacity(existingEntry?.rating == rating ? 0.6 : 0.3), lineWidth: existingEntry?.rating == rating ? 1.5 : 1)
+                                .stroke(ratingColor(rating).opacity(existingRating == rating ? 0.8 : 0.3), lineWidth: existingRating == rating ? 2 : 1)
                         )
+                        .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
                     .foregroundColor(ratingColor(rating))
@@ -1828,14 +1895,84 @@ extension TimelineView {
             }
         }
         .padding(14)
-        .frame(minWidth: 260)
+        .frame(minWidth: 360)
     }
 
     private func ratingColor(_ rating: SessionRating) -> Color {
         switch rating {
+        case .rocket: return .orange
         case .completed: return .green
         case .partial: return .yellow
         case .skipped: return .red
+        }
+    }
+
+    // MARK: - Feedback Picker (in event details)
+
+    private func feedbackPicker(for slot: BusyTimeSlot) -> some View {
+        let currentRating = SessionRating.fromNotes(slot.notes)
+
+        return HStack(spacing: 6) {
+            Text("Feedback:")
+                .font(.system(size: 12, weight: .bold))
+                .foregroundColor(.white.opacity(0.8))
+
+            Spacer()
+
+            // "Not set" button
+            Button {
+                clearFeedbackTag(for: slot)
+            } label: {
+                Text("–")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundColor(.white.opacity(currentRating == nil ? 0.8 : 0.35))
+                    .frame(width: 24, height: 22)
+                    .background(currentRating == nil ? Color.white.opacity(0.12) : Color.clear)
+                    .cornerRadius(4)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 4)
+                            .stroke(Color.white.opacity(currentRating == nil ? 0.25 : 0.1), lineWidth: 1)
+                    )
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .help("Not set")
+
+            ForEach(SessionRating.allCases, id: \.rawValue) { rating in
+                Button {
+                    calendarService.setFeedbackTag(eventId: slot.id, rating: rating)
+                    Task {
+                        await calendarService.fetchEvents(for: selectedDate)
+                        if let updated = calendarService.busySlots.first(where: { $0.id == slot.id }) {
+                            selectedBusySlot = updated
+                        }
+                    }
+                } label: {
+                    Image(systemName: rating.icon)
+                        .font(.system(size: 12))
+                        .foregroundColor(ratingColor(rating).opacity(currentRating == rating ? 1.0 : 0.5))
+                        .frame(width: 24, height: 22)
+                        .background(currentRating == rating ? ratingColor(rating).opacity(0.25) : Color.clear)
+                        .cornerRadius(4)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 4)
+                                .stroke(ratingColor(rating).opacity(currentRating == rating ? 0.6 : 0.15), lineWidth: currentRating == rating ? 1.5 : 1)
+                        )
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .help(rating.label)
+            }
+        }
+    }
+
+    private func clearFeedbackTag(for slot: BusyTimeSlot) {
+        calendarService.clearFeedbackTag(eventId: slot.id)
+        Task {
+            await calendarService.fetchEvents(for: selectedDate)
+            if let updated = calendarService.busySlots.first(where: { $0.id == slot.id }) {
+                selectedBusySlot = updated
+            }
         }
     }
 
@@ -1888,7 +2025,7 @@ extension TimelineView {
         // Normalize empty strings to nil for comparison
         let normalizedNew = editingNotes.isEmpty ? nil : editingNotes
         let normalizedOriginal = originalNotes.isEmpty ? nil : originalNotes
-        
+
         // Only save if actually changed
         guard normalizedNew != normalizedOriginal else {
             isEditingNotes = false
@@ -1896,11 +2033,19 @@ extension TimelineView {
             originalNotes = ""
             return
         }
-        
+
+        // Preserve feedback tag from the original notes (session type tags are user-editable)
+        let rawNotes = slot.notes ?? ""
+        var feedbackTag = ""
+        for tag in SessionRating.allTags {
+            if rawNotes.contains(tag) { feedbackTag = " " + tag; break }
+        }
+        let finalNotes = (normalizedNew ?? "") + feedbackTag
+
         let success = calendarService.updateEvent(
             eventId: slot.id,
             title: nil,
-            notes: normalizedNew,
+            notes: finalNotes.trimmingCharacters(in: .whitespaces).isEmpty ? nil : finalNotes,
             url: nil
         )
         

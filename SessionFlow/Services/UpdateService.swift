@@ -425,9 +425,7 @@ open "$DEST_APP"
         periodicTimer = Timer.scheduledTimer(withTimeInterval: 60 * 60, repeats: true) { [weak self] _ in
             self?.checkForUpdatesIfNeeded()
         }
-        if let timer = periodicTimer {
-            RunLoop.main.add(timer, forMode: .common)
-        }
+        // Avoid .common — causes SwiftUI Menu submenus in contextMenu to flicker
     }
     
     // MARK: - Helpers

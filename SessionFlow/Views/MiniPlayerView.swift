@@ -167,6 +167,7 @@ struct MiniPlayerView: View {
                     Spacer()
 
                     HStack(spacing: 6) {
+                        miniFeedbackButton(rating: .rocket)
                         miniFeedbackButton(rating: .completed)
                         miniFeedbackButton(rating: .partial)
                         miniFeedbackButton(rating: .skipped)
@@ -191,13 +192,7 @@ struct MiniPlayerView: View {
     }
 
     private func miniFeedbackButton(rating: SessionRating) -> some View {
-        let color: Color = {
-            switch rating {
-            case .completed: return .green
-            case .partial: return .yellow
-            case .skipped: return .red
-            }
-        }()
+        let color: Color = ratingColor(rating)
 
         return Button {
             withAnimation(.easeInOut(duration: 0.2)) {
@@ -222,6 +217,15 @@ struct MiniPlayerView: View {
         }
         .buttonStyle(.plain)
         .help(rating.label)
+    }
+
+    private func ratingColor(_ rating: SessionRating) -> Color {
+        switch rating {
+        case .rocket: return .orange
+        case .completed: return .green
+        case .partial: return .yellow
+        case .skipped: return .red
+        }
     }
 
     // MARK: - Shared background

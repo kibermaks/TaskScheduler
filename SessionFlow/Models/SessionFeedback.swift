@@ -1,14 +1,31 @@
 import Foundation
 
-// MARK: - Feedback rating
+// MARK: - Feedback rating (stored as emoji hashtags in calendar event notes)
 
 enum SessionRating: String, Codable, CaseIterable {
+    case rocket = "rocket"          // Amazing session, nailed it
     case completed = "completed"    // Stayed focused the whole time
     case partial = "partial"        // Was there some of the time
     case skipped = "skipped"        // Was AFK / didn't do it
 
+    /// Emoji hashtag written to calendar event notes (e.g. "#flow✅")
+    var tag: String {
+        switch self {
+        case .rocket: return "#flow🚀"
+        case .completed: return "#flow✅"
+        case .partial: return "#flow🌗"
+        case .skipped: return "#flow❌"
+        }
+    }
+
+    /// All known feedback tags for stripping/parsing
+    static var allTags: [String] {
+        allCases.map(\.tag)
+    }
+
     var icon: String {
         switch self {
+        case .rocket: return "flame.fill"
         case .completed: return "checkmark.circle.fill"
         case .partial: return "circle.lefthalf.filled"
         case .skipped: return "xmark.circle.fill"
@@ -17,18 +34,53 @@ enum SessionRating: String, Codable, CaseIterable {
 
     var label: String {
         switch self {
+        case .rocket: return "Fire"
         case .completed: return "Done"
         case .partial: return "Partly"
         case .skipped: return "Skipped"
         }
     }
 
-    var badgeCharacter: String {
+    var focusMultiplier: Double {
         switch self {
-        case .completed: return "✓"
-        case .partial: return "◐"
-        case .skipped: return "✗"
+        case .rocket: return 1.0
+        case .completed: return 0.8
+        case .partial: return 0.5
+        case .skipped: return 0.0
         }
+    }
+
+    /// Parse a rating from calendar event notes by looking for emoji hashtags
+    static func fromNotes(_ notes: String?) -> SessionRating? {
+        guard let notes = notes else { return nil }
+        for rating in allCases {
+            if notes.contains(rating.tag) { return rating }
+        }
+        return nil
+    }
+
+    /// Strips only feedback tags from notes, preserving session type tags
+    static func stripFeedbackTags(_ notes: String?) -> String? {
+        guard let notes = notes, !notes.isEmpty else { return nil }
+        var result = notes
+        for tag in allTags {
+            result = result.replacingOccurrences(of: tag, with: "")
+        }
+        result = result.trimmingCharacters(in: .whitespacesAndNewlines)
+        return result.isEmpty ? nil : result
+    }
+
+    /// Applies this rating tag to notes, removing any existing feedback tag first
+    func applyTo(notes: String?) -> String {
+        var result = notes ?? ""
+        // Remove existing feedback tags
+        for existingTag in Self.allTags {
+            result = result.replacingOccurrences(of: existingTag, with: "")
+        }
+        result = result.trimmingCharacters(in: .whitespacesAndNewlines)
+        // Append new tag
+        result += (result.isEmpty ? "" : " ") + tag
+        return result
     }
 }
 
@@ -44,94 +96,5 @@ struct SessionFeedback: Identifiable {
 
     var totalDuration: TimeInterval {
         endTime.timeIntervalSince(startTime)
-    }
-}
-
-// MARK: - Persisted feedback entry
-
-struct SessionFeedbackEntry: Codable, Identifiable, Equatable {
-    let id: UUID
-    let eventId: String
-    let date: Date
-    let sessionTitle: String
-    let sessionType: String     // SessionType.rawValue
-    let totalMinutes: Int
-    let rating: SessionRating
-
-    init(from feedback: SessionFeedback, rating: SessionRating) {
-        self.id = UUID()
-        self.eventId = feedback.eventId
-        self.date = feedback.startTime
-        self.sessionTitle = feedback.sessionTitle
-        self.sessionType = feedback.sessionType?.rawValue ?? ""
-        self.totalMinutes = Int(feedback.totalDuration / 60)
-        self.rating = rating
-    }
-
-    init(eventId: String, date: Date, sessionTitle: String, sessionType: String, totalMinutes: Int, rating: SessionRating) {
-        self.id = UUID()
-        self.eventId = eventId
-        self.date = date
-        self.sessionTitle = sessionTitle
-        self.sessionType = sessionType
-        self.totalMinutes = totalMinutes
-        self.rating = rating
-    }
-}
-
-// MARK: - Feedback storage
-
-class SessionFeedbackStore {
-    static let shared = SessionFeedbackStore()
-    private static let storageKey = "SessionFlow.SessionFeedbackLog"
-
-    private init() {}
-
-    func loadEntries() -> [SessionFeedbackEntry] {
-        guard let data = UserDefaults.standard.data(forKey: Self.storageKey),
-              let entries = try? JSONDecoder().decode([SessionFeedbackEntry].self, from: data) else {
-            return []
-        }
-        return entries
-    }
-
-    func saveEntry(_ entry: SessionFeedbackEntry) {
-        var entries = loadEntries()
-        // Replace if already exists for this event
-        entries.removeAll { $0.eventId == entry.eventId }
-        entries.append(entry)
-        save(entries)
-    }
-
-    func updateRating(eventId: String, rating: SessionRating) {
-        var entries = loadEntries()
-        if let index = entries.firstIndex(where: { $0.eventId == eventId }) {
-            let old = entries[index]
-            entries[index] = SessionFeedbackEntry(
-                eventId: old.eventId,
-                date: old.date,
-                sessionTitle: old.sessionTitle,
-                sessionType: old.sessionType,
-                totalMinutes: old.totalMinutes,
-                rating: rating
-            )
-            save(entries)
-        }
-    }
-
-    func entry(forEventId eventId: String) -> SessionFeedbackEntry? {
-        loadEntries().first { $0.eventId == eventId }
-    }
-
-    func clearOldEntries(keepingDate: Date) {
-        let calendar = Calendar.current
-        let entries = loadEntries().filter { calendar.isDate($0.date, inSameDayAs: keepingDate) }
-        save(entries)
-    }
-
-    private func save(_ entries: [SessionFeedbackEntry]) {
-        if let data = try? JSONEncoder().encode(entries) {
-            UserDefaults.standard.set(data, forKey: Self.storageKey)
-        }
     }
 }

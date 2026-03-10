@@ -81,6 +81,7 @@ struct ContentView: View {
     @State private var showingWhatsNew = false
     @AppStorage("SessionFlow.LastSeenVersion") private var lastSeenVersion = ""
     @State private var copyToast: CopyToastInfo? = nil
+    @State private var modeToast: String? = nil
 
     enum DateSelection: String, CaseIterable {
         case today = "Today"
@@ -123,7 +124,8 @@ struct ContentView: View {
                     showingPatternsGuide: $showingPatternsGuide,
                     hasSeenTasksGuide: $hasSeenTasksGuide,
                     showingTasksGuide: $showingTasksGuide,
-                    copyToast: $copyToast
+                    copyToast: $copyToast,
+                    modeToast: $modeToast
                 )
             }
         }
@@ -214,6 +216,11 @@ struct ContentViewBody: View {
     @Binding var hasSeenTasksGuide: Bool
     @Binding var showingTasksGuide: Bool
     @Binding var copyToast: CopyToastInfo?
+    @Binding var modeToast: String?
+
+    @AppStorage("devNowLineOverrideEnabled") private var devNowLineOverrideEnabled = false
+    @AppStorage("devNowLineOverrideHour") private var devNowLineOverrideHour = 10
+    @AppStorage("devNowLineOverrideMinute") private var devNowLineOverrideMinute = 30
 
     /// Last date selected while in Custom mode. Restored when switching back to Custom.
     @State private var lastCustomDate: Date?
@@ -236,6 +243,27 @@ struct ContentViewBody: View {
             }
         }
         .overlay(alignment: .bottom) {
+            if let msg = modeToast {
+                Text(msg)
+                    .font(.system(size: 13))
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 10)
+                    .background(Color.black.opacity(0.85))
+                    .cornerRadius(8)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 8)
+                            .stroke(Color.white.opacity(0.15), lineWidth: 1)
+                    )
+                    .padding(.bottom, 24)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                    .zIndex(99)
+                    .onAppear {
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+                            modeToast = nil
+                        }
+                    }
+            }
             if let toast = copyToast {
                 CopyToastView(
                     toast: toast,
@@ -262,6 +290,7 @@ struct ContentViewBody: View {
             }
         }
         .animation(.easeOut(duration: 0.25), value: copyToast?.id)
+        .animation(.easeOut(duration: 0.25), value: modeToast)
         .preferredColorScheme(.dark)
         .sheet(isPresented: $showingNewPresetSheet) {
             NewPresetSheet { preset in
@@ -443,7 +472,8 @@ struct ContentViewBody: View {
             TimelineView(
                 selectedDate: selectedDate,
                 startTime: effectiveStartTime,
-                onCopySuccess: { info in copyToast = info }
+                onCopySuccess: { info in copyToast = info },
+                onModeToast: { modeToast = $0 }
             )
             .padding()
             
@@ -463,6 +493,13 @@ struct ContentViewBody: View {
     
     var effectiveStartTime: Date {
         if useNowTime && dateSelection == .today {
+            // Dev override: use fixed time for demos/screenshots (also drives planning start)
+            if devNowLineOverrideEnabled {
+                let cal = Calendar.current
+                let dayStart = cal.startOfDay(for: selectedDate)
+                return cal.date(byAdding: .hour, value: devNowLineOverrideHour, to: dayStart)
+                    .flatMap { cal.date(byAdding: .minute, value: devNowLineOverrideMinute, to: $0) } ?? roundedNowTime()
+            }
             return roundedNowTime()
         }
         return startTime
@@ -727,7 +764,11 @@ struct HeaderView: View {
     @Binding var useNowTime: Bool
     @Binding var startTime: Date
     @Binding var autoPreview: Bool
-    
+
+    @AppStorage("devNowLineOverrideEnabled") private var devNowLineOverrideEnabled = false
+    @AppStorage("devNowLineOverrideHour") private var devNowLineOverrideHour = 10
+    @AppStorage("devNowLineOverrideMinute") private var devNowLineOverrideMinute = 30
+
     var body: some View {
         HStack {
             appTitle
@@ -889,15 +930,21 @@ struct HeaderView: View {
     
     private func formatNowTime() -> String {
         let calendar = Calendar.current
-        let now = Date()
-        let comp = calendar.dateComponents([.year, .month, .day, .hour, .minute], from: now)
-        let minute = comp.minute ?? 0
-        let rounded = ((minute / 5) + 1) * 5
-        var newComp = comp
-        newComp.minute = rounded % 60
-        newComp.hour = (comp.hour ?? 0) + (rounded >= 60 ? 1 : 0)
-        let date = calendar.date(from: newComp) ?? now
-        
+        let date: Date
+        if devNowLineOverrideEnabled, useNowTime, dateSelection == .today {
+            let dayStart = calendar.startOfDay(for: selectedDate)
+            date = calendar.date(byAdding: .hour, value: devNowLineOverrideHour, to: dayStart)
+                .flatMap { calendar.date(byAdding: .minute, value: devNowLineOverrideMinute, to: $0) } ?? Date()
+        } else {
+            let now = Date()
+            let comp = calendar.dateComponents([.year, .month, .day, .hour, .minute], from: now)
+            let minute = comp.minute ?? 0
+            let rounded = ((minute / 5) + 1) * 5
+            var newComp = comp
+            newComp.minute = rounded % 60
+            newComp.hour = (comp.hour ?? 0) + (rounded >= 60 ? 1 : 0)
+            date = calendar.date(from: newComp) ?? now
+        }
         let formatter = DateFormatter()
         formatter.dateStyle = .none
         formatter.timeStyle = .short
@@ -1130,6 +1177,7 @@ struct LeftPanel: View {
 struct RightPanel: View {
     @EnvironmentObject var calendarService: CalendarService
     @EnvironmentObject var schedulingEngine: SchedulingEngine
+    @EnvironmentObject var sessionAwarenessService: SessionAwarenessService
     let selectedDate: Date
     let effectiveStartTime: Date
     let autoPreview: Bool
@@ -1202,20 +1250,25 @@ struct RightPanel: View {
     var body: some View {
         VStack(spacing: 20) {
             ScrollView(showsIndicators: false) {
-            availabilityCard
-            sessionsSummaryCard
-            if schedulingEngine.showDidYouKnowCard, let fact = currentDidYouKnowFact {
-                DidYouKnowCard(
-                    fact: fact,
-                    factIndex: didYouKnowIndex,
-                    totalFacts: didYouKnowFacts.count,
-                    onNext: nextDidYouKnowFact,
-                    onPrevious: previousDidYouKnowFact,
-                    onClose: { schedulingEngine.showDidYouKnowCard = false }
-                )
-                .frame(maxWidth: .infinity)
-                .transition(.move(edge: .trailing).combined(with: .opacity))
-            }
+                VStack(spacing: 20) {
+                    availabilityCard
+                    sessionsSummaryCard
+                    if sessionAwarenessService.config.enabled && sessionAwarenessService.config.productivityEnabled && calendarService.busySlots.contains(where: { SessionRating.fromNotes($0.notes) != nil }) {
+                        ProductivityCard(selectedDate: selectedDate)
+                    }
+                    if schedulingEngine.showDidYouKnowCard, let fact = currentDidYouKnowFact {
+                        DidYouKnowCard(
+                            fact: fact,
+                            factIndex: didYouKnowIndex,
+                            totalFacts: didYouKnowFacts.count,
+                            onNext: nextDidYouKnowFact,
+                            onPrevious: previousDidYouKnowFact,
+                            onClose: { schedulingEngine.showDidYouKnowCard = false }
+                        )
+                        .frame(maxWidth: .infinity)
+                        .transition(.move(edge: .trailing).combined(with: .opacity))
+                    }
+                }
             }
             Spacer()
             actionButtons
@@ -1462,17 +1515,23 @@ struct RightPanel: View {
     }
     
     private var actionButtons: some View {
-        let purple = Color(hex: "8B5CF6")
+        let neutral = Color(hex: "6B7280")
         let disabled = schedulingEngine.projectedSessions.isEmpty
 
         return VStack(spacing: 12) {
             // Split button: Schedule Sessions (main) + dropdown arrow (planning)
             HStack(spacing: 0) {
                 Button(action: { scheduleAll() }) {
-                    HStack { Image(systemName: "calendar.badge.plus"); Text("Schedule Sessions") }
-                        .font(.system(size: 15, weight: .semibold))
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                        .contentShape(Rectangle())
+                    HStack(spacing: 8) {
+                        Spacer()
+                        Image(systemName: "calendar.badge.plus")
+                        Text("Schedule Sessions")
+                        Spacer()
+                    }
+                    .font(.system(size: 15, weight: .semibold))
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .padding(.leading, 24) // slight visual offset to compensate right chevron area
+                    .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
                 .disabled(disabled)
@@ -1500,7 +1559,7 @@ struct RightPanel: View {
                 .help("More scheduling options")
             }
             .frame(height: 44)
-            .background(disabled ? Color.gray.opacity(0.3) : purple)
+            .background(disabled ? Color.gray.opacity(0.3) : neutral)
             .foregroundColor(.white)
             .cornerRadius(10)
 

@@ -303,6 +303,28 @@ class CalendarService: ObservableObject {
         }
     }
     
+    /// Fetch events around now: any currently active event plus upcoming events until end of day.
+    /// Used by SessionAwarenessService to always track the current session regardless of selected day.
+    func fetchNowSlots() -> [BusyTimeSlot] {
+        let now = Date()
+        // Look back 12 hours to catch events that started earlier and are still running
+        let windowStart = now.addingTimeInterval(-12 * 3600)
+        let endOfDay = effectiveEndOfDay(for: now)
+
+        let calendars = includedEventCalendars()
+        guard !calendars.isEmpty else { return [] }
+
+        let predicate = eventStore.predicateForEvents(withStart: windowStart, end: endOfDay, calendars: calendars)
+        let events = eventStore.events(matching: predicate)
+
+        let nearAlldayThreshold: TimeInterval = 23 * 60 * 60
+        return events
+            .filter { !$0.isAllDay && $0.endDate.timeIntervalSince($0.startDate) < nearAlldayThreshold }
+            // Only keep events that are currently active or upcoming
+            .filter { $0.endDate > now }
+            .map { BusyTimeSlot(from: $0) }
+    }
+
     // MARK: - Event Creation
     
     @discardableResult
@@ -381,12 +403,18 @@ class CalendarService: ObservableObject {
         }
         let newEnd = newStart.addingTimeInterval(duration)
 
+        var notes = source.notes ?? ""
+        for tag in SessionRating.allTags {
+            notes = notes.replacingOccurrences(of: tag, with: "")
+        }
+        notes = notes.trimmingCharacters(in: .whitespacesAndNewlines)
+
         let copy = EKEvent(eventStore: eventStore)
         copy.title = source.title
         copy.startDate = newStart
         copy.endDate = newEnd
         copy.calendar = source.calendar
-        copy.notes = source.notes
+        copy.notes = notes.isEmpty ? nil : notes
         copy.url = source.url
 
         do {
@@ -477,6 +505,94 @@ class CalendarService: ObservableObject {
         }
     }
     
+    // MARK: - Feedback Tag
+
+    /// Atomically reads event notes, replaces any feedback tag, and saves
+    @discardableResult
+    func setFeedbackTag(eventId: String, rating: SessionRating) -> Bool {
+        guard let event = eventStore.event(withIdentifier: eventId) else { return false }
+        event.notes = rating.applyTo(notes: event.notes)
+        do {
+            try eventStore.save(event, span: .thisEvent)
+            return true
+        } catch {
+            errorMessage = "Failed to save feedback: \(error.localizedDescription)"
+            return false
+        }
+    }
+
+    /// Removes any feedback tag from event notes
+    @discardableResult
+    func clearFeedbackTag(eventId: String) -> Bool {
+        guard let event = eventStore.event(withIdentifier: eventId) else { return false }
+        var notes = event.notes ?? ""
+        for tag in SessionRating.allTags {
+            notes = notes.replacingOccurrences(of: tag, with: "")
+        }
+        notes = notes.trimmingCharacters(in: .whitespacesAndNewlines)
+        event.notes = notes.isEmpty ? nil : notes
+        do {
+            try eventStore.save(event, span: .thisEvent)
+            return true
+        } catch {
+            return false
+        }
+    }
+
+    /// Counts feedback ratings across all events in a date range (inclusive)
+    func feedbackStats(from startDate: Date, to endDate: Date) -> [SessionRating: Int] {
+        let calendars = includedEventCalendars()
+        guard !calendars.isEmpty else { return [:] }
+
+        let predicate = eventStore.predicateForEvents(withStart: startDate, end: endDate, calendars: calendars)
+        let events = eventStore.events(matching: predicate)
+
+        var counts: [SessionRating: Int] = [:]
+        for event in events {
+            if let rating = SessionRating.fromNotes(event.notes) {
+                counts[rating, default: 0] += 1
+            }
+        }
+        return counts
+    }
+
+    /// Per-day stats: feedback counts + total events (for computing unrated)
+    struct DayFeedbackStats {
+        var counts: [SessionRating: Int] = [:]
+        var totalEvents: Int = 0
+        var focusMinutes: Double = 0
+        var unrated: Int { totalEvents - counts.values.reduce(0, +) }
+    }
+
+    /// Returns per-day feedback stats for a given month
+    func monthlyFeedbackStats(year: Int, month: Int) -> [Int: DayFeedbackStats] {
+        let cal = Calendar.current
+        guard let monthStart = cal.date(from: DateComponents(year: year, month: month, day: 1)),
+              let monthEnd = cal.date(byAdding: .month, value: 1, to: monthStart) else { return [:] }
+
+        let calendars = includedEventCalendars()
+        guard !calendars.isEmpty else { return [:] }
+
+        let predicate = eventStore.predicateForEvents(withStart: monthStart, end: monthEnd, calendars: calendars)
+        let allEvents = eventStore.events(matching: predicate)
+
+        // Filter out all-day events
+        let nearAlldayThreshold: TimeInterval = 23 * 60 * 60
+        let events = allEvents.filter { !$0.isAllDay && $0.endDate.timeIntervalSince($0.startDate) < nearAlldayThreshold }
+
+        var result: [Int: DayFeedbackStats] = [:]
+        for event in events {
+            let day = cal.component(.day, from: event.startDate)
+            result[day, default: DayFeedbackStats()].totalEvents += 1
+            if let rating = SessionRating.fromNotes(event.notes) {
+                result[day, default: DayFeedbackStats()].counts[rating, default: 0] += 1
+                let minutes = event.endDate.timeIntervalSince(event.startDate) / 60
+                result[day, default: DayFeedbackStats()].focusMinutes += minutes * rating.focusMultiplier
+            }
+        }
+        return result
+    }
+
     // MARK: - Event Time Update
 
     /// Updates the start and end time of an existing calendar event.

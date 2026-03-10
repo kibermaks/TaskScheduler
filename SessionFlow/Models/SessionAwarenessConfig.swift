@@ -192,6 +192,9 @@ struct SessionAwarenessConfig: Codable, Equatable {
     var planningSoundAccelerando: AccelerandoConfig = .init()
     var otherEventsSoundAccelerando: AccelerandoConfig = .init(enabled: true, maxMultiplier: 1.2)
 
+    // Productivity feedback
+    var productivityEnabled: Bool = true
+
     // Phase 5: Menu bar & Dock
     var showMenuBarItem: Bool = true
     var showDockProgress: Bool = true
@@ -253,6 +256,7 @@ struct SessionAwarenessConfig: Codable, Equatable {
         planningSoundAccelerando = try c.decodeIfPresent(AccelerandoConfig.self, forKey: .planningSoundAccelerando) ?? .init()
         otherEventsSoundAccelerando = try c.decodeIfPresent(AccelerandoConfig.self, forKey: .otherEventsSoundAccelerando) ?? .init(enabled: true, maxMultiplier: 1.2)
 
+        productivityEnabled = try c.decodeIfPresent(Bool.self, forKey: .productivityEnabled) ?? true
         showMenuBarItem = try c.decodeIfPresent(Bool.self, forKey: .showMenuBarItem) ?? true
         showDockProgress = try c.decodeIfPresent(Bool.self, forKey: .showDockProgress) ?? true
         miniPlayerFrame = try c.decodeIfPresent(CodableRect.self, forKey: .miniPlayerFrame)
