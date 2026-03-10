@@ -5,6 +5,27 @@ All notable changes to SessionFlow will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.2] - 2026-03-10
+
+### Added
+
+- Hover effects across all interactive UI elements for better visual feedback
+- Mute button visible in all mini-player and awareness panel states
+
+### Fixed
+
+- Side sessions now correctly use side rest duration instead of work rest duration
+- Time rounding no longer skips the current 5-minute mark (e.g. 10:05 stays 10:05)
+- Schedule end-of-day calculation simplified and corrected
+- Preset loading handles missing `sideRestDuration` gracefully for backwards compatibility
+- Time rounding strips leftover seconds for cleaner session start times
+
+### Changed
+
+- Enhanced session awareness tracking with more accurate start/end times
+- Simplified mute controls — always shows interactive mute button
+- Improved mute button tooltips
+
 ## [2.1] - 2026-03-10
 
 ### Added

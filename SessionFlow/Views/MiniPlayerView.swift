@@ -133,6 +133,8 @@ struct MiniPlayerView: View {
                         .foregroundColor(.white.opacity(0.6))
                 }
             }
+
+            muteButton
         }
         .padding(.horizontal, 20)
         .padding(.vertical, 12)
@@ -157,6 +159,8 @@ struct MiniPlayerView: View {
             Text("No sessions today")
                 .font(.system(size: 11))
                 .foregroundColor(.white.opacity(0.2))
+
+            muteButton
         }
         .padding(.horizontal, 20)
         .padding(.vertical, 12)
@@ -205,6 +209,8 @@ struct MiniPlayerView: View {
                     .buttonStyle(.plain)
                     .hoverEffect(brightness: 0.3)
                     .help("Dismiss")
+
+                    muteButton
                 }
             }
         }
@@ -496,7 +502,7 @@ struct MiniPlayerView: View {
         }
         .buttonStyle(.plain)
         .hoverEffect(brightness: 0.2)
-        .help(audioService.isMuted ? "Unmute" : "Mute")
+        .help(audioService.isMuted ? "Unmute ambient sounds" : "Mute all ambient sounds")
     }
 
     // MARK: - Helpers

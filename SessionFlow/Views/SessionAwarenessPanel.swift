@@ -66,7 +66,7 @@ struct SessionAwarenessPanel: View {
             // Right: Time metric + Mute
             HStack(spacing: 12) {
                 clickableTimeDisplay
-                muteSection
+                muteButton
             }
             .frame(width: 150, alignment: .trailing)
         }
@@ -369,6 +369,8 @@ struct SessionAwarenessPanel: View {
                         .foregroundColor(.white.opacity(0.6))
                 }
             }
+
+            muteButton
         }
         .padding(.horizontal, 20)
         .padding(.vertical, 8)
@@ -396,6 +398,8 @@ struct SessionAwarenessPanel: View {
             Text("No sessions today")
                 .font(.system(size: 11))
                 .foregroundColor(.white.opacity(0.2))
+
+            muteButton
         }
         .padding(.horizontal, 20)
         .padding(.vertical, 7)
@@ -446,6 +450,8 @@ struct SessionAwarenessPanel: View {
                     .buttonStyle(.plain)
                     .hoverEffect(brightness: 0.3)
                     .help("Dismiss")
+
+                    muteButton
                 }
             }
         }
@@ -492,31 +498,7 @@ struct SessionAwarenessPanel: View {
         .help(rating.label)
     }
 
-    // MARK: - Mute Section
-
-    private var currentSoundIsOff: Bool {
-        if let type = awarenessService.currentSessionType {
-            return !awarenessService.config.soundConfig(for: type).isPlayable
-        }
-        if awarenessService.isBusySlotMode {
-            return !awarenessService.config.otherEventsSound.isPlayable
-        }
-        return true
-    }
-
-    private var muteSection: some View {
-        Group {
-            if awarenessService.isActive && currentSoundIsOff {
-                Image(systemName: "speaker.slash")
-                    .font(.system(size: 14))
-                    .foregroundColor(.white.opacity(0.15))
-                    .frame(width: 32, height: 32)
-                    .help("Sound is off for this session type")
-            } else {
-                muteButton
-            }
-        }
-    }
+    // MARK: - Mute
 
     private var muteButton: some View {
         Button {
@@ -532,7 +514,7 @@ struct SessionAwarenessPanel: View {
         }
         .buttonStyle(.plain)
         .hoverEffect(brightness: 0.2)
-        .help(audioService.isMuted ? "Unmute" : "Mute")
+        .help(audioService.isMuted ? "Unmute ambient sounds" : "Mute all ambient sounds")
     }
 
     // MARK: - Shared styling

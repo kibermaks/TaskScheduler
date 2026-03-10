@@ -510,7 +510,7 @@ struct ContentViewBody: View {
         let now = Date()
         let components = calendar.dateComponents([.year, .month, .day, .hour, .minute], from: now)
         let minute = components.minute ?? 0
-        let roundedMinute = ((minute / 5) + 1) * 5
+        let roundedMinute = minute % 5 == 0 ? minute : ((minute / 5) + 1) * 5
         let extraHour = roundedMinute >= 60 ? 1 : 0
         
         var newComponents = components

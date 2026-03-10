@@ -274,7 +274,8 @@ struct Preset: Identifiable, Codable, Equatable {
         sideSessionDuration = try container.decode(Int.self, forKey: .sideSessionDuration)
         planningDuration = try container.decode(Int.self, forKey: .planningDuration)
         restDuration = try container.decode(Int.self, forKey: .restDuration)
-        sideRestDuration = try container.decode(Int.self, forKey: .sideRestDuration)
+        let decodedRestDuration = restDuration
+        sideRestDuration = try container.decodeIfPresent(Int.self, forKey: .sideRestDuration) ?? Self.calculateSideRest(from: decodedRestDuration)
         deepRestDuration = try container.decodeIfPresent(Int.self, forKey: .deepRestDuration) ?? restDuration
         schedulePlanning = try container.decode(Bool.self, forKey: .schedulePlanning)
         pattern = try container.decode(SchedulePattern.self, forKey: .pattern)

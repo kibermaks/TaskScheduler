@@ -183,12 +183,8 @@ class SchedulingEngine: ObservableObject {
     /// If scheduleEndHour > 24, extends into the next calendar day (e.g. 26 = 2 AM next day).
     func effectiveEndOfDay(for baseDate: Date) -> Date {
         let calendar = Calendar.current
-        guard let nextDay = calendar.date(byAdding: .day, value: 1, to: baseDate) else { return baseDate }
-        let nextMidnight = calendar.startOfDay(for: nextDay)
-        if scheduleEndHour <= 24 {
-            return nextMidnight
-        }
-        return calendar.date(byAdding: .hour, value: scheduleEndHour - 24, to: nextMidnight) ?? nextMidnight
+        let startOfDay = calendar.startOfDay(for: baseDate)
+        return calendar.date(byAdding: .hour, value: scheduleEndHour, to: startOfDay) ?? baseDate
     }
 
     // MARK: - Core Scheduling Algorithm
@@ -802,8 +798,11 @@ class SchedulingEngine: ObservableObject {
         
         // Otherwise, round up to next interval
         let minutesToAdd = roundingInterval - remainder
-        
-        return calendar.date(byAdding: .minute, value: minutesToAdd, to: date) ?? date
+
+        var cleanComponents = components
+        cleanComponents.second = 0
+        cleanComponents.minute = (components.minute ?? 0) + minutesToAdd
+        return calendar.date(from: cleanComponents) ?? date
     }
     
     // MARK: - Single Session Projection
@@ -950,7 +949,7 @@ class SchedulingEngine: ObservableObject {
         
         // Calculate possible sessions (with rest between)
         let workWithRest = workSessionDuration + restDuration
-        let sideWithRest = sideSessionDuration + restDuration
+        let sideWithRest = sideSessionDuration + sideRestDuration
         let deepWithRest = deepSessionConfig.duration + deepRestDuration
         
         let possibleWork = totalAvailable / max(1, workWithRest)
