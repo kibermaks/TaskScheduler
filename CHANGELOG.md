@@ -5,6 +5,23 @@ All notable changes to SessionFlow will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.1] - 2026-03-10
+
+### Added
+
+- Productivity Card — daily focus time stats and session ratings displayed on the timeline
+- Session feedback tags saved directly into calendar events for persistent tracking
+- Next session preview in mini-player and awareness panel with countdown timer
+- Session Awareness guide with interactive walkthrough
+- Menu bar icon flashing on session transitions
+- Productivity tracking toggle in settings
+
+### Changed
+
+- Debounced schedule regeneration and throttled dock/UI updates for smoother performance
+- Fixed unreliable button click targets across the app
+- Eliminated redundant @Published updates reducing ~10 unnecessary redraws per second
+
 ## [2.0] - 2026-03-09
 
 ### Added
