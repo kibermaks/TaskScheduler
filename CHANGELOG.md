@@ -5,6 +5,19 @@ All notable changes to SessionFlow will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.3] - 2026-03-12
+
+### Added
+
+- Info popover on Productivity Card explaining ratings, focus time calculation, and quick link to settings
+- Focus weights editor in Awareness settings with per-rating percentage controls
+
+### Fixed
+
+- "What's New" dialog no longer appears during initial installation
+- Numeric input fields auto-size to fit their value range instead of fixed width
+- Audio preview now correctly restores playback rate (accelerando) when resuming session ambient
+
 ## [2.2] - 2026-03-10
 
 ### Added
