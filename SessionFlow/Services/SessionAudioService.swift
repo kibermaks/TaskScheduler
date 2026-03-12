@@ -2,18 +2,25 @@ import Foundation
 import AVFoundation
 import CoreAudio
 import SwiftUI
+import Combine
 
 class SessionAudioService: ObservableObject {
 
     // MARK: - Published state
 
-    @Published var isMuted: Bool {
-        didSet { UserDefaults.standard.set(isMuted, forKey: "SessionFlow.SessionAudioMuted")
-            if isMuted { muteAmbient() } else if shouldBePlayingAmbient { resumeAmbient() }
-        }
-    }
+    @Published private(set) var isMuted: Bool = false
     @Published var isPlaying: Bool = false
     @Published var availableOutputDevices: [AudioOutputDevice] = []
+
+    @Published var muteEnabled: Bool = false {
+        didSet { applyMuteState() }
+    }
+    @Published var micAwareEnabled: Bool = false {
+        didSet { applyMuteState() }
+    }
+
+    let micMonitor = MicrophoneMonitor()
+    private var micCancellable: AnyCancellable?
 
     // MARK: - Audio engine
 
@@ -70,11 +77,28 @@ class SessionAudioService: ObservableObject {
     // MARK: - Init
 
     init() {
-        self.isMuted = UserDefaults.standard.bool(forKey: "SessionFlow.SessionAudioMuted")
         setupAmbientEngine()
         refreshOutputDevices()
         observeDeviceChanges()
         observeEngineConfigChanges()
+
+        micCancellable = micMonitor.$isMicActive
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in self?.applyMuteState() }
+    }
+
+    // MARK: - Mute Logic
+
+    private func applyMuteState() {
+        let shouldMute = muteEnabled || (micAwareEnabled && micMonitor.isMicActive)
+        guard shouldMute != isMuted else { return }
+        isMuted = shouldMute
+        if isMuted { muteAmbient() } else if shouldBePlayingAmbient { resumeAmbient() }
+    }
+
+    /// Toggle manual mute from panel buttons.
+    func toggleMute() {
+        muteEnabled.toggle()
     }
 
     deinit {

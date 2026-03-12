@@ -68,11 +68,9 @@ struct AwarenessMuteButton: View {
 
     var body: some View {
         Button {
-            audioService.isMuted.toggle()
+            audioService.toggleMute()
         } label: {
-            Image(systemName: audioService.isMuted ? "speaker.slash.fill" : "speaker.wave.2.fill")
-                .font(.system(size: 14))
-                .foregroundColor(audioService.isMuted ? .red.opacity(0.6) : .white.opacity(0.5))
+            iconView
                 .frame(width: 32, height: 32)
                 .background(Color.white.opacity(0.06))
                 .cornerRadius(6)
@@ -80,7 +78,43 @@ struct AwarenessMuteButton: View {
         }
         .buttonStyle(.plain)
         .hoverEffect(brightness: 0.2)
-        .help(audioService.isMuted ? "Unmute ambient sounds" : "Mute all ambient sounds")
+        .help(helpText)
+    }
+
+    @ViewBuilder
+    private var iconView: some View {
+        if audioService.muteEnabled {
+            // Manually muted
+            Image(systemName: "speaker.slash.fill")
+                .font(.system(size: 14))
+                .foregroundColor(.red.opacity(0.6))
+        } else if audioService.micAwareEnabled {
+            // Mic-aware mode
+            ZStack(alignment: .bottomTrailing) {
+                Image(systemName: audioService.isMuted ? "speaker.slash.fill" : "speaker.wave.2.fill")
+                    .font(.system(size: 14))
+                    .foregroundColor(audioService.isMuted ? .orange.opacity(0.7) : .white.opacity(0.5))
+                Text("A")
+                    .font(.system(size: 7, weight: .heavy, design: .rounded))
+                    .foregroundColor(audioService.isMuted ? .orange.opacity(0.7) : .green.opacity(0.7))
+                    .offset(x: 3, y: 3)
+            }
+        } else {
+            // Normal
+            Image(systemName: "speaker.wave.2.fill")
+                .font(.system(size: 14))
+                .foregroundColor(.white.opacity(0.5))
+        }
+    }
+
+    private var helpText: String {
+        if audioService.muteEnabled {
+            return "Unmute sounds"
+        } else if audioService.micAwareEnabled && audioService.isMuted {
+            return "Auto-muted (mic in use)"
+        } else {
+            return "Mute all sounds"
+        }
     }
 }
 
