@@ -184,7 +184,7 @@ struct ContentView: View {
         lastSeenVersion = currentVersion
         ChangelogService.shared.fetchIfNeeded()
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
-            if hasCompletedSetup && hasSeenWelcome {
+            if hasCompletedSetup && hasSeenWelcome && updateService.installationStatus == nil {
                 showingWhatsNew = true
             }
         }
