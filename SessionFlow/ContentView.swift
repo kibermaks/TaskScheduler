@@ -823,6 +823,11 @@ struct HeaderView: View {
                 Text("v\(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "1.0").\(Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "0")")
                     .font(.system(size: 14, weight: .medium, design: .rounded))
                     .foregroundColor(.white.opacity(0.4))
+            }
+            HStack(spacing: 6) {
+                Text("Plan your productive day")
+                    .font(.subheadline)
+                    .foregroundColor(.white.opacity(0.6))
                 #if DEBUG
                 if let branch = Self.gitBranch {
                     Text(branch)
@@ -834,9 +839,6 @@ struct HeaderView: View {
                 }
                 #endif
             }
-            Text("Plan your productive day")
-                .font(.subheadline)
-                .foregroundColor(.white.opacity(0.6))
             if let status = updateService.installationStatus {
                 HStack(spacing: 8) {
                     ProgressView()
