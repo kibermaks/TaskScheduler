@@ -502,11 +502,9 @@ struct SessionAwarenessPanel: View {
 
     private var muteButton: some View {
         Button {
-            audioService.isMuted.toggle()
+            audioService.toggleMute()
         } label: {
-            Image(systemName: audioService.isMuted ? "speaker.slash.fill" : "speaker.wave.2.fill")
-                .font(.system(size: 14))
-                .foregroundColor(audioService.isMuted ? .red.opacity(0.6) : .white.opacity(0.5))
+            muteBtnIconView
                 .frame(width: 32, height: 32)
                 .background(Color.white.opacity(0.06))
                 .cornerRadius(6)
@@ -514,7 +512,38 @@ struct SessionAwarenessPanel: View {
         }
         .buttonStyle(.plain)
         .hoverEffect(brightness: 0.2)
-        .help(audioService.isMuted ? "Unmute ambient sounds" : "Mute all ambient sounds")
+        .help(muteBtnHelp)
+    }
+
+    @ViewBuilder
+    private var muteBtnIconView: some View {
+        if audioService.muteMode == .on {
+            Image(systemName: "speaker.slash.fill")
+                .font(.system(size: 14))
+                .foregroundColor(.red.opacity(0.6))
+        } else if audioService.muteMode == .auto {
+            ZStack(alignment: .bottomTrailing) {
+                Image(systemName: audioService.isMuted ? "speaker.slash.fill" : "speaker.wave.2.fill")
+                    .font(.system(size: 14))
+                    .foregroundColor(audioService.isMuted ? .orange.opacity(0.7) : .white.opacity(0.5))
+                Text("A")
+                    .font(.system(size: 7, weight: .heavy, design: .rounded))
+                    .foregroundColor(audioService.isMuted ? .orange.opacity(0.7) : .green.opacity(0.7))
+                    .offset(x: 3, y: 3)
+            }
+        } else {
+            Image(systemName: "speaker.wave.2.fill")
+                .font(.system(size: 14))
+                .foregroundColor(.white.opacity(0.5))
+        }
+    }
+
+    private var muteBtnHelp: String {
+        switch audioService.muteMode {
+        case .off:  return "Mute all sounds"
+        case .auto: return audioService.isMuted ? "Auto-muted (mic in use) — click to force mute" : "Auto-mute active — click to mute"
+        case .on:   return "Unmute sounds\(audioService.muteModeBeforeManualMute == .auto ? " (auto-mute)" : "")"
+        }
     }
 
     // MARK: - Shared styling

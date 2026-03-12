@@ -2,18 +2,22 @@ import Foundation
 import AVFoundation
 import CoreAudio
 import SwiftUI
+import Combine
 
 class SessionAudioService: ObservableObject {
 
     // MARK: - Published state
 
-    @Published var isMuted: Bool {
-        didSet { UserDefaults.standard.set(isMuted, forKey: "SessionFlow.SessionAudioMuted")
-            if isMuted { muteAmbient() } else if shouldBePlayingAmbient { resumeAmbient() }
-        }
-    }
+    @Published private(set) var isMuted: Bool = false
     @Published var isPlaying: Bool = false
     @Published var availableOutputDevices: [AudioOutputDevice] = []
+
+    @Published var muteMode: MuteMode = .off {
+        didSet { applyMuteMode() }
+    }
+
+    let micMonitor = MicrophoneMonitor()
+    private var micCancellable: AnyCancellable?
 
     // MARK: - Audio engine
 
@@ -70,11 +74,41 @@ class SessionAudioService: ObservableObject {
     // MARK: - Init
 
     init() {
-        self.isMuted = UserDefaults.standard.bool(forKey: "SessionFlow.SessionAudioMuted")
         setupAmbientEngine()
         refreshOutputDevices()
         observeDeviceChanges()
         observeEngineConfigChanges()
+
+        micCancellable = micMonitor.$isMicActive
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in self?.applyMuteMode() }
+    }
+
+    // MARK: - Mute Mode Logic
+
+    private func applyMuteMode() {
+        let shouldMute: Bool
+        switch muteMode {
+        case .on:    shouldMute = true
+        case .auto:  shouldMute = micMonitor.isMicActive
+        case .off:   shouldMute = false
+        }
+
+        guard shouldMute != isMuted else { return }
+        isMuted = shouldMute
+        if isMuted { muteAmbient() } else if shouldBePlayingAmbient { resumeAmbient() }
+    }
+
+    /// Toggle mute from panel buttons. Preserves auto mode when unmuting.
+    private(set) var muteModeBeforeManualMute: MuteMode = .off
+
+    func toggleMute() {
+        if muteMode == .on {
+            muteMode = muteModeBeforeManualMute
+        } else {
+            muteModeBeforeManualMute = muteMode
+            muteMode = .on
+        }
     }
 
     deinit {

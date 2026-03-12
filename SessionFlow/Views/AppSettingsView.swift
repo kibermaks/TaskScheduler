@@ -511,6 +511,33 @@ struct AppSettingsView: View {
                             .foregroundColor(.white.opacity(0.5))
                             .frame(width: 38, alignment: .trailing)
                     }
+
+                    HStack(spacing: 10) {
+                        muteModeIconView
+                            .frame(width: 16)
+
+                        Text("Mute")
+                            .font(.system(size: 14, weight: .medium))
+
+                        Spacer()
+
+                        Picker("", selection: Binding(
+                            get: { sessionAwarenessService.config.muteMode },
+                            set: { newValue in
+                                sessionAwarenessService.config.muteMode = newValue
+                                sessionAudioService.muteMode = newValue
+                            }
+                        )) {
+                            Text("Off").tag(MuteMode.off)
+                            Text("Auto (mic)").tag(MuteMode.auto)
+                            Text("On").tag(MuteMode.on)
+                        }
+                        .frame(width: 130)
+                    }
+
+                    Text(muteModeDescription)
+                        .font(.caption)
+                        .foregroundColor(.secondary)
                 }
             }
 
@@ -733,6 +760,40 @@ struct AppSettingsView: View {
             }
         }
         .padding(.vertical, 4)
+    }
+
+    // MARK: - Mute mode helpers
+
+    @ViewBuilder
+    private var muteModeIconView: some View {
+        switch sessionAwarenessService.config.muteMode {
+        case .off:
+            Image(systemName: "speaker.wave.2.fill")
+                .font(.system(size: 12))
+                .foregroundColor(.white.opacity(0.5))
+        case .auto:
+            ZStack(alignment: .bottomTrailing) {
+                Image(systemName: sessionAudioService.isMuted ? "speaker.slash.fill" : "speaker.wave.2.fill")
+                    .font(.system(size: 12))
+                    .foregroundColor(sessionAudioService.isMuted ? .orange.opacity(0.7) : .white.opacity(0.5))
+                Text("A")
+                    .font(.system(size: 6, weight: .heavy, design: .rounded))
+                    .foregroundColor(sessionAudioService.isMuted ? .orange.opacity(0.7) : .green.opacity(0.7))
+                    .offset(x: 2, y: 2)
+            }
+        case .on:
+            Image(systemName: "speaker.slash.fill")
+                .font(.system(size: 12))
+                .foregroundColor(.red.opacity(0.6))
+        }
+    }
+
+    private var muteModeDescription: String {
+        switch sessionAwarenessService.config.muteMode {
+        case .off:  return "Sounds play normally."
+        case .auto: return "Sounds mute automatically while your microphone is in use (calls, meetings, recordings) and resume when it stops."
+        case .on:   return "All sounds are muted."
+        }
     }
 
     // MARK: - Sound Picker with Standard/Custom sections

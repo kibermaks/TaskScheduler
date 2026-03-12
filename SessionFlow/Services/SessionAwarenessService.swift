@@ -65,6 +65,10 @@ class SessionAwarenessService: ObservableObject {
         didSet {
             config.save()
             isEnabled = config.enabled
+            // Sync mute mode to audio service
+            if let audioService = audioService, audioService.muteMode != config.muteMode {
+                audioService.muteMode = config.muteMode
+            }
             // Dynamic: update ambient sound if settings change mid-session
             if isActive, let audioService = audioService {
                 let soundConfig: SessionSoundConfig
@@ -134,8 +138,9 @@ class SessionAwarenessService: ObservableObject {
         self.calendarService = calendarService
         self.audioService = audioService
 
-        // Apply saved master volume
+        // Apply saved master volume and mute mode
         audioService.setMasterVolume(config.masterVolume)
+        audioService.muteMode = config.muteMode
 
         // Invalidate slot cache whenever calendar data changes (drag, move, create, delete)
         calendarCancellable = calendarService.$lastRefresh

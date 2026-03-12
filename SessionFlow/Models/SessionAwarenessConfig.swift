@@ -171,12 +171,21 @@ struct FocusWeights: Codable, Equatable {
     }
 }
 
+// MARK: - Mute mode
+
+enum MuteMode: String, Codable, CaseIterable {
+    case off = "off"        // Sounds play normally
+    case auto = "auto"      // Mute while mic is active
+    case on = "on"          // Always muted
+}
+
 // MARK: - Main config
 
 struct SessionAwarenessConfig: Codable, Equatable {
     var enabled: Bool = true
     var masterVolume: Float = 1.0           // 0.0–1.0, scales all audio output
     var outputDeviceUID: String? = nil      // nil = system default
+    var muteMode: MuteMode = .off
 
     // Per-type ambient sound settings
     var workSound: SessionSoundConfig = .init(sound: "Clock Ticking", volume: 0.6)
@@ -250,6 +259,7 @@ struct SessionAwarenessConfig: Codable, Equatable {
         enabled = try c.decodeIfPresent(Bool.self, forKey: .enabled) ?? true
         masterVolume = try c.decodeIfPresent(Float.self, forKey: .masterVolume) ?? 1.0
         outputDeviceUID = try c.decodeIfPresent(String.self, forKey: .outputDeviceUID)
+        muteMode = try c.decodeIfPresent(MuteMode.self, forKey: .muteMode) ?? .off
 
         workSound = try c.decodeIfPresent(SessionSoundConfig.self, forKey: .workSound) ?? .init(sound: "Clock Ticking", volume: 0.6)
         sideSound = try c.decodeIfPresent(SessionSoundConfig.self, forKey: .sideSound) ?? .init(sound: "Clock Ticking", volume: 0.4)
