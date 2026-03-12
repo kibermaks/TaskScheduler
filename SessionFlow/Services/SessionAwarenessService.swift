@@ -339,16 +339,16 @@ class SessionAwarenessService: ObservableObject {
     private func activateSession(slot: BusyTimeSlot, sessionType: SessionType?, isBusySlot: Bool, at now: Date) {
         let isNewSession = currentEventId != slot.id
 
-        // Only update identity properties when session changes (avoids redundant @Published writes)
+        // Update identity properties on new session, and keep title/notes/type in sync for live edits
         if isNewSession {
             currentEventId = slot.id
-            currentSessionTitle = slot.title
-            currentSessionType = sessionType
-            currentEventNotes = slot.notes
             isBusySlotMode = isBusySlot
             busySlotCalendarColor = isBusySlot ? slot.calendarColor : nil
             busySlotCalendarName = isBusySlot ? slot.calendarName : nil
         }
+        if currentSessionTitle != slot.title { currentSessionTitle = slot.title }
+        if currentSessionType != sessionType { currentSessionType = sessionType }
+        if currentEventNotes != slot.notes { currentEventNotes = slot.notes }
 
         // Start/end times may change if the event is dragged — always keep in sync
         if sessionStartTime != slot.startTime { sessionStartTime = slot.startTime }

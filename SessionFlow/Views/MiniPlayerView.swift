@@ -3,13 +3,17 @@ import SwiftUI
 struct MiniPlayerView: View {
     @ObservedObject var awarenessService: SessionAwarenessService
     @ObservedObject var audioService: SessionAudioService
+    var onHeightChange: ((CGFloat) -> Void)? = nil
 
     @State private var flashOpacity: Double = 0
     @State private var flashColor: Color = .clear
     @State private var showingEventInfo = false
     @State private var feedbackConfirmation: SessionRating? = nil
+    @State private var totalWidth: CGFloat = 620
+    @State private var progressAreaWidth: CGFloat = 200
 
-    private let progressVisibleWidthThreshold: CGFloat = 620
+    private let metaColumnThreshold: CGFloat = 500
+    private let fullProgressThreshold: CGFloat = 150
 
     var body: some View {
         Group {
@@ -23,11 +27,22 @@ struct MiniPlayerView: View {
                 miniIdleBar
             }
         }
+        .fixedSize(horizontal: false, vertical: true)
         .background(miniBackground)
         .overlay(
             RoundedRectangle(cornerRadius: 10)
                 .stroke(Color.white.opacity(0.08), lineWidth: 1)
         )
+        .background(
+            GeometryReader { geo in
+                Color.clear
+                    .preference(key: MiniPlayerHeightKey.self, value: geo.size.height)
+                    .task(id: geo.size.width) { totalWidth = geo.size.width }
+            }
+        )
+        .onPreferenceChange(MiniPlayerHeightKey.self) { height in
+            onHeightChange?(height)
+        }
         .animation(.easeInOut(duration: 0.3), value: awarenessService.isActive)
         .animation(.easeInOut(duration: 0.3), value: awarenessService.sessionFeedbackPending?.id)
         .animation(.easeInOut(duration: 0.3), value: awarenessService.nextSessionTitle)
@@ -35,38 +50,53 @@ struct MiniPlayerView: View {
 
     // MARK: - Active session bar
 
+    private var showMetaColumn: Bool { totalWidth >= metaColumnThreshold }
+    private var showFullProgress: Bool { progressAreaWidth >= fullProgressThreshold }
+
     private var miniActiveBar: some View {
-        GeometryReader { geo in
-            let showProgress = geo.size.width >= progressVisibleWidthThreshold
+        HStack(spacing: 0) {
+            HStack(spacing: 8) {
+                expandButton
+                sessionInfoSection
+            }
+            .frame(minWidth: showMetaColumn ? 240 : 220, maxWidth: 280, alignment: .leading)
 
-            HStack(spacing: 0) {
-                HStack(spacing: 8) {
-                    expandButton
-                    sessionInfoSection
-                }
-                .frame(minWidth: 200, maxWidth: 280, alignment: .leading)
+            divider
 
-                divider
-
+            if showMetaColumn {
                 sessionMetaColumn
                     .frame(width: 110, alignment: .leading)
 
-                if showProgress {
-                    divider
-                    progressSection
-                        .padding(.horizontal, 12)
-                    divider
-                } else {
-                    Spacer(minLength: 0)
-                }
-
-                HStack(spacing: 12) {
-                    clickableTimeDisplay
-                    muteButton
-                }
-                .frame(width: 150, alignment: .trailing)
+                divider
             }
+
+            ZStack {
+                if showFullProgress {
+                    progressSection
+                        .transition(.opacity)
+                } else {
+                    compactProgressDonut
+                        .transition(.opacity)
+                }
+            }
+            .padding(.horizontal, 12)
+            .frame(maxWidth: .infinity)
+            .background(
+                GeometryReader { geo in
+                    Color.clear.task(id: geo.size.width) { progressAreaWidth = geo.size.width }
+                }
+            )
+
+            divider
+
+            HStack(spacing: 12) {
+                clickableTimeDisplay
+                muteButton
+            }
+            .frame(minWidth: 100, maxWidth: 150, alignment: .trailing)
         }
+        .frame(maxWidth: .infinity)
+        .animation(.spring(response: 0.35, dampingFraction: 0.8), value: showFullProgress)
         .padding(.horizontal, 20)
         .padding(.vertical, 12)
         .onChange(of: awarenessService.flashTrigger != nil) { _, isFlashing in
@@ -418,6 +448,34 @@ struct MiniPlayerView: View {
         }
     }
 
+    // MARK: - Compact donut progress
+
+    private var compactProgressDonut: some View {
+        let barColor: Color = awarenessService.isBusySlotMode
+            ? (awarenessService.busySlotCalendarColor ?? .gray)
+            : (awarenessService.currentSessionType?.color ?? .blue)
+        let size: CGFloat = 28
+        let lineWidth: CGFloat = 3.5
+
+        return ZStack {
+            Circle()
+                .stroke(Color.white.opacity(0.08), lineWidth: lineWidth)
+            Circle()
+                .trim(from: 0, to: CGFloat(awarenessService.progress))
+                .stroke(barColor, style: StrokeStyle(lineWidth: lineWidth, lineCap: .round))
+                .rotationEffect(.degrees(-90))
+            (
+                Text("\(Int(awarenessService.progress * 100))")
+                    .font(.system(size: 9, weight: .medium, design: .monospaced))
+                +
+                Text("%")
+                    .font(.system(size: 6, weight: .medium, design: .monospaced))
+            )
+            .foregroundColor(.white.opacity(0.5))
+        }
+        .frame(width: size, height: size)
+    }
+
     // MARK: - Progress (spring)
 
     private var progressSection: some View {
@@ -539,3 +597,11 @@ struct MiniPlayerView: View {
         return "\(formatter.string(from: start)) - \(formatter.string(from: end)) \u{2022} \(durationMinutes) min"
     }
 }
+
+private struct MiniPlayerHeightKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = max(value, nextValue())
+    }
+}
+

@@ -6,11 +6,19 @@ class MiniPlayerWindowController: NSObject, ObservableObject, NSWindowDelegate {
     private var panel: NSPanel?
     private var cancellables = Set<AnyCancellable>()
     private weak var awarenessService: SessionAwarenessService?
+    private var mouseMonitor: Any?
+    private var cursorMonitor: Any?
+    private var cursorOnEdge = false
+
+    private enum DragMode { case move, resizeLeft, resizeRight }
+    private var dragMode: DragMode?
+    private var dragStartMouse: NSPoint = .zero
+    private var dragStartFrame: NSRect = .zero
+    private let edgeWidth: CGFloat = 8
 
     func setup(awarenessService: SessionAwarenessService, audioService: SessionAudioService) {
         self.awarenessService = awarenessService
 
-        // React to collapsed state changes
         awarenessService.$isCollapsed
             .receive(on: DispatchQueue.main)
             .sink { [weak self] collapsed in
@@ -26,7 +34,6 @@ class MiniPlayerWindowController: NSObject, ObservableObject, NSWindowDelegate {
     private func showPanel(awarenessService: SessionAwarenessService, audioService: SessionAudioService) {
         guard panel == nil else { return }
 
-        // Save main window frame and hide it
         if let mainWindow = NSApp.windows.first(where: { $0.isVisible && !($0 is NSPanel) }) {
             let frame = mainWindow.frame
             awarenessService.config.mainWindowFrame = CodableRect(
@@ -36,16 +43,23 @@ class MiniPlayerWindowController: NSObject, ObservableObject, NSWindowDelegate {
             mainWindow.orderOut(nil)
         }
 
-        let miniView = MiniPlayerView(awarenessService: awarenessService, audioService: audioService)
+        let miniView = MiniPlayerView(awarenessService: awarenessService, audioService: audioService, onHeightChange: { [weak self] height in
+            DispatchQueue.main.async {
+                self?.updatePanelHeight(height)
+            }
+        })
         let hostingView = NSHostingView(rootView: miniView)
+        hostingView.setContentHuggingPriority(.defaultLow, for: .horizontal)
+        hostingView.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
 
         let defaultWidth: CGFloat = 620
-        let defaultHeight: CGFloat = 110
+        let minWidth: CGFloat = 500
+        let defaultHeight: CGFloat = 56
 
         let panelRect: NSRect
         if let saved = awarenessService.config.miniPlayerFrame {
-            // Always use fixed height; preserve saved position and width
-            panelRect = NSRect(x: saved.x, y: saved.y, width: saved.width, height: defaultHeight)
+            let clampedWidth = max(minWidth, saved.width)
+            panelRect = NSRect(x: saved.x, y: saved.y, width: clampedWidth, height: defaultHeight)
         } else {
             let screenFrame = NSScreen.main?.visibleFrame ?? NSRect(x: 0, y: 0, width: 800, height: 600)
             panelRect = NSRect(
@@ -58,39 +72,141 @@ class MiniPlayerWindowController: NSObject, ObservableObject, NSWindowDelegate {
 
         let newPanel = NSPanel(
             contentRect: panelRect,
-            styleMask: [.borderless, .nonactivatingPanel, .resizable],
+            styleMask: [.borderless, .nonactivatingPanel],
             backing: .buffered,
             defer: false
         )
         newPanel.level = .floating
-        newPanel.isMovableByWindowBackground = true
+        newPanel.isMovableByWindowBackground = false
         newPanel.backgroundColor = .clear
         newPanel.isOpaque = false
-        newPanel.hasShadow = false  // Use SwiftUI shadow only (rounded); window shadow is square
+        newPanel.hasShadow = false
         newPanel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
-        newPanel.contentView = hostingView
+
+        let containerView = NSView()
+        containerView.addSubview(hostingView)
+        hostingView.translatesAutoresizingMaskIntoConstraints = false
+        NSLayoutConstraint.activate([
+            hostingView.leadingAnchor.constraint(equalTo: containerView.leadingAnchor),
+            hostingView.trailingAnchor.constraint(equalTo: containerView.trailingAnchor),
+            hostingView.topAnchor.constraint(equalTo: containerView.topAnchor),
+            hostingView.bottomAnchor.constraint(equalTo: containerView.bottomAnchor),
+        ])
+
+        newPanel.contentView = containerView
         newPanel.delegate = self
-        newPanel.minSize = NSSize(width: 500, height: defaultHeight)
-        newPanel.maxSize = NSSize(width: 960, height: defaultHeight)
+        newPanel.minSize = NSSize(width: minWidth, height: defaultHeight)
+        newPanel.maxSize = NSSize(width: CGFloat.greatestFiniteMagnitude, height: 200)
+        newPanel.acceptsMouseMovedEvents = true
         newPanel.orderFront(nil)
 
         self.panel = newPanel
+
+        mouseMonitor = NSEvent.addLocalMonitorForEvents(matching: [.leftMouseDown, .leftMouseDragged, .leftMouseUp]) { [weak self] event in
+            guard let self = self, let panel = self.panel else { return event }
+            guard event.window === panel else { return event }
+            return self.handlePanelMouse(event)
+        }
+
+        cursorMonitor = NSEvent.addLocalMonitorForEvents(matching: [.mouseMoved, .mouseEntered, .mouseExited]) { [weak self] event in
+            guard let self = self, let panel = self.panel else { return event }
+            guard event.window === panel else {
+                if self.cursorOnEdge { NSCursor.arrow.set(); self.cursorOnEdge = false }
+                return event
+            }
+            let loc = event.locationInWindow
+            let onEdge = loc.x <= self.edgeWidth || loc.x >= panel.frame.width - self.edgeWidth
+            if onEdge && !self.cursorOnEdge {
+                NSCursor.resizeLeftRight.push()
+                self.cursorOnEdge = true
+            } else if !onEdge && self.cursorOnEdge {
+                NSCursor.pop()
+                self.cursorOnEdge = false
+            }
+            return event
+        }
     }
 
-    private func hidePanel() {
-        guard let panel = panel else { return }
+    private func handlePanelMouse(_ event: NSEvent) -> NSEvent? {
+        switch event.type {
+        case .leftMouseDown:
+            let loc = event.locationInWindow
+            guard let panel = panel else { return event }
+            dragStartMouse = NSEvent.mouseLocation
+            dragStartFrame = panel.frame
 
-        // Save mini-player frame
+            if loc.x <= edgeWidth {
+                dragMode = .resizeLeft
+                return nil
+            } else if loc.x >= panel.frame.width - edgeWidth {
+                dragMode = .resizeRight
+                return nil
+            }
+            dragMode = nil
+            return event // pass through for buttons
+
+        case .leftMouseDragged:
+            guard let panel = panel else { return event }
+            let mouse = NSEvent.mouseLocation
+            let dx = mouse.x - dragStartMouse.x
+            let dy = mouse.y - dragStartMouse.y
+
+            // If no mode yet, start a window move once drag exceeds threshold
+            if dragMode == nil {
+                guard abs(dx) > 3 || abs(dy) > 3 else { return event }
+                dragMode = .move
+            }
+
+            var newFrame = dragStartFrame
+            switch dragMode! {
+            case .move:
+                newFrame.origin.x += dx
+                newFrame.origin.y += dy
+            case .resizeLeft:
+                let maxDx = dragStartFrame.width - panel.minSize.width
+                let clamped = min(dx, maxDx)
+                newFrame.origin.x = dragStartFrame.origin.x + clamped
+                newFrame.size.width = dragStartFrame.width - clamped
+            case .resizeRight:
+                newFrame.size.width = max(panel.minSize.width, dragStartFrame.width + dx)
+            }
+            panel.setFrame(newFrame, display: true)
+            return nil
+
+        case .leftMouseUp:
+            if dragMode != nil {
+                dragMode = nil
+                savePanelFrame()
+                return nil
+            }
+            return event
+
+        default:
+            return event
+        }
+    }
+
+    private func savePanelFrame() {
+        guard let panel = panel else { return }
         let frame = panel.frame
         awarenessService?.config.miniPlayerFrame = CodableRect(
             x: frame.origin.x, y: frame.origin.y,
             width: frame.size.width, height: frame.size.height
         )
+    }
+
+    private func hidePanel() {
+        if let monitor = mouseMonitor { NSEvent.removeMonitor(monitor); mouseMonitor = nil }
+        if let monitor = cursorMonitor { NSEvent.removeMonitor(monitor); cursorMonitor = nil }
+        if cursorOnEdge { NSCursor.pop(); cursorOnEdge = false }
+
+        guard let panel = panel else { return }
+
+        savePanelFrame()
 
         panel.orderOut(nil)
         self.panel = nil
 
-        // Restore and show main window
         if let mainWindow = NSApp.windows.first(where: { !($0 is NSPanel) }) {
             if let saved = awarenessService?.config.mainWindowFrame {
                 let rect = NSRect(x: saved.x, y: saved.y, width: saved.width, height: saved.height)
@@ -101,23 +217,29 @@ class MiniPlayerWindowController: NSObject, ObservableObject, NSWindowDelegate {
         }
     }
 
+    private func updatePanelHeight(_ newHeight: CGFloat) {
+        guard let panel = panel else { return }
+        guard dragMode == nil else { return }
+        guard newHeight > 0, abs(panel.frame.height - newHeight) > 1 else { return }
+
+        var frame = panel.frame
+        frame.origin.y += frame.size.height - newHeight
+        frame.size.height = newHeight
+
+        panel.minSize.height = newHeight
+        panel.maxSize.height = newHeight
+
+        panel.setFrame(frame, display: true)
+    }
+
     // MARK: - NSWindowDelegate
 
     func windowDidMove(_ notification: Notification) {
-        guard let panel = panel else { return }
-        let frame = panel.frame
-        awarenessService?.config.miniPlayerFrame = CodableRect(
-            x: frame.origin.x, y: frame.origin.y,
-            width: frame.size.width, height: frame.size.height
-        )
+        savePanelFrame()
     }
 
     func windowDidResize(_ notification: Notification) {
-        guard let panel = panel else { return }
-        let frame = panel.frame
-        awarenessService?.config.miniPlayerFrame = CodableRect(
-            x: frame.origin.x, y: frame.origin.y,
-            width: frame.size.width, height: frame.size.height
-        )
+        savePanelFrame()
     }
 }
+

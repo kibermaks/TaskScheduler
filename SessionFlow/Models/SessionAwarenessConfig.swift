@@ -13,6 +13,7 @@ struct SessionSoundConfig: Codable, Equatable {
     static let availableSounds = [
         "Clock Ticking",
         "Clock Ticking Slow",
+        "Creek Atmosphere",
         "Kitchen Timer",
         "Duskfall on a River",
         "Light Rain",

@@ -26,7 +26,9 @@
       "Bash(ls -1 *.mp3)",
       "Bash(ls -1 *.aiff)",
       "Bash(/tmp/button_search.txt:*)",
-      "Read(//tmp/**)"
+      "Read(//tmp/**)",
+      "Bash(./build_app.sh --release minor)",
+      "Bash(find /Users/maks/Code-Projects/SessionFlow -name *.plist -type f)"
     ]
   },
   "hooks": {

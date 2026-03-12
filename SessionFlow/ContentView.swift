@@ -801,7 +801,7 @@ struct HeaderView: View {
                 Text("SessionFlow")
                     .font(.system(size: 28, weight: .bold, design: .rounded))
                     .foregroundColor(.white)
-                Text("v\(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "1.0")")
+                Text("v\(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "1.0").\(Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "0")")
                     .font(.system(size: 14, weight: .medium, design: .rounded))
                     .foregroundColor(.white.opacity(0.4))
             }
