@@ -5,6 +5,18 @@ All notable changes to SessionFlow will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.5] - 2026-03-12
+
+### Added
+
+- Auto-mute when microphone is active — automatically silences sounds during calls and recordings
+- Session type filtering on Productivity Card and Calendar view with per-type stats
+
+### Changed
+
+- Mute controls redesigned as independent toggles (manual mute + mic-aware auto-mute)
+- Extracted shared awareness components to reduce code duplication
+
 ## [2.4] - 2026-03-12
 
 ### Added
