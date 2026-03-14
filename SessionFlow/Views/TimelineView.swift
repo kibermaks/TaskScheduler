@@ -310,7 +310,7 @@ struct TimelineView: View {
             if calendarService.isLoading {
                 ProgressView()
                     .progressViewStyle(.circular)
-                    .scaleEffect(0.8)
+                    .scaleEffect(0.5)
             }
             
             legendView
