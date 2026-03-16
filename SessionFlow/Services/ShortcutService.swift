@@ -38,11 +38,7 @@ class ShortcutService {
         }
 
         guard triggerConfig.isEnabled else { return }
-        // Rest triggers don't use type filter
-        let isRestTrigger = trigger == .restStarted || trigger == .restEnded || trigger == .restEndingSoon
-        if !isRestTrigger {
-            guard triggerConfig.typeFilter.matches(sessionType: session.type, isBusySlot: session.isBusySlot) else { return }
-        }
+        guard triggerConfig.typeFilter.matches(sessionType: session.type, isBusySlot: session.isBusySlot) else { return }
         guard !triggerConfig.shortcutName.trimmingCharacters(in: .whitespaces).isEmpty else { return }
 
         let payload = buildPayload(trigger: trigger, session: session)

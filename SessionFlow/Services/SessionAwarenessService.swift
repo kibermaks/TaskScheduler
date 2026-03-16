@@ -466,7 +466,8 @@ class SessionAwarenessService: ObservableObject {
         }
 
         // Rest ending soon
-        let leadSeconds = TimeInterval(config.restEndingSoonLeadTimeMinutes * 60)
+        let leadMinutes = config.shortcuts.restEndingSoon.leadTimeMinutes ?? 2
+        let leadSeconds = TimeInterval(leadMinutes * 60)
         if !hasPlayedRestEndingSoon && restRemaining <= leadSeconds && restRemaining > 0 {
             hasPlayedRestEndingSoon = true
             shortcutService.fire(

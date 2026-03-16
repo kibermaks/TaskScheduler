@@ -211,7 +211,7 @@ struct ShortcutsConfig: Codable, Equatable {
     var ended: ShortcutTriggerConfig = .init(shortcutName: "SessionFlow Ended")
     var restStarted: ShortcutTriggerConfig = .init(shortcutName: "Rest Started")
     var restEnded: ShortcutTriggerConfig = .init(shortcutName: "Rest Ended")
-    var restEndingSoon: ShortcutTriggerConfig = .init(shortcutName: "Rest Ending Soon")
+    var restEndingSoon: ShortcutTriggerConfig = .init(shortcutName: "Rest Ending Soon", leadTimeMinutes: 2)
 
     init() {}
 
@@ -228,7 +228,7 @@ struct ShortcutsConfig: Codable, Equatable {
         restEnded = try c.decodeIfPresent(ShortcutTriggerConfig.self, forKey: .restEnded)
             ?? .init(shortcutName: "Rest Ended")
         restEndingSoon = try c.decodeIfPresent(ShortcutTriggerConfig.self, forKey: .restEndingSoon)
-            ?? .init(shortcutName: "Rest Ending Soon")
+            ?? .init(shortcutName: "Rest Ending Soon", leadTimeMinutes: 2)
     }
 }
 
@@ -308,7 +308,6 @@ struct SessionAwarenessConfig: Codable, Equatable {
     var trackRests: Bool = false
     var restSound: SessionSoundConfig = .init(sound: "Ocean Waves", volume: 0.3)
     var restSoundAccelerando: AccelerandoConfig = .init()
-    var restEndingSoonLeadTimeMinutes: Int = 2
 
     // Shortcuts integration
     var shortcuts: ShortcutsConfig = .init()
@@ -349,7 +348,7 @@ struct SessionAwarenessConfig: Codable, Equatable {
         case productivityEnabled, focusWeights
         case showMenuBarItem, showDockProgress
         case miniPlayerFrame, mainWindowFrame
-        case trackRests, restSound, restSoundAccelerando, restEndingSoonLeadTimeMinutes
+        case trackRests, restSound, restSoundAccelerando
         case shortcuts
     }
 
@@ -390,7 +389,6 @@ struct SessionAwarenessConfig: Codable, Equatable {
         try c.encode(trackRests, forKey: .trackRests)
         try c.encode(restSound, forKey: .restSound)
         try c.encode(restSoundAccelerando, forKey: .restSoundAccelerando)
-        try c.encode(restEndingSoonLeadTimeMinutes, forKey: .restEndingSoonLeadTimeMinutes)
         try c.encode(shortcuts, forKey: .shortcuts)
     }
 
@@ -444,7 +442,6 @@ struct SessionAwarenessConfig: Codable, Equatable {
         trackRests = try c.decodeIfPresent(Bool.self, forKey: .trackRests) ?? false
         restSound = try c.decodeIfPresent(SessionSoundConfig.self, forKey: .restSound) ?? .init(sound: "Ocean Waves", volume: 0.3)
         restSoundAccelerando = try c.decodeIfPresent(AccelerandoConfig.self, forKey: .restSoundAccelerando) ?? .init()
-        restEndingSoonLeadTimeMinutes = try c.decodeIfPresent(Int.self, forKey: .restEndingSoonLeadTimeMinutes) ?? 2
         shortcuts = try c.decodeIfPresent(ShortcutsConfig.self, forKey: .shortcuts) ?? .init()
     }
 
