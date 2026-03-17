@@ -146,53 +146,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         return !hasVisiblePanel
     }
 
-    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
-        let hasVisiblePanel = NSApp.windows.contains { $0 is NSPanel && $0.isVisible }
-        let hasVisibleMainWindow = NSApp.windows.contains { !($0 is NSPanel) && $0.isVisible }
+    // Dock icon click: MiniPlayerWindowController handles expansion via didBecomeKey observer
 
-        if hasVisiblePanel && !hasVisibleMainWindow {
-            // Mini-player is active, main window is hidden — flash the panel instead
-            if let panel = NSApp.windows.first(where: { $0 is NSPanel && $0.isVisible }) {
-                flashWindow(panel)
-            }
-            return false // Don't open main window
-        }
-        return true
-    }
-
-    private func flashWindow(_ window: NSWindow) {
-        guard let contentView = window.contentView else { return }
-        let flash = NSView(frame: contentView.bounds)
-        flash.wantsLayer = true
-        flash.layer?.backgroundColor = NSColor.white.withAlphaComponent(0.25).cgColor
-        flash.layer?.cornerRadius = 10
-        flash.alphaValue = 0
-        contentView.addSubview(flash)
-        flash.autoresizingMask = [.width, .height]
-
-        NSAnimationContext.runAnimationGroup({ ctx in
-            ctx.duration = 0.15
-            flash.animator().alphaValue = 1
-        }, completionHandler: {
-            NSAnimationContext.runAnimationGroup({ ctx in
-                ctx.duration = 0.3
-                flash.animator().alphaValue = 0
-            }, completionHandler: {
-                // Second flash
-                NSAnimationContext.runAnimationGroup({ ctx in
-                    ctx.duration = 0.15
-                    flash.animator().alphaValue = 1
-                }, completionHandler: {
-                    NSAnimationContext.runAnimationGroup({ ctx in
-                        ctx.duration = 0.3
-                        flash.animator().alphaValue = 0
-                    }, completionHandler: {
-                        flash.removeFromSuperview()
-                    })
-                })
-            })
-        })
-    }
 }
 
 private extension SessionFlowApp {

@@ -600,6 +600,9 @@ struct AppSettingsView: View {
                         ambientSoundRow(icon: "calendar", iconColor: .gray, label: "Your events",
                                         soundKeyPath: \.otherEventsSound, accelKeyPath: \.otherEventsSoundAccelerando)
                     }
+
+                    ambientSoundRow(icon: "cup.and.saucer.fill", iconColor: .teal, label: "Rest",
+                                    soundKeyPath: \.restSound, accelKeyPath: \.restSoundAccelerando)
                 }
 
                 Section("Session Transitions") {
@@ -641,26 +644,6 @@ struct AppSettingsView: View {
                     Text("Plays a short sound at regular intervals to help you stay focused.")
                         .font(.caption)
                         .foregroundColor(.secondary)
-                }
-
-                Section("Rest Tracking") {
-                    Toggle("Track rests between sessions", isOn: Binding(
-                        get: { sessionAwarenessService.config.trackRests },
-                        set: { sessionAwarenessService.config.trackRests = $0 }
-                    ))
-
-                    Text("Shows rest state in the awareness panel when you're between two sessions and the gap matches the configured rest duration. Requires rest durations set in Presets.")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-
-                    if sessionAwarenessService.config.trackRests {
-                        ambientSoundRow(icon: "cup.and.saucer.fill", iconColor: .teal, label: "Rest",
-                                        soundKeyPath: \.restSound, accelKeyPath: \.restSoundAccelerando)
-
-                        Text("Rest shortcuts (with lead time) can be configured in the Shortcuts tab.")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                    }
                 }
 
                 Section("Menu Bar & Dock") {
@@ -1082,56 +1065,42 @@ struct AppSettingsView: View {
                 )
             }
 
-            // Rest triggers (only shown when rest tracking is enabled)
-            if sessionAwarenessService.config.trackRests {
-                Section {
-                    VStack(alignment: .leading, spacing: 4) {
-                        HStack(spacing: 6) {
-                            Image(systemName: "cup.and.saucer.fill")
-                                .font(.system(size: 12))
-                                .foregroundColor(.teal)
-                            Text("Rest Shortcuts")
-                                .font(.system(size: 13, weight: .semibold))
-                        }
-                        Text("These fire only while rest tracking is enabled.")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                    }
-                }
+            // Rest triggers
+            Section {
+                shortcutTriggerRow(
+                    triggerPath: \.restStarted,
+                    title: "Rest Started",
+                    triggerKey: "rest_started",
+                    isRestTrigger: true,
+                    showingPayload: $showingRestStartedPayload,
+                    examplePayload: shortcutPayloadExample(trigger: "rest_started",
+                        message: "Rest started (20 min)")
+                )
+            }
 
-                Section {
-                    shortcutTriggerRow(
-                        triggerPath: \.restStarted,
-                        title: "Rest Started",
-                        triggerKey: "rest_started",
-                        showingPayload: $showingRestStartedPayload,
-                        examplePayload: shortcutPayloadExample(trigger: "rest_started",
-                            message: "Rest started (20 min)")
-                    )
-                }
+            Section {
+                shortcutTriggerRow(
+                    triggerPath: \.restEndingSoon,
+                    title: "Rest Ending Soon",
+                    triggerKey: "rest_ending_soon",
+                    isRestTrigger: true,
+                    showLeadTime: true,
+                    showingPayload: $showingRestEndingSoonPayload,
+                    examplePayload: shortcutPayloadExample(trigger: "rest_ending_soon",
+                        message: "Rest ending in 2 min")
+                )
+            }
 
-                Section {
-                    shortcutTriggerRow(
-                        triggerPath: \.restEndingSoon,
-                        title: "Rest Ending Soon",
-                        triggerKey: "rest_ending_soon",
-                        showLeadTime: true,
-                        showingPayload: $showingRestEndingSoonPayload,
-                        examplePayload: shortcutPayloadExample(trigger: "rest_ending_soon",
-                            message: "Rest ending in 2 min")
-                    )
-                }
-
-                Section {
-                    shortcutTriggerRow(
-                        triggerPath: \.restEnded,
-                        title: "Rest Ended",
-                        triggerKey: "rest_ended",
-                        showingPayload: $showingRestEndedPayload,
-                        examplePayload: shortcutPayloadExample(trigger: "rest_ended",
-                            message: "Rest ended")
-                    )
-                }
+            Section {
+                shortcutTriggerRow(
+                    triggerPath: \.restEnded,
+                    title: "Rest Ended",
+                    triggerKey: "rest_ended",
+                    isRestTrigger: true,
+                    showingPayload: $showingRestEndedPayload,
+                    examplePayload: shortcutPayloadExample(trigger: "rest_ended",
+                        message: "Rest ended")
+                )
             }
         }
         .formStyle(.grouped)
@@ -1165,6 +1134,7 @@ struct AppSettingsView: View {
         triggerPath: WritableKeyPath<ShortcutsConfig, ShortcutTriggerConfig>,
         title: String,
         triggerKey: String,
+        isRestTrigger: Bool = false,
         showLeadTime: Bool = false,
         showingPayload: Binding<Bool>,
         examplePayload: String
@@ -1240,7 +1210,7 @@ Spacer()
                 }
 
                 HStack {
-                    Text("Trigger for:")
+                    Text(isRestTrigger ? "Rest after:" : "Trigger for:")
                         .font(.system(size: 12))
                         .foregroundColor(.secondary)
                     Spacer()

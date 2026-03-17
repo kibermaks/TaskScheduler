@@ -117,7 +117,7 @@ struct MiniPlayerView: View {
     // MARK: - Rest bar
 
     private var miniRestBar: some View {
-        AwarenessRestContent(awarenessService: awarenessService, audioService: audioService, toggleButton: expandButton, showProgress: false)
+        AwarenessRestContent(awarenessService: awarenessService, audioService: audioService, toggleButton: expandButton)
             .padding(.horizontal, 20)
             .padding(.vertical, 12)
     }

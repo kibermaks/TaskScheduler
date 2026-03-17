@@ -304,8 +304,7 @@ struct SessionAwarenessConfig: Codable, Equatable {
     var miniPlayerFrame: CodableRect? = nil
     var mainWindowFrame: CodableRect? = nil
 
-    // Rest tracking between sessions
-    var trackRests: Bool = false
+    // Rest tracking between sessions (always active when awareness is enabled)
     var restSound: SessionSoundConfig = .init(sound: "Ocean Waves", volume: 0.3)
     var restSoundAccelerando: AccelerandoConfig = .init()
 
@@ -348,7 +347,8 @@ struct SessionAwarenessConfig: Codable, Equatable {
         case productivityEnabled, focusWeights
         case showMenuBarItem, showDockProgress
         case miniPlayerFrame, mainWindowFrame
-        case trackRests, restSound, restSoundAccelerando
+        case trackRests // legacy — decoded for migration, never encoded
+        case restSound, restSoundAccelerando
         case shortcuts
     }
 
@@ -386,7 +386,6 @@ struct SessionAwarenessConfig: Codable, Equatable {
         try c.encode(showDockProgress, forKey: .showDockProgress)
         try c.encodeIfPresent(miniPlayerFrame, forKey: .miniPlayerFrame)
         try c.encodeIfPresent(mainWindowFrame, forKey: .mainWindowFrame)
-        try c.encode(trackRests, forKey: .trackRests)
         try c.encode(restSound, forKey: .restSound)
         try c.encode(restSoundAccelerando, forKey: .restSoundAccelerando)
         try c.encode(shortcuts, forKey: .shortcuts)
@@ -439,7 +438,8 @@ struct SessionAwarenessConfig: Codable, Equatable {
         showDockProgress = try c.decodeIfPresent(Bool.self, forKey: .showDockProgress) ?? true
         miniPlayerFrame = try c.decodeIfPresent(CodableRect.self, forKey: .miniPlayerFrame)
         mainWindowFrame = try c.decodeIfPresent(CodableRect.self, forKey: .mainWindowFrame)
-        trackRests = try c.decodeIfPresent(Bool.self, forKey: .trackRests) ?? false
+        // trackRests legacy key — ignored (rest tracking is always on when awareness is enabled)
+        _ = try c.decodeIfPresent(Bool.self, forKey: .trackRests)
         restSound = try c.decodeIfPresent(SessionSoundConfig.self, forKey: .restSound) ?? .init(sound: "Ocean Waves", volume: 0.3)
         restSoundAccelerando = try c.decodeIfPresent(AccelerandoConfig.self, forKey: .restSoundAccelerando) ?? .init()
         shortcuts = try c.decodeIfPresent(ShortcutsConfig.self, forKey: .shortcuts) ?? .init()

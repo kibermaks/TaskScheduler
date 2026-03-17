@@ -316,8 +316,8 @@ class SessionAwarenessService: ObservableObject {
         // Update next session
         updateNextSession(in: todaySlots, at: now)
 
-        // Rest tracking
-        if isEnabled && config.trackRests && !isActive {
+        // Rest tracking (always active when awareness is enabled)
+        if isEnabled && !isActive {
             checkRestState(in: todaySlots, at: now)
         } else if isResting {
             endRestState()
