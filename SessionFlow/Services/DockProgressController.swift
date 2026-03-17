@@ -5,6 +5,7 @@ import Combine
 class DockProgressController {
     private var cancellables = Set<AnyCancellable>()
     private var customView: DockTileProgressView?
+    private var flashGeneration = 0
 
     func setup(awarenessService: SessionAwarenessService) {
         awarenessService.$isActive
@@ -27,6 +28,16 @@ class DockProgressController {
                     busyColor: busyColor,
                     timeDisplayMode: mode
                 )
+            }
+            .store(in: &cancellables)
+
+        // Flash the dock donut when presence reminder or ending soon fires
+        awarenessService.$flashTrigger
+            .compactMap { $0 }
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] type in
+                guard awarenessService.config.showDockProgress else { return }
+                self?.flashDockDonut(type: type)
             }
             .store(in: &cancellables)
     }
@@ -62,6 +73,32 @@ class DockProgressController {
         customView?.isRemainingMode = (timeDisplayMode == .remaining)
         NSApp.dockTile.display()
     }
+
+    // MARK: - Flash
+
+    private func flashDockDonut(type: SessionAwarenessService.FlashType) {
+        guard customView != nil else { return }
+
+        flashGeneration &+= 1
+        let gen = flashGeneration
+        let flashColor: NSColor = type == .endingSoon ? .systemRed : .systemOrange
+
+        // Double-blink pattern matching menu bar: on → off → on → off
+        let steps: [(delay: Double, color: NSColor?)] = [
+            (0,    flashColor),
+            (0.55, nil),
+            (0.65, flashColor),
+            (1.2,  nil),
+        ]
+
+        for step in steps {
+            DispatchQueue.main.asyncAfter(deadline: .now() + step.delay) { [weak self] in
+                guard let self, self.flashGeneration == gen, let view = self.customView else { return }
+                view.flashColor = step.color
+                NSApp.dockTile.display()
+            }
+        }
+    }
 }
 
 // MARK: - Custom Dock Tile View
@@ -70,6 +107,7 @@ private class DockTileProgressView: NSView {
     var progress: Double = 0
     var progressColor: NSColor = .white
     var isRemainingMode: Bool = true
+    var flashColor: NSColor?  // non-nil during flash — tints the donut background
 
     override func draw(_ dirtyRect: NSRect) {
         super.draw(dirtyRect)
@@ -110,11 +148,13 @@ private class DockTileProgressView: NSView {
             $0.shadowColor = NSColor.black.withAlphaComponent(0.25)
             $0.set()
         }
-        NSColor.white.withAlphaComponent(0.95).setFill()
+        let badgeFill = flashColor?.withAlphaComponent(0.85) ?? NSColor.white.withAlphaComponent(0.95)
+        badgeFill.setFill()
         badgePath.fill()
         NSGraphicsContext.current?.restoreGraphicsState()
 
-        NSColor.black.withAlphaComponent(0.12).setStroke()
+        let badgeStroke = flashColor?.withAlphaComponent(0.5) ?? NSColor.black.withAlphaComponent(0.12)
+        badgeStroke.setStroke()
         badgePath.lineWidth = 1
         badgePath.stroke()
 

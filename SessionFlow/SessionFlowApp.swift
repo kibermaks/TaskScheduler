@@ -59,6 +59,7 @@ struct SessionFlowApp: App {
                     if let mainWindow = NSApp.windows.first(where: { !($0 is NSPanel) }) {
                         mainWindow.setFrameAutosaveName("SessionFlowMainWindow")
                     }
+                    appDelegate.awarenessService = sessionAwarenessService
                 }
         }
         .windowStyle(.hiddenTitleBar)
@@ -139,6 +140,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         FocusRingController.shared.install()
     }
+    weak var awarenessService: SessionAwarenessService?
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
         // Don't quit when main window is hidden for mini-player
@@ -146,8 +148,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         return !hasVisiblePanel
     }
 
-    // Dock icon click: MiniPlayerWindowController handles expansion via didBecomeKey observer
-
+    func applicationWillTerminate(_ notification: Notification) {
+        // Flush pending session/rest shortcuts before quitting
+        awarenessService?.flushOnTermination()
+    }
 }
 
 private extension SessionFlowApp {

@@ -1074,7 +1074,6 @@ struct AppSettingsView: View {
                     isRestTrigger: true,
                     showingPayload: $showingRestStartedPayload,
                     examplePayload: shortcutPayloadExample(trigger: "rest_started",
-                        message: "Rest started (20 min)")
                 )
             }
 
@@ -1087,7 +1086,6 @@ struct AppSettingsView: View {
                     showLeadTime: true,
                     showingPayload: $showingRestEndingSoonPayload,
                     examplePayload: shortcutPayloadExample(trigger: "rest_ending_soon",
-                        message: "Rest ending in 2 min")
                 )
             }
 
@@ -1263,16 +1261,32 @@ Spacer()
         }
         let typeName = typeKey == "external" ? "External" : typeKey.prefix(1).uppercased() + typeKey.dropFirst()
         let message: String
+        let restDuration: Int?
+        let nextTitle: String?
         switch triggerKey {
         case "approaching":
             let lead = sessionAwarenessService.config.shortcuts[keyPath: triggerPath].leadTimeMinutes ?? 1
             message = "\(typeName) session 'Heavy brainstorm' starts in \(lead) min"
+            restDuration = nil; nextTitle = nil
         case "started":
             message = "\(typeName) session 'Heavy brainstorm' started"
+            restDuration = nil; nextTitle = nil
+        case "rest_started":
+            message = "Rest started (20 min)"
+            restDuration = 20; nextTitle = nil
+        case "rest_ending_soon":
+            let lead = sessionAwarenessService.config.shortcuts[keyPath: triggerPath].leadTimeMinutes ?? 2
+            message = "Rest ending in \(lead) min"
+            restDuration = nil; nextTitle = nil
+        case "rest_ended":
+            message = "Rest ended"
+            restDuration = nil; nextTitle = nil
         default:
             message = "\(typeName) session 'Heavy brainstorm' ended"
+            restDuration = nil; nextTitle = nil
         }
-        let testPayload = shortcutPayloadExample(trigger: triggerKey, message: message, type: typeKey)
+        let testPayload = shortcutPayloadExample(trigger: triggerKey, message: message, type: typeKey,
+                                                  restDuration: restDuration, nextTitle: nextTitle)
         shortcutTestTitle = title
         shortcutTestResult = .running
         ShortcutService.test(name: name, payload: testPayload) { result in
@@ -1405,10 +1419,19 @@ Spacer()
         .buttonStyle(.plain)
     }
 
-    private func shortcutPayloadExample(trigger: String, message: String, type: String = "deep") -> String {
+    private func shortcutPayloadExample(trigger: String, message: String, type: String = "deep",
+                                        restDuration: Int? = nil, nextTitle: String? = nil) -> String {
         let typeName = type == "external" ? "External" : type.prefix(1).uppercased() + type.dropFirst()
         let sessionLabel = "\(typeName) session"
         let msg = message.isEmpty ? "\(sessionLabel) 'Heavy brainstorm'" : message
+        var restFields = ""
+        if let rd = restDuration {
+            restFields += ",\n  \"restDuration\": \(rd)"
+        }
+        if let nt = nextTitle {
+            restFields += ",\n  \"nextTitle\": \"\(nt)\""
+            restFields += ",\n  \"nextStartTime\": \"2026-03-14T12:15:00Z\""
+        }
         return """
         {
           "trigger": "\(trigger)",
@@ -1418,7 +1441,7 @@ Spacer()
           "message": "\(msg)",
           "duration": 120,
           "startTime": "2026-03-14T10:00:00Z",
-          "endTime": "2026-03-14T12:00:00Z"
+          "endTime": "2026-03-14T12:00:00Z"\(restFields)
         }
         """
     }

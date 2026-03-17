@@ -18,6 +18,10 @@ class ShortcutService {
         let isBusySlot: Bool
         let startTime: Date
         let endTime: Date
+        // Rest context (optional, populated for rest triggers)
+        var restDuration: Int? = nil        // minutes
+        var nextTitle: String? = nil
+        var nextStartTime: Date? = nil
     }
 
     private var approachingTimer: Timer?
@@ -27,15 +31,7 @@ class ShortcutService {
 
     /// Fire a shortcut for the given trigger, checking config filters.
     func fire(trigger: Trigger, session: SessionInfo, config: ShortcutsConfig) {
-        let triggerConfig: ShortcutTriggerConfig
-        switch trigger {
-        case .approaching: triggerConfig = config.approaching
-        case .started: triggerConfig = config.started
-        case .ended: triggerConfig = config.ended
-        case .restStarted: triggerConfig = config.restStarted
-        case .restEnded: triggerConfig = config.restEnded
-        case .restEndingSoon: triggerConfig = config.restEndingSoon
-        }
+        let triggerConfig = configFor(trigger: trigger, config: config)
 
         guard triggerConfig.isEnabled else { return }
         guard triggerConfig.typeFilter.matches(sessionType: session.type, isBusySlot: session.isBusySlot) else { return }
@@ -43,6 +39,28 @@ class ShortcutService {
 
         let payload = buildPayload(trigger: trigger, session: session)
         runShortcut(name: triggerConfig.shortcutName, payload: payload)
+    }
+
+    /// Fire a shortcut synchronously (launch process without waiting).
+    /// Used for app termination flush — the child process continues after the app exits.
+    func fireAndForget(trigger: Trigger, session: SessionInfo, config: ShortcutsConfig) {
+        let triggerConfig = configFor(trigger: trigger, config: config)
+
+        guard triggerConfig.isEnabled else { return }
+        guard triggerConfig.typeFilter.matches(sessionType: session.type, isBusySlot: session.isBusySlot) else { return }
+        guard !triggerConfig.shortcutName.trimmingCharacters(in: .whitespaces).isEmpty else { return }
+
+        let payload = buildPayload(trigger: trigger, session: session)
+        guard let inputPath = Self.writePayloadToTempFile(payload) else { return }
+
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/shortcuts")
+        process.arguments = ["run", triggerConfig.shortcutName, "--input-path", inputPath.path]
+        process.standardOutput = FileHandle.nullDevice
+        process.standardError = FileHandle.nullDevice
+        try? process.run()
+        // Don't wait — process continues after app terminates
+        // Don't clean up temp file — OS handles it
     }
 
     /// Schedule the "approaching" shortcut to fire before a session starts.
@@ -82,6 +100,19 @@ class ShortcutService {
         lastScheduledSessionId = nil
     }
 
+    // MARK: - Config lookup
+
+    private func configFor(trigger: Trigger, config: ShortcutsConfig) -> ShortcutTriggerConfig {
+        switch trigger {
+        case .approaching: return config.approaching
+        case .started: return config.started
+        case .ended: return config.ended
+        case .restStarted: return config.restStarted
+        case .restEndingSoon: return config.restEndingSoon
+        case .restEnded: return config.restEnded
+        }
+    }
+
     // MARK: - Payload
 
     private func buildPayload(trigger: Trigger, session: SessionInfo) -> String {
@@ -100,15 +131,29 @@ class ShortcutService {
         case .ended:
             message = "\(typeName) session '\(session.title)' ended"
         case .restStarted:
-            message = "Rest started (\(duration) min)"
-        case .restEnded:
-            message = "Rest ended"
+            if let restMin = session.restDuration, let nextTitle = session.nextTitle {
+                message = "Rest started — \(restMin) min until '\(nextTitle)'"
+            } else if let restMin = session.restDuration {
+                message = "Rest started — \(restMin) min break"
+            } else {
+                message = "Rest started after \(typeName) session '\(session.title)'"
+            }
         case .restEndingSoon:
-            let remaining = Int(session.endTime.timeIntervalSinceNow / 60) + 1
-            message = "Rest ending in \(remaining) min"
+            if let nextTitle = session.nextTitle, let nextStart = session.nextStartTime {
+                let lead = max(1, Int(nextStart.timeIntervalSinceNow / 60) + 1)
+                message = "Rest ending soon — '\(nextTitle)' starts in \(lead) min"
+            } else {
+                message = "Rest ending soon"
+            }
+        case .restEnded:
+            if let nextTitle = session.nextTitle {
+                message = "Rest ended — '\(nextTitle)' is starting"
+            } else {
+                message = "Rest ended"
+            }
         }
 
-        let payload: [String: Any] = [
+        var payload: [String: Any] = [
             "trigger": trigger.rawValue,
             "type": typeKey,
             "typeName": typeName,
@@ -118,6 +163,17 @@ class ShortcutService {
             "startTime": iso.string(from: session.startTime),
             "endTime": iso.string(from: session.endTime)
         ]
+
+        // Add rest-specific fields
+        if let restDuration = session.restDuration {
+            payload["restDuration"] = restDuration
+        }
+        if let nextTitle = session.nextTitle {
+            payload["nextTitle"] = nextTitle
+        }
+        if let nextStart = session.nextStartTime {
+            payload["nextStartTime"] = iso.string(from: nextStart)
+        }
 
         guard let data = try? JSONSerialization.data(withJSONObject: payload, options: []),
               let json = String(data: data, encoding: .utf8) else {
