@@ -57,18 +57,21 @@ class MiniPlayerWindowController: NSObject, ObservableObject, NSWindowDelegate {
         let minWidth: CGFloat = 500
         let defaultHeight: CGFloat = 56
 
+        let screenFrame = NSScreen.main?.visibleFrame ?? NSRect(x: 0, y: 0, width: 800, height: 600)
+        let defaultRect = NSRect(
+            x: screenFrame.midX - defaultWidth / 2,
+            y: screenFrame.maxY - defaultHeight - 40,
+            width: defaultWidth,
+            height: defaultHeight
+        )
+
         let panelRect: NSRect
         if let saved = awarenessService.config.miniPlayerFrame {
             let clampedWidth = max(minWidth, saved.width)
-            panelRect = NSRect(x: saved.x, y: saved.y, width: clampedWidth, height: defaultHeight)
+            let candidate = NSRect(x: saved.x, y: saved.y, width: clampedWidth, height: defaultHeight)
+            panelRect = isRectOnScreen(candidate) ? candidate : defaultRect
         } else {
-            let screenFrame = NSScreen.main?.visibleFrame ?? NSRect(x: 0, y: 0, width: 800, height: 600)
-            panelRect = NSRect(
-                x: screenFrame.midX - defaultWidth / 2,
-                y: screenFrame.maxY - defaultHeight - 40,
-                width: defaultWidth,
-                height: defaultHeight
-            )
+            panelRect = defaultRect
         }
 
         let newPanel = NSPanel(
@@ -78,6 +81,7 @@ class MiniPlayerWindowController: NSObject, ObservableObject, NSWindowDelegate {
             defer: false
         )
         newPanel.level = .floating
+        newPanel.hidesOnDeactivate = false
         newPanel.isMovableByWindowBackground = false
         newPanel.backgroundColor = .clear
         newPanel.isOpaque = false
@@ -117,10 +121,12 @@ class MiniPlayerWindowController: NSObject, ObservableObject, NSWindowDelegate {
             guard let self = self, self.panel != nil,
                   let window = notification.object as? NSWindow,
                   !(window is NSPanel) else { return }
-            // Restore saved frame on the window that SwiftUI just showed
+            // Restore saved frame if it's still on a connected screen
             if let saved = self.awarenessService?.config.mainWindowFrame {
                 let rect = NSRect(x: saved.x, y: saved.y, width: saved.width, height: saved.height)
-                window.setFrame(rect, display: true)
+                if self.isRectOnScreen(rect) {
+                    window.setFrame(rect, display: true)
+                }
             }
             // Collapse the mini player normally
             self.awarenessService?.isCollapsed = false
@@ -229,7 +235,9 @@ class MiniPlayerWindowController: NSObject, ObservableObject, NSWindowDelegate {
         if let mainWindow = NSApp.windows.first(where: { !($0 is NSPanel) }) {
             if let saved = awarenessService?.config.mainWindowFrame {
                 let rect = NSRect(x: saved.x, y: saved.y, width: saved.width, height: saved.height)
-                mainWindow.setFrame(rect, display: true)
+                if isRectOnScreen(rect) {
+                    mainWindow.setFrame(rect, display: true)
+                }
             }
             mainWindow.makeKeyAndOrderFront(nil)
             NSApp.activate(ignoringOtherApps: true)
@@ -249,6 +257,15 @@ class MiniPlayerWindowController: NSObject, ObservableObject, NSWindowDelegate {
         panel.maxSize.height = newHeight
 
         panel.setFrame(frame, display: true)
+    }
+
+    /// Check if at least a portion of the rect is visible on any connected screen.
+    private func isRectOnScreen(_ rect: NSRect) -> Bool {
+        let minVisible: CGFloat = 50
+        return NSScreen.screens.contains { screen in
+            let intersection = screen.frame.intersection(rect)
+            return intersection.width >= minVisible && intersection.height >= minVisible
+        }
     }
 
     // MARK: - NSWindowDelegate

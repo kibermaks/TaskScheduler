@@ -18,6 +18,8 @@ struct AppSettingsView: View {
     @AppStorage("devNowLineOverrideMinute") private var devNowLineOverrideMinute = 30
 
     @State private var focusWeightsExpanded = false
+    @AppStorage("hasSeenShortcutsGuide") var hasSeenShortcutsGuide = false
+    @State private var showingShortcutsGuide = false
     @State private var showingShortcutsInfo = false
     @State private var shortcutTestResult: ShortcutTestResult?
     @State private var shortcutTestTitle: String = ""
@@ -130,6 +132,16 @@ struct AppSettingsView: View {
         .onReceive(NotificationCenter.default.publisher(for: Self.switchToAwarenessTab)) { _ in
             selectedSettingsTab = .awareness
         }
+        .sheet(isPresented: $showingShortcutsGuide) {
+            ShortcutsGuide()
+        }
+        .onChange(of: selectedSettingsTab) { _, newTab in
+            if newTab == .shortcuts && !hasSeenShortcutsGuide {
+                hasSeenShortcutsGuide = true
+                showingShortcutsGuide = true
+            }
+        }
+        .focusEffectDisabled()
     }
 
     private func settingsTabButton(_ tab: SettingsTab) -> some View {
@@ -257,6 +269,7 @@ struct AppSettingsView: View {
                         hasSeenTasksGuide = false
                         timelineIntroBarDismissed = false
                         UserDefaults.standard.set(false, forKey: "hasSeenSessionAwarenessGuide")
+                        hasSeenShortcutsGuide = false
                     }) {
                         Label("Reset All Dirty Triggers", systemImage: "arrow.counterclockwise")
                     }
@@ -1007,6 +1020,25 @@ struct AppSettingsView: View {
                             .fixedSize(horizontal: false, vertical: true)
 
                         Spacer()
+
+                        Button {
+                            if let url = URL(string: "https://github.com/kibermaks/SessionFlow/tree/main/public/shortcuts") {
+                                NSWorkspace.shared.open(url)
+                            }
+                        } label: {
+                            HStack(spacing: 4) {
+                                Image(systemName: "square.and.arrow.down.fill")
+                                    .font(.system(size: 10))
+                                Text("Example Shortcuts")
+                                    .font(.system(size: 11, weight: .medium))
+                            }
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 5)
+                            .background(RoundedRectangle(cornerRadius: 6).fill(Color.accentColor.opacity(0.15)))
+                            .foregroundColor(.accentColor)
+                        }
+                        .buttonStyle(.plain)
+                        .hoverEffect(brightness: 0.2)
 
                         Button {
                             if let url = URL(string: "https://support.apple.com/guide/shortcuts-mac/intro-to-shortcuts-apdf22b0444c/mac") {

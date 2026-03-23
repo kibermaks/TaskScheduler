@@ -67,7 +67,7 @@ struct AwarenessSkipSessionButton: View {
     @ObservedObject var awarenessService: SessionAwarenessService
 
     var body: some View {
-        if awarenessService.isActive {
+        if awarenessService.isActive || awarenessService.isResting {
             Button {
                 awarenessService.toggleSessionMute()
             } label: {
@@ -85,7 +85,7 @@ struct AwarenessSkipSessionButton: View {
             }
             .buttonStyle(.plain)
             .hoverEffect(brightness: 0.2)
-            .help(awarenessService.isSessionMuted ? "Resume sounds for this session" : "Mute until next session")
+            .help(awarenessService.isSessionMuted ? "Resume sounds" : "Mute until next session")
         }
     }
 }
@@ -592,6 +592,7 @@ struct AwarenessRestContent<ToggleButton: View>: View {
                     .foregroundColor(.white.opacity(0.25))
             }
 
+            AwarenessSkipSessionButton(awarenessService: awarenessService)
             AwarenessMuteButton(audioService: audioService)
         }
     }

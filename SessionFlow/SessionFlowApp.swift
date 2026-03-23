@@ -46,6 +46,7 @@ struct SessionFlowApp: App {
                 .environmentObject(sessionAwarenessService)
                 .environmentObject(sessionAudioService)
                 .frame(minWidth: 1000, minHeight: 700)
+                .focusEffectDisabled()
                 .onAppear {
                     updateService.startAutomaticChecks()
                     sessionAwarenessService.start(calendarService: calendarService, audioService: sessionAudioService)
@@ -98,6 +99,10 @@ struct SessionFlowApp: App {
                     NotificationCenter.default.post(name: Notification.Name("ShowSessionAwarenessGuide"), object: nil)
                 }
 
+                Button("Shortcuts...") {
+                    NotificationCenter.default.post(name: Notification.Name("ShowShortcutsGuide"), object: nil)
+                }
+
                 Divider()
 
                 Button("What's New...") {
@@ -141,6 +146,16 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         FocusRingController.shared.install()
     }
     weak var awarenessService: SessionAwarenessService?
+
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        // If mini player is active, bring it to front instead of opening the main window
+        if awarenessService?.isCollapsed == true,
+           let panel = NSApp.windows.first(where: { $0 is NSPanel && $0.isVisible }) {
+            panel.orderFront(nil)
+            return false
+        }
+        return true
+    }
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
         // Don't quit when main window is hidden for mini-player

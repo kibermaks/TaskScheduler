@@ -16,7 +16,7 @@ class SessionAwarenessService: ObservableObject {
             if !isEnabled {
                 audioService?.stopAmbient()
                 clearActiveState()
-                clearRestState()
+                endRestState()
             }
         }
     }
@@ -144,12 +144,6 @@ class SessionAwarenessService: ObservableObject {
     private var savedPresenceReminderTime: Date? = nil
     private var savedEndingSoonPlayed: Bool = false
 
-    // Rest state tracking (gap between ended session and next session)
-    private var isInRestState: Bool = false
-    private var restPreviousSessionInfo: ShortcutService.SessionInfo? = nil
-    private var restStateEndTime: Date? = nil
-    private var hasFiredRestEndingSoon: Bool = false
-
     // Cached slots — refreshed every 30s or immediately when calendar data changes
     private var cachedNowSlots: [BusyTimeSlot] = []
     private var lastSlotsFetch: Date = .distantPast
@@ -248,7 +242,7 @@ class SessionAwarenessService: ObservableObject {
 
         guard let calendarService = calendarService else {
             clearActiveState()
-            clearRestState()
+            endRestState()
             return
         }
 
@@ -259,24 +253,16 @@ class SessionAwarenessService: ObservableObject {
         }
         let todaySlots = cachedNowSlots
 
-        // Track whether a session ended this tick (for rest entry after updateNextSession)
-        var sessionEndedThisTick = false
-        var endedSessionTitle: String = ""
-        var endedSessionType: SessionType? = nil
-        var endedSessionStart: Date? = nil
-        var endedSessionEnd: Date? = nil
-        var endedSessionIsBusySlot: Bool = false
-
         // 1. Try to find active tagged session
         if let slot = findActiveTaggedSession(in: todaySlots, at: now) {
             let sessionType = CalendarService.sessionType(fromNotes: slot.notes)
             // If transitioning from rest to active, fire restEnded first
-            if isInRestState { exitRestState() }
+            if isResting { endRestState() }
             activateSession(slot: slot, sessionType: sessionType, isBusySlot: false, at: now)
         }
         // 2. Try non-tagged event if enabled
         else if config.trackOtherEvents, let slot = findActiveBusySlot(in: todaySlots, at: now) {
-            if isInRestState { exitRestState() }
+            if isResting { endRestState() }
             activateSession(slot: slot, sessionType: nil, isBusySlot: true, at: now)
         }
         // 3. No active session
@@ -298,12 +284,6 @@ class SessionAwarenessService: ObservableObject {
                     endTime: end,
                     isNaturalEnd: isNaturalEnd
                 )
-                sessionEndedThisTick = true
-                endedSessionTitle = currentSessionTitle
-                endedSessionType = currentSessionType
-                endedSessionStart = start
-                endedSessionEnd = end
-                endedSessionIsBusySlot = currentSessionType == nil
             }
             clearActiveState()
         }
@@ -665,7 +645,7 @@ class SessionAwarenessService: ObservableObject {
         )
 
         // If we were in rest when session ended (shouldn't normally happen, but safety)
-        if isInRestState { exitRestState() }
+        if isResting { endRestState() }
 
         // Audio and feedback require awareness enabled
         guard isEnabled else { return }
@@ -732,86 +712,6 @@ class SessionAwarenessService: ObservableObject {
         }
     }
 
-    // MARK: - Rest state management
-
-    private func enterRestState(previousSession: ShortcutService.SessionInfo, restEndTime: Date) {
-        isInRestState = true
-        restPreviousSessionInfo = previousSession
-        self.restStateEndTime = restEndTime
-        hasFiredRestEndingSoon = false
-
-        shortcutService.fire(trigger: .restStarted, session: previousSession, config: config.shortcuts)
-    }
-
-    private func exitRestState() {
-        guard isInRestState, let info = restPreviousSessionInfo else {
-            clearRestState()
-            return
-        }
-        // Update nextTitle/nextStartTime with latest info before firing
-        var updatedInfo = info
-        updatedInfo.nextTitle = nextSessionTitle
-        updatedInfo.nextStartTime = nextSessionStartTime
-        shortcutService.fire(trigger: .restEnded, session: updatedInfo, config: config.shortcuts)
-        clearRestState()
-    }
-
-    private func clearRestState() {
-        isInRestState = false
-        restPreviousSessionInfo = nil
-        restStateEndTime = nil
-        hasFiredRestEndingSoon = false
-    }
-
-    /// Called each tick while in rest state — checks rest end and restEndingSoon.
-    private func tickRestState(at now: Date) {
-        guard let restEnd = restStateEndTime else {
-            clearRestState()
-            return
-        }
-
-        // If next session was removed (dragged away), rest ends
-        guard nextSessionStartTime != nil else {
-            exitRestState()
-            return
-        }
-
-        // If rest time is over (next session should be starting)
-        if now >= restEnd {
-            exitRestState()
-            return
-        }
-
-        // Update rest end time if next session was moved
-        if let newNextStart = nextSessionStartTime, newNextStart != restEnd {
-            restStateEndTime = newNextStart
-            if var info = restPreviousSessionInfo {
-                info.restDuration = Int(newNextStart.timeIntervalSince(info.endTime) / 60)
-                info.nextTitle = nextSessionTitle
-                info.nextStartTime = newNextStart
-                restPreviousSessionInfo = info
-            }
-            // If next session moved further out, reset restEndingSoon so it can re-fire at the right time
-            if newNextStart > restEnd {
-                hasFiredRestEndingSoon = false
-            }
-        }
-
-        // Check restEndingSoon
-        if !hasFiredRestEndingSoon {
-            let leadTime = TimeInterval((config.shortcuts.restEndingSoon.leadTimeMinutes ?? 2) * 60)
-            let timeUntilEnd = (restStateEndTime ?? restEnd).timeIntervalSince(now)
-            if timeUntilEnd <= leadTime && timeUntilEnd > 0 {
-                var sessionInfo = restPreviousSessionInfo ?? .init(
-                    title: "", type: nil, isBusySlot: false, startTime: now, endTime: now)
-                sessionInfo.nextTitle = nextSessionTitle
-                sessionInfo.nextStartTime = nextSessionStartTime
-                shortcutService.fire(trigger: .restEndingSoon, session: sessionInfo, config: config.shortcuts)
-                hasFiredRestEndingSoon = true
-            }
-        }
-    }
-
     // MARK: - App termination flush
 
     /// Fire pending end/restEnded shortcuts synchronously before the app terminates.
@@ -823,10 +723,11 @@ class SessionAwarenessService: ObservableObject {
                                isBusySlot: isBusySlotMode, startTime: start, endTime: end),
                 config: config.shortcuts
             )
-        } else if isInRestState, let info = restPreviousSessionInfo {
+        } else if isResting, let start = restStartTime, let end = restEndTime {
             shortcutService.fireAndForget(
                 trigger: .restEnded,
-                session: info,
+                session: .init(title: "Rest", type: restAfterSessionType, isBusySlot: false,
+                               startTime: start, endTime: end),
                 config: config.shortcuts
             )
         }
@@ -880,9 +781,11 @@ class SessionAwarenessService: ObservableObject {
         if isSessionMuted {
             isSessionMuted = false
             sessionMutedEventId = nil
-            // Resume ambient if there's an active session
+            // Resume ambient if there's an active session or rest
             if isActive {
                 playSessionStartAudio(sessionType: currentSessionType, skipTransition: true)
+            } else if isResting {
+                audioService?.playAmbient(config: config.restSound)
             }
         } else {
             isSessionMuted = true

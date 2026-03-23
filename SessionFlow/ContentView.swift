@@ -76,6 +76,7 @@ struct ContentView: View {
     @State private var showingPatternsGuide = false
     @State private var showingTasksGuide = false
     @State private var showingSessionAwarenessGuide = false
+    @State private var showingShortcutsGuide = false
     @State private var showingCalendarSetup = false
     @State private var updateAlert: UpdateService.UpdateAlert?
     @State private var showingWhatsNew = false
@@ -167,15 +168,22 @@ struct ContentView: View {
         .sheet(isPresented: $showingSessionAwarenessGuide) {
             SessionAwarenessGuide()
         }
+        .sheet(isPresented: $showingShortcutsGuide) {
+            ShortcutsGuide()
+        }
         .onReceive(NotificationCenter.default.publisher(for: Notification.Name("ShowWhatsNew"))) { _ in
             showingWhatsNew = true
         }
         .onReceive(NotificationCenter.default.publisher(for: Notification.Name("ShowSessionAwarenessGuide"))) { _ in
             showingSessionAwarenessGuide = true
         }
+        .onReceive(NotificationCenter.default.publisher(for: Notification.Name("ShowShortcutsGuide"))) { _ in
+            showingShortcutsGuide = true
+        }
         .onAppear {
             checkForWhatsNew()
         }
+        .focusEffectDisabled()
     }
 
     private func checkForWhatsNew() {
@@ -510,7 +518,7 @@ struct ContentViewBody: View {
         let now = Date()
         let components = calendar.dateComponents([.year, .month, .day, .hour, .minute], from: now)
         let minute = components.minute ?? 0
-        let roundedMinute = minute % 5 == 0 ? minute : ((minute / 5) + 1) * 5
+        let roundedMinute = ((minute / 5) + 1) * 5
         let extraHour = roundedMinute >= 60 ? 1 : 0
         
         var newComponents = components

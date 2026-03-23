@@ -34,6 +34,7 @@ SessionFlow is a native macOS app that helps you plan, execute, and reflect on p
 - **📊 Interactive Timeline**: Drag-and-drop events, resize sessions, lock layout, and freeze projections for manual fine-tuning
 - **👁 Session Awareness**: Tracks active calendar events—both tagged sessions and your regular calendar events—with ambient sounds, a progress bar, and gentle reminders as sessions approach their end. A progress donut on the dock icon and an optional menu-bar timer let you glance at remaining time without switching windows
 - **🪟 Mini-Player**: Compact floating window that shows session status at a glance—collapse the main window and keep awareness in a small footprint. Displays idle, next-up, active, and feedback states with the same progress and time info as the full panel
+- **⌘ Shortcuts Integration**: Trigger macOS Shortcuts when sessions start, end, or approach. Each shortcut receives structured JSON with session details—use it to toggle Focus modes, send notifications, control smart home devices, or anything Shortcuts can do. [Template shortcuts](public/shortcuts/) are available for every trigger
 - **🌙 Night-Owl Mode**: Schedule beyond midnight with +1d markers on the timeline (up to 6 am next day)
 - **↩️ Undo/Redo**: Full history for event moves and projected session edits
 
@@ -137,6 +138,7 @@ See [Building from Source](#-building-from-source) section below.
 - **Presets**: Save Workday, Focus, Weekend, or any custom mix for instant reuse.
 - **Awareness Mode**: Toggle “Aware of existing tasks” when you want counts to respect what’s already booked.
 - **Track Other Events**: Enable “Awareness of your other calendar events” to also track regular (untagged) calendar events with timer, progress, and ambient sound.
+- **Shortcuts**: Set up macOS Shortcuts to automate actions at session boundaries. Go to Settings → Shortcuts, enable a trigger, and name your shortcut. Download [ready-made templates](public/shortcuts/) to get started instantly.
 - **Dock & Menu Bar**: Enable the dock progress donut and menu-bar timer in Session Awareness settings so you can monitor remaining time from anywhere.
 - **Mini-Player**: Click the collapse button on the bottom panel to detach a floating mini-player; expand back anytime.
 - **Freeze & Adjust**: After scheduling, freeze projections and drag/resize them by hand for pixel-perfect layouts.

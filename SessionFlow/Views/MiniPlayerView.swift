@@ -49,6 +49,7 @@ struct MiniPlayerView: View {
         .animation(.easeInOut(duration: 0.3), value: awarenessService.isResting)
         .animation(.easeInOut(duration: 0.3), value: awarenessService.sessionFeedbackPending?.id)
         .animation(.easeInOut(duration: 0.3), value: awarenessService.nextSessionTitle)
+        .focusEffectDisabled()
     }
 
     // MARK: - Active session bar
