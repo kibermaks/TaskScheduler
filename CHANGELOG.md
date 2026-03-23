@@ -5,6 +5,18 @@ All notable changes to SessionFlow will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.6] - 2026-03-23
+
+### Added
+
+- macOS Shortcuts integration — trigger any Shortcut at session start, end, approaching, and rest boundaries with structured JSON payloads
+- Shortcuts settings tab with test button, type filters, and example shortcuts
+
+### Fixed
+
+- Mini-player widget now drags with native macOS feel
+- Awareness settings UI no longer lags while a session is active
+
 ## [2.5] - 2026-03-12
 
 ### Added
