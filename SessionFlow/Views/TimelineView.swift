@@ -994,6 +994,8 @@ extension TimelineView {
                         .strokeBorder(slot.calendarColor.opacity(0.5), lineWidth: 1)
                 )
 
+            let showsFeedbackBadge = slot.endTime < Date() && sessionAwarenessService.config.enabled && sessionAwarenessService.config.productivityEnabled
+
             VStack(alignment: .leading, spacing: 1) {
                 if height <= 25 {
                     HStack(spacing: 3) {
@@ -1007,6 +1009,7 @@ extension TimelineView {
                             .foregroundColor(.white.opacity(0.7))
                             .lineLimit(1)
                             .layoutPriority(1)
+                            .padding(.trailing, showsFeedbackBadge ? 16 : 0)
                     }
                 } else {
                     Text(slot.title)
@@ -1039,7 +1042,7 @@ extension TimelineView {
             .padding(4)
 
             // Feedback badge for past events
-            if slot.endTime < Date() && sessionAwarenessService.config.enabled && sessionAwarenessService.config.productivityEnabled {
+            if showsFeedbackBadge {
                 feedbackBadge(for: slot)
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
                     .padding(2)
