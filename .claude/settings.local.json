@@ -30,7 +30,8 @@
       "Bash(./build_app.sh --release minor)",
       "Bash(find /Users/maks/Code-Projects/SessionFlow -name *.plist -type f)",
       "Bash(brew list:*)",
-      "WebSearch"
+      "WebSearch",
+      "Bash(python3 scripts/generate_shortcuts.py)"
     ]
   },
   "hooks": {
