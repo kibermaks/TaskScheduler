@@ -17,6 +17,7 @@ Ready-to-import templates for macOS Shortcuts that work with SessionFlow's trigg
 |----------|---------|-------------|
 | [SessionFlow Approaching.shortcut](SessionFlow%20Approaching.shortcut) | `approaching` | Fires before a session starts (configurable lead time). Use to prepare your workspace. |
 | [SessionFlow Started.shortcut](SessionFlow%20Started.shortcut) | `started` | Fires when a session begins. Use to enable Focus mode, silence notifications, start a timer. |
+| [SessionFlow Ending Soon.shortcut](SessionFlow%20Ending%20Soon.shortcut) | `ending_soon` | Fires shortly before a session ends. Use to wrap things up — save work, dim lights, prepare to switch context. |
 | [SessionFlow Ended.shortcut](SessionFlow%20Ended.shortcut) | `ended` | Fires when a session ends. Use to disable Focus mode, log time, send a summary. |
 
 ### Rest Lifecycle

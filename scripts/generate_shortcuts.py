@@ -50,6 +50,24 @@ SHORTCUTS = [
         "glyph": 59511,
     },
     {
+        "filename": "SessionFlow Ending Soon",
+        "comment": (
+            "SessionFlow Template: Session Ending Soon\n\n"
+            "Runs shortly before a session ends.\n"
+            "Use this to wrap things up — save your work, prepare to switch context.\n\n"
+            "Input JSON keys: trigger, type, typeName, title, message, duration, startTime, endTime"
+        ),
+        "extra_comment": (
+            "Add your custom actions below. For example:\n"
+            "- Play a soft chime or speak a reminder\n"
+            "- Auto-save documents\n"
+            "- Pre-warm the next tool or window\n"
+            "- Dim the lights to signal wind-down"
+        ),
+        "color": 4271458815,
+        "glyph": 59511,
+    },
+    {
         "filename": "SessionFlow Ended",
         "comment": (
             "SessionFlow Template: Session Ended\n\n"
