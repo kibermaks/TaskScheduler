@@ -64,6 +64,7 @@
 		AA14B2C3D4E5F6A7B8C9D014 /* Submarine.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = BB14C2D3E4F5A6B7C8D9E014 /* Submarine.mp3 */; };
 		AA15B2C3D4E5F6A7B8C9D015 /* Purr.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = BB15C2D3E4F5A6B7C8D9E015 /* Purr.mp3 */; };
 		AA16B2C3D4E5F6A7B8C9D016 /* Creek Atmosphere.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = BB16C2D3E4F5A6B7C8D9E016 /* Creek Atmosphere.mp3 */; };
+		FF01CHANGELOG002 /* CHANGELOG.md in Resources */ = {isa = PBXBuildFile; fileRef = FF01CHANGELOG001 /* CHANGELOG.md */; };
 		D1A1B2C3D4E5F6A7B8C9D0E1 /* DockProgressController.swift in Sources */ = {isa = PBXBuildFile; fileRef = E1F2A3B4C5D6E7F8A9B0C1D2 /* DockProgressController.swift */; };
 		D2B2C3D4E5F6A7B8C9D0E1F2 /* MenuBarController.swift in Sources */ = {isa = PBXBuildFile; fileRef = E2F3A4B5C6D7E8F9A0B1C2D3 /* MenuBarController.swift */; };
 		D3C3D4E5F6A7B8C9D0E1F2A3 /* MiniPlayerWindowController.swift in Sources */ = {isa = PBXBuildFile; fileRef = E3F4A5B6C7D8E9F0A1B2C3D4 /* MiniPlayerWindowController.swift */; };
@@ -140,6 +141,7 @@
 		F5A6B7C8D9E0F1A2B3C4D5E6 /* SharedAwarenessComponents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedAwarenessComponents.swift; sourceTree = "<group>"; };
 		A1B1C1D1E1F10002A2B2C2D1 /* ShortcutService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShortcutService.swift; sourceTree = "<group>"; };
 		A1B1C1D1E1F10004A2B2C2D1 /* SessionFlowIntents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionFlowIntents.swift; sourceTree = "<group>"; };
+		FF01CHANGELOG001 /* CHANGELOG.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; name = CHANGELOG.md; path = CHANGELOG.md; sourceTree = SOURCE_ROOT; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -261,6 +263,7 @@
 		C8C8050EED40EF171CC2784D /* Resources */ = {
 			isa = PBXGroup;
 			children = (
+				FF01CHANGELOG001 /* CHANGELOG.md */,
 				DB9FA0D4AF211849B3A47ED1 /* Sounds */,
 			);
 			path = Resources;
@@ -365,6 +368,7 @@
 				AA14B2C3D4E5F6A7B8C9D014 /* Submarine.mp3 in Resources */,
 				AA15B2C3D4E5F6A7B8C9D015 /* Purr.mp3 in Resources */,
 				AA16B2C3D4E5F6A7B8C9D016 /* Creek Atmosphere.mp3 in Resources */,
+				FF01CHANGELOG002 /* CHANGELOG.md in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -559,7 +563,7 @@
 				CODE_SIGN_ENTITLEMENTS = SessionFlow/SessionFlow.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 720;
+				CURRENT_PROJECT_VERSION = 730;
 				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_ASSET_PATHS = "";
 				ENABLE_APP_SANDBOX = NO;
@@ -596,7 +600,7 @@
 				CODE_SIGN_ENTITLEMENTS = SessionFlow/SessionFlow.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 720;
+				CURRENT_PROJECT_VERSION = 730;
 				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_ASSET_PATHS = "";
 				ENABLE_APP_SANDBOX = NO;

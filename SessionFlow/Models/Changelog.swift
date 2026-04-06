@@ -33,7 +33,11 @@ final class ChangelogService: ObservableObject {
     }()
 
     init() {
-        if let cached = UserDefaults.standard.string(forKey: cacheKey) {
+        // Prefer the bundled CHANGELOG.md — always matches the installed version
+        if let url = Bundle.main.url(forResource: "CHANGELOG", withExtension: "md"),
+           let markdown = try? String(contentsOf: url, encoding: .utf8) {
+            entries = Self.parse(markdown)
+        } else if let cached = UserDefaults.standard.string(forKey: cacheKey) {
             entries = Self.parse(cached)
         }
     }
