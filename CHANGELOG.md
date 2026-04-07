@@ -5,6 +5,22 @@ All notable changes to SessionFlow will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.7] - 2026-04-07
+
+### Added
+
+- Master on/off switch for Shortcuts — runs independently of Session Awareness
+- Session Ending Soon shortcut trigger with configurable lead time
+- Mini Player border pulses briefly when the window appears
+
+### Fixed
+
+- Time and duration alignment on the feedback icon
+- Stale progress bar and countdown labels in shared awareness components
+- Duplicate timers and observers when the root view recreated on launch
+- Burst of calendar sync events now coalesces into a single timeline refresh
+- Mute toggled from the mini player or bottom panel no longer reverts after unrelated settings tweaks
+
 ## [2.6] - 2026-03-23
 
 ### Added
