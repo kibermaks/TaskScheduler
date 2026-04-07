@@ -28,15 +28,21 @@ class SessionAwarenessService: ObservableObject {
             }
             if !isEnabled {
                 audioService?.stopAmbient()
-                clearActiveState()
-                endRestState()
+                // Only tear down detection state when shortcuts aren't keeping it alive
+                if !hasActiveShortcuts {
+                    clearActiveState()
+                    endRestState()
+                }
             }
         }
     }
 
-    /// Whether any shortcut trigger is enabled (timer must keep running for detection)
+    /// Whether the global shortcuts switch is on AND any trigger is enabled.
+    /// When true, the tick timer must keep running so shortcut detection works
+    /// even if Session Awareness itself is disabled.
     var hasActiveShortcuts: Bool {
-        config.shortcuts.approaching.isEnabled || config.shortcuts.started.isEnabled || config.shortcuts.endingSoon.isEnabled || config.shortcuts.ended.isEnabled ||
+        guard config.shortcuts.globalEnabled else { return false }
+        return config.shortcuts.approaching.isEnabled || config.shortcuts.started.isEnabled || config.shortcuts.endingSoon.isEnabled || config.shortcuts.ended.isEnabled ||
         config.shortcuts.restStarted.isEnabled || config.shortcuts.restEnded.isEnabled || config.shortcuts.restEndingSoon.isEnabled
     }
 
@@ -105,9 +111,17 @@ class SessionAwarenessService: ObservableObject {
         didSet {
             config.save()
             isEnabled = config.enabled
-            // Keep timer running if shortcuts need it
+            // Keep timer running if shortcuts need it; stop if neither needs it
             if hasActiveShortcuts && timer == nil {
                 startTimer()
+            } else if !isEnabled && !hasActiveShortcuts && timer != nil {
+                stopTimer()
+                clearActiveState()
+                endRestState()
+            }
+            // If shortcuts global toggle just flipped off, drop any pending approaching timer
+            if oldValue.shortcuts.globalEnabled && !config.shortcuts.globalEnabled {
+                shortcutService.cancelApproaching()
             }
             // Sync mute settings to audio service — only when the config
             // values actually changed in this mutation. Otherwise an unrelated
@@ -346,20 +360,6 @@ class SessionAwarenessService: ObservableObject {
                 }
             }
 
-            if isActive && !hasFiredEndingSoonShortcut {
-                let leadMinutes = config.shortcuts.endingSoon.leadTimeMinutes ?? 2
-                let leadSeconds = TimeInterval(leadMinutes * 60)
-                if remaining <= leadSeconds && remaining > 0 {
-                    hasFiredEndingSoonShortcut = true
-                    shortcutService.fire(
-                        trigger: .endingSoon,
-                        session: .init(title: currentSessionTitle, type: currentSessionType, isBusySlot: isBusySlotMode,
-                                       startTime: sessionStartTime ?? now, endTime: sessionEndTime ?? now),
-                        config: config.shortcuts
-                    )
-                }
-            }
-
             // Phase 3: Accelerando — update playback rate (skip when session-muted)
             if isActive && !isSessionMuted {
                 let accelConfig: AccelerandoConfig
@@ -374,11 +374,26 @@ class SessionAwarenessService: ObservableObject {
             }
         }
 
+        // Ending soon shortcut — fires regardless of awareness state
+        if isActive && !hasFiredEndingSoonShortcut {
+            let leadMinutes = config.shortcuts.endingSoon.leadTimeMinutes ?? 2
+            let leadSeconds = TimeInterval(leadMinutes * 60)
+            if remaining <= leadSeconds && remaining > 0 {
+                hasFiredEndingSoonShortcut = true
+                shortcutService.fire(
+                    trigger: .endingSoon,
+                    session: .init(title: currentSessionTitle, type: currentSessionType, isBusySlot: isBusySlotMode,
+                                   startTime: sessionStartTime ?? now, endTime: sessionEndTime ?? now),
+                    config: config.shortcuts
+                )
+            }
+        }
+
         // Update next session
         updateNextSession(in: todaySlots, at: now)
 
-        // Rest tracking (always active when awareness is enabled)
-        if isEnabled && !isActive {
+        // Rest tracking — runs whenever awareness OR shortcut detection is active
+        if (isEnabled || hasActiveShortcuts) && !isActive {
             checkRestState(in: todaySlots, at: now)
         } else if isResting {
             endRestState()
@@ -512,8 +527,8 @@ class SessionAwarenessService: ObservableObject {
             isResting = true
             hasPlayedRestEndingSoon = false
 
-            // Play rest ambient
-            if !isSessionMuted {
+            // Play rest ambient (awareness only)
+            if isEnabled && !isSessionMuted {
                 audioService?.playAmbient(config: config.restSound)
             }
 
@@ -539,8 +554,8 @@ class SessionAwarenessService: ObservableObject {
             )
         }
 
-        // Accelerando for rest
-        if !isSessionMuted {
+        // Accelerando for rest (awareness only)
+        if isEnabled && !isSessionMuted {
             audioService?.updatePlaybackRate(progress: restProgress, accelerando: config.restSoundAccelerando)
         }
     }
@@ -632,6 +647,17 @@ class SessionAwarenessService: ObservableObject {
             // If we're joining mid-event (elapsed > 10s), skip start transition — just play ambient
             let isJoiningMidEvent = elapsed > 10
 
+            // When joining mid-event, suppress the endingSoon shortcut so it doesn't
+            // fire late for sessions we never tracked from the start. This needs to
+            // run regardless of awareness state — otherwise toggling off awareness
+            // would re-fire endingSoon late once shortcut detection re-attaches.
+            if isJoiningMidEvent {
+                let endingSoonLeadMinutes = config.shortcuts.endingSoon.leadTimeMinutes ?? 2
+                if remaining <= TimeInterval(endingSoonLeadMinutes * 60) {
+                    hasFiredEndingSoonShortcut = true
+                }
+            }
+
             if isEnabled {
                 // When joining mid-event, suppress immediate presence/ending triggers
                 // (only fire when DateTime Now naturally crosses the next interval boundary)
@@ -646,10 +672,6 @@ class SessionAwarenessService: ObservableObject {
                     }
                     if remaining <= 120 {
                         hasPlayedEndingSoon = true
-                    }
-                    let endingSoonLeadMinutes = config.shortcuts.endingSoon.leadTimeMinutes ?? 2
-                    if remaining <= TimeInterval(endingSoonLeadMinutes * 60) {
-                        hasFiredEndingSoonShortcut = true
                     }
                 } else {
                     triggerFlash(.sessionStarted)

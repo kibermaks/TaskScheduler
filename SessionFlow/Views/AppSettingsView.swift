@@ -428,7 +428,7 @@ struct AppSettingsView: View {
                     }
                 ))
 
-                Text("Bottom panel tracks your current session with timer, progress, and ambient sound.")
+                Text("Bottom panel(collapsible to Always on Top Mini-player) tracks your current session with timer, progress, and ambient sound.")
                     .font(.caption)
                     .foregroundColor(.secondary)
 
@@ -986,7 +986,8 @@ struct AppSettingsView: View {
     // MARK: - Shortcuts tab
 
     private var shortcutsTab: some View {
-        Form {
+        let globallyEnabled = sessionAwarenessService.config.shortcuts.globalEnabled
+        return Form {
             // Header
             Section {
                 HStack(spacing: 8) {
@@ -1001,6 +1002,28 @@ struct AppSettingsView: View {
                 .padding(.vertical, 6)
             }
 
+            // Global on/off
+            Section {
+                HStack(spacing: 10) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Enable Shortcuts")
+                            .font(.system(size: 13, weight: .semibold))
+                        Text("Run your macOS Shortcuts when sessions start, end, are about to begin, or are about to end.")
+                            .font(.system(size: 11))
+                            .foregroundColor(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    Spacer()
+                    Toggle("", isOn: Binding(
+                        get: { sessionAwarenessService.config.shortcuts.globalEnabled },
+                        set: { sessionAwarenessService.config.shortcuts.globalEnabled = $0 }
+                    ))
+                    .labelsHidden()
+                }
+                .padding(.vertical, 2)
+            }
+
+            if globallyEnabled {
             // Intro
             Section {
                 VStack(alignment: .leading, spacing: 10) {
@@ -1147,6 +1170,7 @@ struct AppSettingsView: View {
                         message: "Rest ended")
                 )
             }
+            } // if globallyEnabled
         }
         .formStyle(.grouped)
         .alert(

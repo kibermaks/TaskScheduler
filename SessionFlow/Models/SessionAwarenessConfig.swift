@@ -206,32 +206,34 @@ struct ShortcutTriggerConfig: Codable, Equatable {
 // MARK: - Shortcuts config
 
 struct ShortcutsConfig: Codable, Equatable {
-    var approaching: ShortcutTriggerConfig = .init(shortcutName: "SessionFlow Approaching", leadTimeMinutes: 1)
-    var started: ShortcutTriggerConfig = .init(shortcutName: "SessionFlow Started")
-    var endingSoon: ShortcutTriggerConfig = .init(shortcutName: "SessionFlow Ending Soon", leadTimeMinutes: 2)
-    var ended: ShortcutTriggerConfig = .init(shortcutName: "SessionFlow Ended")
-    var restStarted: ShortcutTriggerConfig = .init(shortcutName: "Rest Started")
-    var restEnded: ShortcutTriggerConfig = .init(shortcutName: "Rest Ended")
-    var restEndingSoon: ShortcutTriggerConfig = .init(shortcutName: "Rest Ending Soon", leadTimeMinutes: 2)
+    var globalEnabled: Bool = false
+    var approaching: ShortcutTriggerConfig = .init(isEnabled: true, shortcutName: "SessionFlow Approaching", leadTimeMinutes: 1)
+    var started: ShortcutTriggerConfig = .init(isEnabled: true, shortcutName: "SessionFlow Started")
+    var endingSoon: ShortcutTriggerConfig = .init(isEnabled: true, shortcutName: "SessionFlow Ending Soon", leadTimeMinutes: 2)
+    var ended: ShortcutTriggerConfig = .init(isEnabled: true, shortcutName: "SessionFlow Ended")
+    var restStarted: ShortcutTriggerConfig = .init(isEnabled: true, shortcutName: "Rest Started")
+    var restEnded: ShortcutTriggerConfig = .init(isEnabled: true, shortcutName: "Rest Ended")
+    var restEndingSoon: ShortcutTriggerConfig = .init(isEnabled: true, shortcutName: "Rest Ending Soon", leadTimeMinutes: 2)
 
     init() {}
 
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
+        globalEnabled = try c.decodeIfPresent(Bool.self, forKey: .globalEnabled) ?? false
         approaching = try c.decodeIfPresent(ShortcutTriggerConfig.self, forKey: .approaching)
-            ?? .init(shortcutName: "SessionFlow Approaching", leadTimeMinutes: 1)
+            ?? .init(isEnabled: true, shortcutName: "SessionFlow Approaching", leadTimeMinutes: 1)
         started = try c.decodeIfPresent(ShortcutTriggerConfig.self, forKey: .started)
-            ?? .init(shortcutName: "SessionFlow Started")
+            ?? .init(isEnabled: true, shortcutName: "SessionFlow Started")
         endingSoon = try c.decodeIfPresent(ShortcutTriggerConfig.self, forKey: .endingSoon)
-            ?? .init(shortcutName: "SessionFlow Ending Soon", leadTimeMinutes: 2)
+            ?? .init(isEnabled: true, shortcutName: "SessionFlow Ending Soon", leadTimeMinutes: 2)
         ended = try c.decodeIfPresent(ShortcutTriggerConfig.self, forKey: .ended)
-            ?? .init(shortcutName: "SessionFlow Ended")
+            ?? .init(isEnabled: true, shortcutName: "SessionFlow Ended")
         restStarted = try c.decodeIfPresent(ShortcutTriggerConfig.self, forKey: .restStarted)
-            ?? .init(shortcutName: "Rest Started")
+            ?? .init(isEnabled: true, shortcutName: "Rest Started")
         restEnded = try c.decodeIfPresent(ShortcutTriggerConfig.self, forKey: .restEnded)
-            ?? .init(shortcutName: "Rest Ended")
+            ?? .init(isEnabled: true, shortcutName: "Rest Ended")
         restEndingSoon = try c.decodeIfPresent(ShortcutTriggerConfig.self, forKey: .restEndingSoon)
-            ?? .init(shortcutName: "Rest Ending Soon", leadTimeMinutes: 2)
+            ?? .init(isEnabled: true, shortcutName: "Rest Ending Soon", leadTimeMinutes: 2)
     }
 }
 

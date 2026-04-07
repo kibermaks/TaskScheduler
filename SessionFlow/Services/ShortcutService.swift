@@ -32,6 +32,7 @@ class ShortcutService {
 
     /// Fire a shortcut for the given trigger, checking config filters.
     func fire(trigger: Trigger, session: SessionInfo, config: ShortcutsConfig) {
+        guard config.globalEnabled else { return }
         let triggerConfig = configFor(trigger: trigger, config: config)
 
         guard triggerConfig.isEnabled else { return }
@@ -45,6 +46,7 @@ class ShortcutService {
     /// Fire a shortcut synchronously (launch process without waiting).
     /// Used for app termination flush — the child process continues after the app exits.
     func fireAndForget(trigger: Trigger, session: SessionInfo, config: ShortcutsConfig) {
+        guard config.globalEnabled else { return }
         let triggerConfig = configFor(trigger: trigger, config: config)
 
         guard triggerConfig.isEnabled else { return }
@@ -66,6 +68,10 @@ class ShortcutService {
 
     /// Schedule the "approaching" shortcut to fire before a session starts.
     func scheduleApproaching(sessionId: String, session: SessionInfo, config: ShortcutsConfig) {
+        guard config.globalEnabled else {
+            cancelApproaching()
+            return
+        }
         let triggerConfig = config.approaching
         guard triggerConfig.isEnabled else {
             cancelApproaching()
