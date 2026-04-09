@@ -21,6 +21,7 @@ class SessionAudioService: ObservableObject {
 
     let micMonitor = MicrophoneMonitor()
     private var micCancellable: AnyCancellable?
+    private var sharedDeviceCancellable: AnyCancellable?
 
     // MARK: - Audio engine
 
@@ -85,12 +86,16 @@ class SessionAudioService: ObservableObject {
         micCancellable = micMonitor.$isMicActive
             .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in self?.applyMuteState() }
+        sharedDeviceCancellable = micMonitor.$inputOutputSharedDevice
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in self?.applyMuteState() }
     }
 
     // MARK: - Mute Logic
 
     private func applyMuteState() {
-        let shouldMute = muteEnabled || (micAwareEnabled && micMonitor.isMicActive)
+        let micAwareActive = micAwareEnabled && micMonitor.isMicActive && !micMonitor.inputOutputSharedDevice
+        let shouldMute = muteEnabled || micAwareActive
         guard shouldMute != isMuted else { return }
         isMuted = shouldMute
         if isMuted { muteAmbient() } else if shouldBePlayingAmbient { resumeAmbient() }

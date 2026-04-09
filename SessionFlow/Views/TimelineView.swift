@@ -2072,6 +2072,7 @@ extension TimelineView {
                     .font(.system(size: 7, weight: .bold))
                     .foregroundColor(color)
             )
+            .help(rating.label)
     }
 
     private func feedbackPopoverContent(for slot: BusyTimeSlot, existingRating: SessionRating?) -> some View {
@@ -2083,7 +2084,11 @@ extension TimelineView {
             HStack(spacing: 8) {
                 ForEach(SessionRating.allCases, id: \.rawValue) { rating in
                     Button {
-                        calendarService.setFeedbackTag(eventId: slot.id, rating: rating)
+                        if existingRating == rating {
+                            calendarService.clearFeedbackTag(eventId: slot.id)
+                        } else {
+                            calendarService.setFeedbackTag(eventId: slot.id, rating: rating)
+                        }
                         Task { await calendarService.fetchEvents(for: selectedDate) }
                         feedbackPopoverEventId = nil
                     } label: {

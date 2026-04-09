@@ -94,10 +94,13 @@ struct AwarenessSkipSessionButton: View {
 
 struct AwarenessMuteButton: View {
     @ObservedObject var audioService: SessionAudioService
+    @EnvironmentObject var awarenessService: SessionAwarenessService
 
     var body: some View {
         Button {
-            audioService.toggleMute()
+            let newValue = !audioService.muteEnabled
+            audioService.muteEnabled = newValue
+            awarenessService.config.muteEnabled = newValue
         } label: {
             iconView
                 .frame(width: 32, height: 32)
