@@ -4,12 +4,17 @@ import Combine
 
 class MicrophoneMonitor: ObservableObject {
     @Published private(set) var isMicActive = false
+    /// True when the default input and output devices are the same hardware
+    /// (e.g. Thunderbolt Display), which causes false mic activation from audio playback.
+    @Published private(set) var inputOutputSharedDevice = false
+    @Published private(set) var sharedDeviceName: String?
 
     private var listenerBlock: AudioObjectPropertyListenerBlock?
     private var observedDevice: AudioDeviceID = 0
 
     init() {
         observeDefaultInputDevice()
+        checkSharedDevice()
     }
 
     deinit {
@@ -62,6 +67,7 @@ class MicrophoneMonitor: ObservableObject {
             DispatchQueue.main.async {
                 self?.removeListener()
                 self?.observeDefaultInputDevice()
+                self?.checkSharedDevice()
             }
         }
     }
@@ -83,6 +89,48 @@ class MicrophoneMonitor: ObservableObject {
         if isMicActive != active {
             isMicActive = active
         }
+    }
+
+    /// Checks whether the default input and output devices are the same hardware.
+    private func checkSharedDevice() {
+        let inputID = defaultDeviceID(selector: kAudioHardwarePropertyDefaultInputDevice)
+        let outputID = defaultDeviceID(selector: kAudioHardwarePropertyDefaultOutputDevice)
+        let shared = inputID != 0 && inputID == outputID
+        if inputOutputSharedDevice != shared {
+            inputOutputSharedDevice = shared
+            sharedDeviceName = shared ? deviceName(for: inputID) : nil
+        }
+    }
+
+    private func defaultDeviceID(selector: AudioObjectPropertySelector) -> AudioDeviceID {
+        var address = AudioObjectPropertyAddress(
+            mSelector: selector,
+            mScope: kAudioObjectPropertyScopeGlobal,
+            mElement: kAudioObjectPropertyElementMain
+        )
+        var deviceID: AudioDeviceID = 0
+        var size = UInt32(MemoryLayout<AudioDeviceID>.size)
+        let status = AudioObjectGetPropertyData(
+            AudioObjectID(kAudioObjectSystemObject),
+            &address, 0, nil, &size, &deviceID
+        )
+        return status == noErr ? deviceID : 0
+    }
+
+    private func deviceName(for deviceID: AudioDeviceID) -> String? {
+        var address = AudioObjectPropertyAddress(
+            mSelector: kAudioObjectPropertyName,
+            mScope: kAudioObjectPropertyScopeGlobal,
+            mElement: kAudioObjectPropertyElementMain
+        )
+        var size: UInt32 = 0
+        guard AudioObjectGetPropertyDataSize(deviceID, &address, 0, nil, &size) == noErr else { return nil }
+        var name: Unmanaged<CFString>?
+        let status = withUnsafeMutablePointer(to: &name) { ptr in
+            AudioObjectGetPropertyData(deviceID, &address, 0, nil, &size, ptr)
+        }
+        guard status == noErr, let cf = name?.takeUnretainedValue() else { return nil }
+        return cf as String
     }
 
     private func removeListener() {

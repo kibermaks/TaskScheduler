@@ -589,9 +589,19 @@ struct AppSettingsView: View {
                             }
                         ))
                         .font(.system(size: 14, weight: .medium))
+                        .disabled(sessionAudioService.micMonitor.inputOutputSharedDevice)
                     }
 
-                    if sessionAwarenessService.config.micAwareEnabled {
+                    if sessionAudioService.micMonitor.inputOutputSharedDevice {
+                        HStack(spacing: 6) {
+                            Image(systemName: "exclamationmark.triangle.fill")
+                                .font(.system(size: 11))
+                                .foregroundColor(.orange)
+                            Text("Mic Aware is unavailable — your input and output both use \"\(sessionAudioService.micMonitor.sharedDeviceName ?? "the same device")\", which causes false mic activation during audio playback. Use a separate mic or change your output device.")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                    } else if sessionAwarenessService.config.micAwareEnabled {
                         Text("Auto-mutes while your microphone is in use.")
                             .font(.caption)
                             .foregroundColor(.secondary)

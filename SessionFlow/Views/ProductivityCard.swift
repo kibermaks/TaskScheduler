@@ -260,6 +260,7 @@ struct ProductivityCard: View {
                         .foregroundColor(.white.opacity(count > 0 ? 0.9 : 0.3))
                 }
                 .frame(maxWidth: .infinity)
+                .help(rating.label)
             }
 
             // Unrated count
@@ -272,6 +273,7 @@ struct ProductivityCard: View {
                     .foregroundColor(.white.opacity(unratedCount > 0 ? 0.6 : 0.3))
             }
             .frame(maxWidth: .infinity)
+            .help("Unrated")
         }
     }
 
@@ -604,6 +606,7 @@ struct MonthlyStatsView: View {
                         .font(.system(size: 14, weight: .medium, design: .monospaced))
                         .foregroundColor(count > 0 ? .primary : .secondary.opacity(0.4))
                 }
+                .help(rating.label)
             }
 
             Spacer()
@@ -617,6 +620,7 @@ struct MonthlyStatsView: View {
                     .font(.system(size: 14, weight: .medium, design: .monospaced))
                     .foregroundColor(unrated > 0 ? .primary.opacity(0.6) : .secondary.opacity(0.4))
             }
+            .help("Unrated")
 
             Divider().frame(height: 18)
 
