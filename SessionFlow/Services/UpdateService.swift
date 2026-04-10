@@ -375,21 +375,30 @@ DEST_APP="$2"
 PROCESS_NAME="$3"
 TEMP_DIR="$4"
 
-wait_for_exit() {
-  while pgrep -x "$PROCESS_NAME" >/dev/null; do
-    sleep 0.5
-  done
-}
+# Wait for the old process to exit (max 30 seconds)
+TRIES=0
+while pgrep -x "$PROCESS_NAME" >/dev/null 2>&1; do
+  sleep 0.5
+  TRIES=$((TRIES + 1))
+  if [ "$TRIES" -ge 60 ]; then
+    exit 1
+  fi
+done
 
-wait_for_exit
+# Small grace period for file handles to release
+sleep 1
+
 rm -rf "$DEST_APP"
 mv "$TEMP_APP" "$DEST_APP"
-rm -rf "$TEMP_DIR"
+
+# Launch the new app BEFORE cleaning up (script lives in TEMP_DIR)
 open "$DEST_APP"
+sleep 1
+rm -rf "$TEMP_DIR"
 """
         try script.write(to: scriptURL, atomically: true, encoding: .utf8)
         try runProcess("/bin/chmod", arguments: ["+x", scriptURL.path])
-        
+
         let process = Process()
         process.launchPath = "/bin/bash"
         process.arguments = [
@@ -399,6 +408,10 @@ open "$DEST_APP"
             ProcessInfo.processInfo.processName,
             tempDir.path
         ]
+        // Detach stdio so the script isn't tied to the parent process
+        process.standardOutput = FileHandle.nullDevice
+        process.standardError = FileHandle.nullDevice
+        process.standardInput = FileHandle.nullDevice
         try process.run()
     }
     

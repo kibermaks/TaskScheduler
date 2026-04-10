@@ -171,38 +171,42 @@ hdiutil create -volname "$VOLUME_NAME" \
 
 echo -e "${BLUE}🔧 Configuring DMG layout...${NC}"
 MOUNT_DIR="/Volumes/$VOLUME_NAME"
-hdiutil attach "$TEMP_DMG" -mountpoint "$MOUNT_DIR" -nobrowse > /dev/null
+# Mount without -nobrowse so Finder can interact with the volume
+hdiutil attach "$TEMP_DMG" -mountpoint "$MOUNT_DIR" > /dev/null
+sleep 2
 
-# Set up the DMG window layout
-osascript <<EOF > /dev/null 2>&1 || true
+# Set up the DMG window layout via Finder AppleScript
+# Use inline 'container window' references to avoid stale window ID variables
+osascript <<EOF
 tell application "Finder"
     tell disk "$VOLUME_NAME"
         open
-        set containerWindow to container window
-        set current view of containerWindow to icon view
-        set toolbar visible of containerWindow to false
-        set statusbar visible of containerWindow to false
-        set the bounds of containerWindow to {$DMG_WINDOW_LEFT, $DMG_WINDOW_TOP, $DMG_WINDOW_RIGHT, $DMG_WINDOW_BOTTOM}
-        set viewOptions to the icon view options of containerWindow
-        set arrangement of viewOptions to not arranged
-        set icon size of viewOptions to $DMG_ICON_SIZE
-        if exists file ".background:$BACKGROUND_FILE" then
-            set background picture of viewOptions to file ".background:$BACKGROUND_FILE"
-        end if
-        set position of item "$APP_FILE" of containerWindow to {$DMG_APP_POS_X, $DMG_APP_POS_Y}
-        set position of item "Applications" of containerWindow to {$DMG_APPLICATIONS_POS_X, $DMG_APPLICATIONS_POS_Y}
-        close containerWindow
+        delay 2
+        set current view of container window to icon view
+        set toolbar visible of container window to false
+        set statusbar visible of container window to false
+        set the bounds of container window to {$DMG_WINDOW_LEFT, $DMG_WINDOW_TOP, $DMG_WINDOW_RIGHT, $DMG_WINDOW_BOTTOM}
+        delay 1
+        set theViewOptions to the icon view options of container window
+        set arrangement of theViewOptions to not arranged
+        set icon size of theViewOptions to $DMG_ICON_SIZE
+        set background picture of theViewOptions to file ".background:$BACKGROUND_FILE"
+        set position of item "$APP_FILE" of container window to {$DMG_APP_POS_X, $DMG_APP_POS_Y}
+        set position of item "Applications" of container window to {$DMG_APPLICATIONS_POS_X, $DMG_APPLICATIONS_POS_Y}
+        close container window
         open
         update without registering applications
-        delay 2
+        delay 3
+        close container window
     end tell
 end tell
 EOF
 
 echo -e "${BLUE}💾 Finalizing DMG...${NC}"
 sync
-hdiutil detach "$MOUNT_DIR" -force > /dev/null 2>&1 || true
 sleep 2
+hdiutil detach "$MOUNT_DIR" -force > /dev/null 2>&1 || true
+sleep 1
 
 hdiutil convert "$TEMP_DMG" \
     -format UDZO \
