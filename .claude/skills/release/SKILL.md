@@ -48,6 +48,8 @@ Collect all commits since the last tag — used to write the changelog.
 The `--release` flag:
 - Builds in `Release` configuration (not Debug)
 - Re-signs the app with Developer ID Application certificate + hardened runtime + timestamp
+- Outputs to `./release/SessionFlow.app` (separate from debug builds in `./`)
+- Does NOT auto-open the app
 - This is required for notarization and Gatekeeper approval
 
 The script sets the marketing version to today's date and bumps the build number automatically.
@@ -57,14 +59,12 @@ For same-day rebuilds (version already matches today), use:
 ./build_app.sh --release current
 ```
 
-Confirm the output says the correct version (e.g. `version 2026.4.10 (build 750) is ready`).
-
-**IMPORTANT**: Do NOT open the app after building — close it if the build script opened it. The next step (notarization) needs the .app bundle unmodified.
+Confirm the output says the correct version (e.g. `version 2026.4.10 (build 750) is ready in ./release/`).
 
 ### 4. Notarize the app
 
 ```bash
-./notarize.sh "SessionFlow.app"
+./notarize.sh "release/SessionFlow.app"
 ```
 
 This submits the signed app to Apple's notary service, waits for approval, and staples the notarization ticket. Takes 1-5 minutes typically.
@@ -75,12 +75,12 @@ Requires keychain credentials stored under profile "SessionFlow" (one-time setup
 
 For same-day suffix releases, set the override:
 ```bash
-DMG_VERSION_OVERRIDE="YYYY.M.D-N" ./create_dmg.sh
+DMG_VERSION_OVERRIDE="YYYY.M.D-N" APP_SOURCE_OVERRIDE="./release/SessionFlow.app" ./create_dmg.sh
 ```
 
 For normal releases:
 ```bash
-./create_dmg.sh
+APP_SOURCE_OVERRIDE="./release/SessionFlow.app" ./create_dmg.sh
 ```
 
 The DMG is created in `dmg_output/SessionFlow-{VERSION}.dmg`.
@@ -95,10 +95,10 @@ The DMG also needs its own notarization ticket stapled.
 
 ### 7. Create ZIP
 
-The ZIP contains the notarized `.app` (not the DMG):
+The ZIP contains the notarized `.app` from `./release/` (not the DMG):
 
 ```bash
-zip -r "SessionFlow-{VERSION}.zip" "SessionFlow.app" -q
+(cd release && zip -r "../SessionFlow-{VERSION}.zip" "SessionFlow.app" -q)
 ```
 
 The ZIP is created in the project root.

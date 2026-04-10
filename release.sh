@@ -145,10 +145,13 @@ ZIP_PATH="$ZIP_FILENAME"
 echo ""
 echo -e "${GREEN}✅ Built version $DISPLAY_VERSION${NC}"
 
+# Release builds live in ./release/ to avoid being overwritten by debug builds
+RELEASE_APP="./release/SessionFlow.app"
+
 # Notarize the .app
 echo ""
 echo -e "${BLUE}🔏 Notarizing app...${NC}"
-./notarize.sh "SessionFlow.app"
+./notarize.sh "$RELEASE_APP"
 
 if [ $? -ne 0 ]; then
     echo -e "${RED}❌ App notarization failed!${NC}"
@@ -157,7 +160,7 @@ fi
 
 echo ""
 echo -e "${BLUE}📦 Creating DMG...${NC}"
-DMG_VERSION_OVERRIDE="$ARTIFACT_VERSION_LABEL" ./create_dmg.sh
+DMG_VERSION_OVERRIDE="$ARTIFACT_VERSION_LABEL" APP_SOURCE_OVERRIDE="$RELEASE_APP" ./create_dmg.sh
 
 if [ $? -ne 0 ]; then
     echo -e "${RED}❌ DMG creation failed!${NC}"
@@ -176,14 +179,14 @@ fi
 
 echo ""
 echo -e "${BLUE}🗜  Creating ZIP archive...${NC}"
-if [ ! -d "SessionFlow.app" ]; then
-    echo -e "${RED}❌ 'SessionFlow.app' not found in project root. Cannot create ZIP.${NC}"
+if [ ! -d "$RELEASE_APP" ]; then
+    echo -e "${RED}❌ '$RELEASE_APP' not found. Cannot create ZIP.${NC}"
     exit 1
 fi
 if [ -f "$ZIP_PATH" ]; then
     rm -f "$ZIP_PATH"
 fi
-zip -r "$ZIP_PATH" "SessionFlow.app" -q
+(cd "$(dirname "$RELEASE_APP")" && zip -r "../$ZIP_PATH" "$(basename "$RELEASE_APP")" -q)
 echo -e "${GREEN}✅ ZIP created: $ZIP_PATH${NC}"
 
 echo ""

@@ -177,7 +177,7 @@ APP_PATH=$(find "$BUILD_DIR" -maxdepth 1 -name "*.app" | head -n 1)
 if [ -n "$APP_PATH" ]; then
     APP_NAME=$(basename "$APP_PATH")
     echo "✅ Build successful! Found $APP_NAME"
-    
+
     # Kill if running
     APP_PROCESS_NAME="${APP_NAME%.app}"
     if pgrep -x "$APP_PROCESS_NAME" > /dev/null 2>&1; then
@@ -185,13 +185,21 @@ if [ -n "$APP_PATH" ]; then
         killall "$APP_PROCESS_NAME" 2>/dev/null || true
         sleep 0.5
     fi
-    
-    if [ -d "./$APP_NAME" ]; then
-        rm -rf "./$APP_NAME"
+
+    # Release builds go to ./release/ to avoid being overwritten by debug builds
+    if [ "$RELEASE_BUILD" = true ]; then
+        OUTPUT_DIR="./release"
+        mkdir -p "$OUTPUT_DIR"
+    else
+        OUTPUT_DIR="."
     fi
-    
-    cp -R "$APP_PATH" "./$APP_NAME"
-    touch "./$APP_NAME"
+
+    if [ -d "$OUTPUT_DIR/$APP_NAME" ]; then
+        rm -rf "$OUTPUT_DIR/$APP_NAME"
+    fi
+
+    cp -R "$APP_PATH" "$OUTPUT_DIR/$APP_NAME"
+    touch "$OUTPUT_DIR/$APP_NAME"
 
     # Re-sign with Developer ID for distribution (--release flag)
     if [ "$RELEASE_BUILD" = true ]; then
@@ -199,13 +207,13 @@ if [ -n "$APP_PATH" ]; then
 
         # Create release entitlements (extract current, strip get-task-allow)
         RELEASE_ENT=$(mktemp /tmp/release-ent-XXXXXXXX).plist
-        codesign -d --entitlements "$RELEASE_ENT" --xml "./$APP_NAME" 2>/dev/null
+        codesign -d --entitlements "$RELEASE_ENT" --xml "$OUTPUT_DIR/$APP_NAME" 2>/dev/null
         /usr/libexec/PlistBuddy -c "Delete :com.apple.security.get-task-allow" "$RELEASE_ENT" 2>/dev/null || true
 
         codesign --deep --force --options runtime --timestamp \
             --sign "Developer ID Application: MaksymTW Grigorash ($TEAM_ID)" \
             --entitlements "$RELEASE_ENT" \
-            "./$APP_NAME"
+            "$OUTPUT_DIR/$APP_NAME"
         rm -f "$RELEASE_ENT"
         echo "   ✓ Signed for distribution"
     fi
@@ -215,18 +223,20 @@ if [ -n "$APP_PATH" ]; then
     BUILD_DURATION=$((BUILD_END_TIME - BUILD_START_TIME))
     BUILD_MINUTES=$((BUILD_DURATION / 60))
     BUILD_SECONDS=$((BUILD_DURATION % 60))
-    
+
     if [ $BUILD_MINUTES -gt 0 ]; then
         DURATION_STR="${BUILD_MINUTES}m ${BUILD_SECONDS}s"
     else
         DURATION_STR="${BUILD_SECONDS}s"
     fi
-    
+
     CURRENT_TIME=$(date +"%Y-%m-%d %H:%M:%S")
 
-    echo "🎉 Done! version $NEW_VERSION (build $NEW_BUILD_NUMBER) is ready in this folder."
+    echo "🎉 Done! version $NEW_VERSION (build $NEW_BUILD_NUMBER) is ready in $OUTPUT_DIR/"
     echo "⏱️ [$CURRENT_TIME] Build completed in $DURATION_STR"
-    open "./$APP_NAME"
+    if [ "$RELEASE_BUILD" = false ]; then
+        open "$OUTPUT_DIR/$APP_NAME"
+    fi
 else
     echo "❌ [$CURRENT_TIME] Build failed. Could not find .app."
     exit 1
