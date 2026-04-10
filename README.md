@@ -167,10 +167,10 @@ These are the tricks that make SessionFlow click once you know them.
 ### Timeline Tricks
 
 - **Double-click empty space** (left half) to create a new event right there — no need to open Calendar.app. An autocomplete dropdown suggests recent events so you can recreate them in two keystrokes.
-- **Double-click an event block** to open its detail sheet where you can edit the title, notes, and URL inline.
+- **Double-click an event block** to open its detail sheet where you can edit the title, notes, and URL inline. **Enter** saves notes; **Shift+Enter** inserts a newline.
 - **Drag the top or bottom edge** of any event or projected session to resize it. The grab zone is about 8 pixels from the edge.
 - **Right-click any calendar event** to copy it to an upcoming day or pick a custom date. Great for repeating a meeting you just had.
-- **Right-click a projected session** to schedule it immediately, schedule everything up to that point, or rename it.
+- **Right-click a projected session** to schedule it immediately, schedule everything up to that point ("Schedule All Up to Here"), or rename it.
 
 ### Event Creation Popover
 
@@ -182,15 +182,7 @@ When the popover is open after a double-click:
 
 ### Freeze & Manual Layout
 
-Drag any projected session and the app automatically freezes all projections so they stop recalculating. Now you can rearrange sessions by hand — overlapping sessions push out of the way. Unfreeze when you want the engine to take over again.
-
-### Developer Mode
-
-Quadruple-click the "General" heading in Settings to unlock developer tools:
-
-- **Override the "now" line** — pin the red time marker to any hour and minute. Perfect for screenshots or testing how awareness behaves at a specific time.
-- **Simulate awareness events** — trigger "Presence Reminder" or "Ending Soon" sounds without waiting for a real session.
-- **Reset onboarding** — re-show the welcome wizard, calendar setup, or "Did You Know" tips.
+Drag any projected session and the app automatically freezes all projections so they stop recalculating. Now you can rearrange sessions by hand — overlapping sessions push out of the way automatically. Unfreeze when you want the engine to take over again.
 
 ### Awareness Anywhere
 
@@ -200,6 +192,13 @@ You don't need the main window open to stay on track:
 - **Menu bar** shows a live countdown timer.
 - **Mini-player** floats on your desktop — collapse the bottom awareness panel to switch to it.
 - **Mute button** is always accessible from the mini-player and the bottom panel.
+- **Mic-aware auto-mute** silences ambient sounds automatically when your microphone is active — no need to manually mute before a call or recording.
+
+### Sounds & Accelerando
+
+Each session type can have its own ambient sound, and the app can gradually speed it up as the session nears its end — like a musical accelerando. The effect is subtle at first and builds toward the finish, giving you a natural sense of time pressure without needing to glance at a clock. You control the max speed multiplier per session type in Settings → Awareness.
+
+You can also import your own sound files — drop any audio file into the sound picker in Awareness settings and it becomes available for any session type.
 
 ### Shortcuts Automation
 
