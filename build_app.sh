@@ -161,7 +161,9 @@ echo "🚀 Starting $BUILD_CONFIG Build for $SCHEME..."
 xcodebuild -project "$PROJECT" \
            -scheme "$SCHEME" \
            -configuration "$BUILD_CONFIG" \
-           -destination 'platform=macOS,arch=arm64' \
+           -destination 'platform=macOS' \
+           ARCHS='arm64 x86_64' \
+           ONLY_ACTIVE_ARCH=NO \
            clean build \
            DEVELOPMENT_TEAM="$TEAM_ID" \
            CODE_SIGN_STYLE="Automatic" \
