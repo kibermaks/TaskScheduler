@@ -214,6 +214,14 @@ struct AppSettingsView: View {
                 }
                 .padding(.top, 4)
 
+
+                LabeledContent("Default start:") {
+                    NumericInputField(value: $schedulingEngine.defaultStartHour, range: 0...23, step: 1, unit: "h")
+                }
+                Text("Starting hour by default when switching to Set time mode.")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+
                 LabeledContent("Schedule until:") {
                     HStack {
                         if schedulingEngine.scheduleEndHour > 24 {

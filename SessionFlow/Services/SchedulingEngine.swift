@@ -5,7 +5,6 @@ import SwiftUI
 /// Core scheduling algorithm ported from AppleScript
 class SchedulingEngine: ObservableObject {
     // MARK: - Configuration
-    // MARK: - Configuration
     @Published var workSessions: Int = 5 { didSet { saveState() } }
     @Published var sideSessions: Int = 2 { didSet { saveState() } }
     @Published var workSessionName: String = "Work Session" { didSet { saveState() } }
@@ -18,7 +17,7 @@ class SchedulingEngine: ObservableObject {
     @Published var pattern: SchedulePattern = .alternating { didSet { saveState() } }
     @Published var workSessionsPerCycle: Int = 2 { didSet { saveState() } }
     @Published var sideSessionsPerCycle: Int = 2 { didSet { saveState() } }
-    @Published var sideFirst: Bool = false { didSet { saveState() } } // New
+    @Published var sideFirst: Bool = false { didSet { saveState() } }
     @Published var workCalendarName: String = "Work" { didSet { saveState() } }
     @Published var sideCalendarName: String = "Side Tasks" { didSet { saveState() } }
     @Published var workCalendarIdentifier: String? { didSet { saveState() } }
@@ -71,23 +70,23 @@ class SchedulingEngine: ObservableObject {
     
     @Published var sideRestDuration: Int = 15 { didSet { saveState() } }
     @Published var deepRestDuration: Int = 20 { didSet { saveState() } }
+    @Published var defaultStartHour: Int = (UserDefaults.standard.object(forKey: "SessionFlow.DefaultStartHour") as? Int) ?? 8 {
+        didSet { UserDefaults.standard.set(defaultStartHour, forKey: "SessionFlow.DefaultStartHour") }
+    }
     
     @Published var deepSessionConfig: DeepSessionConfig = .default { didSet { saveState() } }
     @Published var bigRestConfig: BigRestConfig = .default { didSet { saveState() } }
 
     // MARK: - State Tracking
     @Published var currentPresetId: UUID? {
-        didSet {
-             // Save the ID if it changes (though saveState covers the config, we might want to know which preset was "base")
-             UserDefaults.standard.set(currentPresetId?.uuidString, forKey: "SessionFlow.CurrentPresetId")
-        }
+        didSet { PresetStorage.shared.saveLastActivePresetId(currentPresetId) }
     }
     
     // MARK: - Scheduling Settings
     private let existingEventBuffer: Int = 10 // minutes
-    private let roundingInterval: Int = 5 // Changed to 5 minutes for better precision
-    private let maxSchedulingHour: Int = 24
-    
+    private let roundingInterval: Int = 5
+
+
     // MARK: - Scheduled Output
     @Published var projectedSessions: [ScheduledSession] = []
     @Published var schedulingMessage: String = ""
@@ -103,12 +102,7 @@ class SchedulingEngine: ObservableObject {
     
     init() {
         loadState()
-        
-        // Load last preset ID if exists (though loadState should handle logic, we track the ID separately)
-        if let idStr = UserDefaults.standard.string(forKey: "SessionFlow.CurrentPresetId"),
-           let id = UUID(uuidString: idStr) {
-            self.currentPresetId = id
-        }
+        self.currentPresetId = PresetStorage.shared.loadLastActivePresetId()
     }
     
     // MARK: - Apply Preset
@@ -178,7 +172,7 @@ class SchedulingEngine: ObservableObject {
             )
         )
     }
-    
+
 
     /// Calculates the effective end-of-day based on scheduleEndHour.
     /// If scheduleEndHour > 24, extends into the next calendar day (e.g. 26 = 2 AM next day).

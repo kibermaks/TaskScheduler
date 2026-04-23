@@ -235,7 +235,8 @@ struct ContentViewBody: View {
     @EnvironmentObject var schedulingEngine: SchedulingEngine
     @EnvironmentObject var sessionAwarenessService: SessionAwarenessService
     @EnvironmentObject var sessionAudioService: SessionAudioService
-    
+    @EnvironmentObject var eventCreationCoordinator: EventCreationCoordinator
+
     @Binding var selectedDate: Date
     @Binding var startTime: Date
     @Binding var showingDeleteConfirmation: Bool
@@ -279,7 +280,14 @@ struct ContentViewBody: View {
                     SessionAwarenessPanel()
                 }
             }
+
+            if let creationTime = eventCreationCoordinator.startTime {
+                eventCreationModalLayer(startTime: creationTime)
+                    .transition(.opacity)
+                    .zIndex(200)
+            }
         }
+        .animation(.easeOut(duration: 0.15), value: eventCreationCoordinator.startTime)
         .overlay(alignment: .bottom) {
             if let msg = modeToast {
                 Text(msg)
@@ -463,7 +471,7 @@ struct ContentViewBody: View {
         case .tomorrow:
             selectedDate = calendar.date(byAdding: .day, value: 1, to: Date()) ?? Date()
             useNowTime = false
-            startTime = calendar.date(bySettingHour: 8, minute: 0, second: 0, of: selectedDate) ?? selectedDate
+            startTime = calendar.date(bySettingHour: schedulingEngine.defaultStartHour, minute: 0, second: 0, of: selectedDate) ?? selectedDate
         case .custom:
             useNowTime = false
             // Restore last custom date if we have one; else preset to day after tomorrow when coming from Today/Tomorrow
@@ -481,6 +489,33 @@ struct ContentViewBody: View {
         }
     }
     
+    @ViewBuilder
+    private func eventCreationModalLayer(startTime: Date) -> some View {
+        ZStack {
+            Color.black.opacity(0.45)
+                .ignoresSafeArea()
+                .contentShape(Rectangle())
+                .onTapGesture {
+                    withAnimation(.easeOut(duration: 0.15)) {
+                        eventCreationCoordinator.dismiss()
+                    }
+                }
+
+            EventCreationPopover(
+                startTime: startTime,
+                defaultDurationMinutes: 30,
+                onCommit: { title, start, end, calendar in
+                    eventCreationCoordinator.onCommit?(title, start, end, calendar)
+                },
+                onCancel: {
+                    withAnimation(.easeOut(duration: 0.15)) {
+                        eventCreationCoordinator.dismiss()
+                    }
+                }
+            )
+        }
+    }
+
     private var backgroundGradient: some View {
         LinearGradient(
             colors: [Color(hex: "0F172A"), Color(hex: "1E293B")],
@@ -510,6 +545,7 @@ struct ContentViewBody: View {
             TimelineView(
                 selectedDate: selectedDate,
                 startTime: effectiveStartTime,
+                useNowTime: useNowTime && dateSelection == .today,
                 onCopySuccess: { info in copyToast = info },
                 onModeToast: { modeToast = $0 }
             )
@@ -587,7 +623,12 @@ struct ContentViewBody: View {
         ensureCalendarsExist(for: preset)
         
         schedulingEngine.applyPreset(preset)
-        PresetStorage.shared.saveLastActivePresetId(preset.id)
+        if !useNowTime {
+            let cal = Calendar.current
+            if let adjusted = cal.date(bySettingHour: schedulingEngine.defaultStartHour, minute: 0, second: 0, of: selectedDate) {
+                startTime = adjusted
+            }
+        }
         if autoPreview { updateProjectedSchedule() }
     }
     
@@ -758,6 +799,7 @@ struct SettingsChangeModifier: ViewModifier {
             .onChange(of: engine.sideCalendarName) { _, _ in trigger() }
             .background(extraObservers1)
             .background(extraObservers2)
+            .background(extraObservers3)
     }
     
     private var extraObservers1: some View {
@@ -797,6 +839,13 @@ struct SettingsChangeModifier: ViewModifier {
             }
     }
 
+    private var extraObservers3: some View {
+        Color.clear
+            .onChange(of: engine.workCalendarIdentifier) { _, _ in trigger() }
+            .onChange(of: engine.sideCalendarIdentifier) { _, _ in trigger() }
+            .onChange(of: engine.deepSessionConfig.calendarIdentifier) { _, _ in trigger() }
+    }
+
     private func trigger() {
         syncRestDurations()
         debounceWork?.cancel()
@@ -818,6 +867,7 @@ struct SettingsChangeModifier: ViewModifier {
 // MARK: - Header View
 struct HeaderView: View {
     @EnvironmentObject var updateService: UpdateService
+    @EnvironmentObject var schedulingEngine: SchedulingEngine
     @Binding var dateSelection: ContentView.DateSelection
     @Binding var selectedDate: Date
     @Binding var useNowTime: Bool
@@ -998,7 +1048,7 @@ struct HeaderView: View {
                 selectedDate = date
                 dateSelection = .custom
                 useNowTime = false
-                startTime = Calendar.current.date(bySettingHour: 8, minute: 0, second: 0, of: date) ?? date
+                startTime = Calendar.current.date(bySettingHour: schedulingEngine.defaultStartHour, minute: 0, second: 0, of: date) ?? date
             }
             menu.addItem(item)
         }
@@ -1009,7 +1059,8 @@ struct HeaderView: View {
     }
 
     private var startTimeControls: some View {
-        HStack(spacing: 8) {
+        let nowDisabled = dateSelection != .today
+        return HStack(spacing: 8) {
             Text("Start:").foregroundColor(.white.opacity(0.7))
             Picker("", selection: $useNowTime) {
                 Text("Now").tag(true)
@@ -1017,6 +1068,8 @@ struct HeaderView: View {
             }
             .pickerStyle(.segmented)
             .frame(width: 100)
+            .disabled(nowDisabled)
+            .help(nowDisabled ? "\"Now\" is only available for Today" : "")
             
             ZStack {
                 if !useNowTime {

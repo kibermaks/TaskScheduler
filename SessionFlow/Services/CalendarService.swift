@@ -14,7 +14,7 @@ class CalendarService: ObservableObject {
     private static let excludedCalendarsDefaultsKey = "SessionFlow.ExcludedCalendars"
     private let eventStore = EKEventStore()
     private var notificationObserver: NSObjectProtocol?
-    private var ekChangeDebouncePending = false
+    private var ekChangeTask: Task<Void, Never>?
     private let recognizedSessionTags = ["#work", "#side", "#deep", "#plan", "#break"]
 
     /// Resolves a session tag in notes to its corresponding SessionType.
@@ -32,9 +32,13 @@ class CalendarService: ObservableObject {
     @Published var availableCalendars: [EKCalendar] = []
     @Published var busySlots: [BusyTimeSlot] = []
     @Published var isLoading = false
-    @Published var errorMessage: String?
     @Published var lastRefresh: Date = Date()
     @Published var excludedCalendarIDs: Set<String> = []
+
+    /// Last EventKit failure — not observed by any view today; assignments are kept
+    /// as a hook for a future error banner and to preserve the message at the moment
+    /// of failure for debug logs.
+    var errorMessage: String?
     
     // Store the current date for auto-refresh
     private var currentFetchDate: Date?
@@ -59,13 +63,14 @@ class CalendarService: ObservableObject {
     }
     
     deinit {
+        ekChangeTask?.cancel()
         if let observer = notificationObserver {
             NotificationCenter.default.removeObserver(observer)
         }
     }
-    
+
     // MARK: - Notification Observer
-    
+
     private func setupNotificationObserver() {
         notificationObserver = NotificationCenter.default.addObserver(
             forName: .EKEventStoreChanged,
@@ -73,20 +78,19 @@ class CalendarService: ObservableObject {
             queue: .main
         ) { [weak self] _ in
             guard let self = self else { return }
-            // Debounce: coalesce rapid-fire sync notifications into a single fetch
-            guard !self.ekChangeDebouncePending else { return }
-            self.ekChangeDebouncePending = true
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
-                guard let self = self, let date = self.currentFetchDate else {
-                    self?.ekChangeDebouncePending = false
-                    return
-                }
-                self.ekChangeDebouncePending = false
-                Task {
-                    // Clear cached EventKit objects so deletions are reflected immediately.
+            // Debounce: cancel any in-flight task and schedule a new one so only
+            // the last notification in a burst fires, and reset+fetch run in a
+            // single serial chain on the main actor (EKEventStore is not
+            // thread-safe — concurrent reset() + events(matching:) can crash).
+            self.ekChangeTask?.cancel()
+            self.ekChangeTask = Task { [weak self] in
+                try? await Task.sleep(nanoseconds: 500_000_000)
+                if Task.isCancelled { return }
+                guard let self = self, let date = self.currentFetchDate else { return }
+                await MainActor.run {
                     self.eventStore.reset()
-                    await self.fetchEvents(for: date)
                 }
+                await self.fetchEvents(for: date)
             }
         }
     }
@@ -272,38 +276,28 @@ class CalendarService: ObservableObject {
     // MARK: - Event Fetching
     
     func fetchEvents(for date: Date) async {
+        // Keep all EKEventStore access on the main actor — EKEventStore is not
+        // thread-safe, and previously the events(matching:) call ran on a Task
+        // cooperative thread while reset() could fire concurrently from the
+        // change debounce.
         await MainActor.run {
             self.isLoading = true
             self.currentFetchDate = date
-        }
-        
-        let calendar = Calendar.current
-        let startOfDay = calendar.startOfDay(for: date)
-        let endOfDay = effectiveEndOfDay(for: date)
 
-        let calendars = includedEventCalendars()
-        if calendars.isEmpty {
-            await MainActor.run {
-                self.busySlots = []
-                self.isLoading = false
-                self.lastRefresh = Date()
+            let startOfDay = Calendar.current.startOfDay(for: date)
+            let endOfDay = self.effectiveEndOfDay(for: date)
+            let calendars = self.includedEventCalendars()
+            let slots: [BusyTimeSlot]
+            if calendars.isEmpty {
+                slots = []
+            } else {
+                let predicate = self.eventStore.predicateForEvents(withStart: startOfDay, end: endOfDay, calendars: calendars)
+                let nearAlldayThreshold: TimeInterval = 23 * 60 * 60
+                slots = self.eventStore.events(matching: predicate)
+                    .filter { !$0.isAllDay && $0.endDate.timeIntervalSince($0.startDate) < nearAlldayThreshold }
+                    .map { BusyTimeSlot(from: $0) }
             }
-            return
-        }
-        
-        let predicate = eventStore.predicateForEvents(withStart: startOfDay, end: endOfDay, calendars: calendars)
-        let events = eventStore.events(matching: predicate)
-        
-        // Filter out all-day events (duration >= 23 hours)
-        let nearAlldayThreshold: TimeInterval = 23 * 60 * 60
-        let timedEvents = events.filter { event in
-            let duration = event.endDate.timeIntervalSince(event.startDate)
-            return duration < nearAlldayThreshold && !event.isAllDay
-        }
-        
-        let slots = timedEvents.map { BusyTimeSlot(from: $0) }
-        
-        await MainActor.run {
+
             self.busySlots = slots
             self.isLoading = false
             self.lastRefresh = Date()

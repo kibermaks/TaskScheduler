@@ -89,6 +89,17 @@ struct AccelerandoConfig: Codable, Equatable {
     var maxMultiplier: Double = 1.0
 
     static let multiplierOptions: [Double] = [0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 1.8, 1.9, 2.0]
+
+    init(enabled: Bool = false, maxMultiplier: Double = 1.0) {
+        self.enabled = enabled
+        self.maxMultiplier = maxMultiplier
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        enabled = try c.decodeIfPresent(Bool.self, forKey: .enabled) ?? false
+        maxMultiplier = try c.decodeIfPresent(Double.self, forKey: .maxMultiplier) ?? 1.0
+    }
 }
 
 // MARK: - Codable rect for window position persistence
@@ -161,6 +172,23 @@ struct ShortcutTypeFilter: Codable, Equatable {
     var deep: Bool = true
     var planning: Bool = true
     var external: Bool = false
+
+    init(work: Bool = true, side: Bool = true, deep: Bool = true, planning: Bool = true, external: Bool = false) {
+        self.work = work
+        self.side = side
+        self.deep = deep
+        self.planning = planning
+        self.external = external
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        work = try c.decodeIfPresent(Bool.self, forKey: .work) ?? true
+        side = try c.decodeIfPresent(Bool.self, forKey: .side) ?? true
+        deep = try c.decodeIfPresent(Bool.self, forKey: .deep) ?? true
+        planning = try c.decodeIfPresent(Bool.self, forKey: .planning) ?? true
+        external = try c.decodeIfPresent(Bool.self, forKey: .external) ?? false
+    }
 
     func matches(sessionType: SessionType?, isBusySlot: Bool) -> Bool {
         if isBusySlot || sessionType == nil { return external }
@@ -244,6 +272,21 @@ struct FocusWeights: Codable, Equatable {
     var completedPercent: Int = 80 // Done
     var partialPercent: Int = 50   // Partly
     var skippedPercent: Int = 0    // Skipped
+
+    init(rocketPercent: Int = 100, completedPercent: Int = 80, partialPercent: Int = 50, skippedPercent: Int = 0) {
+        self.rocketPercent = rocketPercent
+        self.completedPercent = completedPercent
+        self.partialPercent = partialPercent
+        self.skippedPercent = skippedPercent
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        rocketPercent = try c.decodeIfPresent(Int.self, forKey: .rocketPercent) ?? 100
+        completedPercent = try c.decodeIfPresent(Int.self, forKey: .completedPercent) ?? 80
+        partialPercent = try c.decodeIfPresent(Int.self, forKey: .partialPercent) ?? 50
+        skippedPercent = try c.decodeIfPresent(Int.self, forKey: .skippedPercent) ?? 0
+    }
 
     func multiplier(for rating: SessionRating) -> Double {
         switch rating {

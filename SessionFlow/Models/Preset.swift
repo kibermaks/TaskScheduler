@@ -22,13 +22,28 @@ struct CalendarMapping: Codable, Equatable {
     var sideCalendarName: String
     var workCalendarIdentifier: String?
     var sideCalendarIdentifier: String?
-    
-    static let `default` = CalendarMapping(
-        workCalendarName: "Work",
-        sideCalendarName: "Side Tasks",
-        workCalendarIdentifier: nil,
-        sideCalendarIdentifier: nil
-    )
+
+    init(
+        workCalendarName: String = "Work",
+        sideCalendarName: String = "Side Tasks",
+        workCalendarIdentifier: String? = nil,
+        sideCalendarIdentifier: String? = nil
+    ) {
+        self.workCalendarName = workCalendarName
+        self.sideCalendarName = sideCalendarName
+        self.workCalendarIdentifier = workCalendarIdentifier
+        self.sideCalendarIdentifier = sideCalendarIdentifier
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        workCalendarName = try c.decodeIfPresent(String.self, forKey: .workCalendarName) ?? "Work"
+        sideCalendarName = try c.decodeIfPresent(String.self, forKey: .sideCalendarName) ?? "Side Tasks"
+        workCalendarIdentifier = try c.decodeIfPresent(String.self, forKey: .workCalendarIdentifier)
+        sideCalendarIdentifier = try c.decodeIfPresent(String.self, forKey: .sideCalendarIdentifier)
+    }
+
+    static let `default` = CalendarMapping()
 }
 
 // MARK: - Deep Session Configuration
@@ -131,9 +146,6 @@ struct Preset: Identifiable, Codable, Equatable {
 
     var bigRestConfig: BigRestConfig
 
-    // Default start hour for future days
-    var defaultStartHour: Int
-    
     // Schema version for migration tracking
     var schemaVersion: PresetSchemaVersion
     
@@ -160,7 +172,6 @@ struct Preset: Identifiable, Codable, Equatable {
         flexibleSideScheduling: Bool = true,
         bigRestConfig: BigRestConfig = .default,
         calendarMapping: CalendarMapping = .default,
-        defaultStartHour: Int = 8,
         schemaVersion: PresetSchemaVersion = .current
     ) {
         self.id = id
@@ -188,7 +199,6 @@ struct Preset: Identifiable, Codable, Equatable {
         self.flexibleSideScheduling = flexibleSideScheduling
         self.bigRestConfig = bigRestConfig
         self.calendarMapping = calendarMapping
-        self.defaultStartHour = defaultStartHour
         self.schemaVersion = schemaVersion
     }
     
@@ -257,7 +267,7 @@ struct Preset: Identifiable, Codable, Equatable {
         case workSessionDuration, sideSessionDuration
         case planningDuration, restDuration, sideRestDuration, deepRestDuration
         case schedulePlanning, pattern, workSessionsPerCycle, sideSessionsPerCycle, sideFirst
-        case deepSessionConfig, flexibleSideScheduling, bigRestConfig, calendarMapping, defaultStartHour
+        case deepSessionConfig, flexibleSideScheduling, bigRestConfig, calendarMapping
         case schemaVersion
     }
     
@@ -286,7 +296,6 @@ struct Preset: Identifiable, Codable, Equatable {
         flexibleSideScheduling = try container.decodeIfPresent(Bool.self, forKey: .flexibleSideScheduling) ?? true
         bigRestConfig = try container.decodeIfPresent(BigRestConfig.self, forKey: .bigRestConfig) ?? .default
         calendarMapping = try container.decode(CalendarMapping.self, forKey: .calendarMapping)
-        defaultStartHour = try container.decodeIfPresent(Int.self, forKey: .defaultStartHour) ?? 8
         // If version is missing, assume v1 (old preset)
         schemaVersion = try container.decodeIfPresent(PresetSchemaVersion.self, forKey: .schemaVersion) ?? .v1
     }
@@ -382,10 +391,9 @@ struct Preset: Identifiable, Codable, Equatable {
             sideCalendarName: "Side Tasks",
             workCalendarIdentifier: nil,
             sideCalendarIdentifier: nil
-        ),
-        defaultStartHour: 10
+        )
     )
-    
+
     static let lightDay = Preset(
         name: "Light Day",
         icon: "leaf.fill",
@@ -532,8 +540,7 @@ struct Preset: Identifiable, Codable, Equatable {
                 pattern: .alternatingReverse,
                 deepSessionConfig: deepConfigWeekend,
                 bigRestConfig: bigRestCfg,
-                calendarMapping: workMapping,
-                defaultStartHour: 10
+                calendarMapping: workMapping
             ),
             Preset(
                 name: "Light Day",

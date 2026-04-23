@@ -34,6 +34,7 @@ struct SessionFlowApp: App {
     @StateObject private var sessionAwarenessService = SessionAwarenessService()
     @StateObject private var sessionAudioService = SessionAudioService()
     @StateObject private var recentEventsStore = RecentEventsStore()
+    @StateObject private var eventCreationCoordinator = EventCreationCoordinator()
     @StateObject private var menuBarController = MenuBarController()
     @StateObject private var miniPlayerController = MiniPlayerWindowController()
     @State private var didInitializeServices = false
@@ -49,6 +50,7 @@ struct SessionFlowApp: App {
                 .environmentObject(sessionAwarenessService.timeState)
                 .environmentObject(sessionAudioService)
                 .environmentObject(recentEventsStore)
+                .environmentObject(eventCreationCoordinator)
                 .frame(minWidth: 1000, minHeight: 700)
                 .focusEffectDisabled()
                 .onAppear {

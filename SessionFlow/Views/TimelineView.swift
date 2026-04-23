@@ -32,9 +32,22 @@ struct DiagonalStripesPattern: View {
     }
 }
 
+@MainActor
+final class EventCreationCoordinator: ObservableObject {
+    @Published var startTime: Date? = nil
+    var onCommit: ((String, Date, Date, CalendarDescriptor) -> Void)?
+
+    var isActive: Bool { startTime != nil }
+
+    func dismiss() {
+        startTime = nil
+    }
+}
+
 struct TimelineView: View {
     let selectedDate: Date
     let startTime: Date
+    var useNowTime: Bool = true
     var onCopySuccess: ((CopyToastInfo) -> Void)? = nil
     var onModeToast: ((String) -> Void)? = nil
 
@@ -42,6 +55,7 @@ struct TimelineView: View {
     @EnvironmentObject var schedulingEngine: SchedulingEngine
     @EnvironmentObject var sessionAwarenessService: SessionAwarenessService
     @EnvironmentObject var recentEventsStore: RecentEventsStore
+    @EnvironmentObject var eventCreationCoordinator: EventCreationCoordinator
     
     private let hourHeight: CGFloat = 90 // Zoomed in from 60
     private let timeColumnWidth: CGFloat = 55
@@ -103,10 +117,6 @@ struct TimelineView: View {
     @State private var renamingSessionId: UUID? = nil
     @State private var renameText: String = ""
 
-    // Event creation popover
-    @State private var showingEventCreation: Bool = false
-    @State private var eventCreationTime: Date? = nil
-
     // Feedback badge
     @State private var feedbackPopoverEventId: String? = nil
 
@@ -161,10 +171,6 @@ struct TimelineView: View {
                     detailSheetOverlay
                 }
 
-                // Event creation overlay (outside scroll view so it doesn't clip)
-                if showingEventCreation, let creationTime = eventCreationTime {
-                    eventCreationFloatingOverlay(startTime: creationTime, geoSize: geo.size)
-                }
             }
             .onAppear {
                 containerWidth = geo.size.width
@@ -180,10 +186,9 @@ struct TimelineView: View {
                             cancelDrag()
                             return nil
                         }
-                        if showingEventCreation {
+                        if eventCreationCoordinator.isActive {
                             withAnimation(.easeOut(duration: 0.15)) {
-                                showingEventCreation = false
-                                eventCreationTime = nil
+                                eventCreationCoordinator.dismiss()
                             }
                             return nil
                         }
@@ -248,6 +253,11 @@ struct TimelineView: View {
             }
             .onChange(of: selectedDate) { _, _ in
                 eventUndoManager.clear()
+                if eventCreationCoordinator.isActive {
+                    withAnimation(.easeOut(duration: 0.15)) {
+                        eventCreationCoordinator.dismiss()
+                    }
+                }
             }
             .onAppear {
                 guard clockTimer == nil else { return }
@@ -451,6 +461,10 @@ struct TimelineView: View {
                 if shouldShowCurrentTimeIndicator {
                     currentTimeIndicator(currentTime: effectiveNowTimeForIndicator, width: geometry.size.width)
                 }
+
+                if !useNowTime {
+                    customStartIndicator(startTime: startTime, width: geometry.size.width)
+                }
                 
                 // Background tap target for event creation (left half only)
                 eventCreationBackgroundLayer(containerWidth: geometry.size.width)
@@ -542,18 +556,34 @@ struct TimelineView: View {
                 .shadow(color: Color.blue.opacity(0.3), radius: 8, y: 2)
 
             if blockHeight >= 16 {
-                VStack(alignment: .leading, spacing: 1) {
-                    Text(slot.title)
-                        .font(.system(size: 12, weight: .medium))
-                        .foregroundColor(.white)
-                        .lineLimit(1)
-                    if blockHeight > 30 {
+                if blockHeight <= 30 {
+                    HStack(spacing: 3) {
+                        Text(slot.title)
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundColor(.white)
+                            .lineLimit(1)
+                        Spacer(minLength: 2)
                         Text(startAndDurationString(start: newStart, end: newEnd))
                             .font(.system(size: 10, weight: .bold))
                             .foregroundColor(.white.opacity(0.9))
+                            .lineLimit(1)
+                            .layoutPriority(1)
                     }
+                    .padding(4)
+                } else {
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(slot.title)
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundColor(.white)
+                            .lineLimit(1)
+                        if blockHeight > 30 {
+                            Text(startAndDurationString(start: newStart, end: newEnd))
+                                .font(.system(size: 10, weight: .bold))
+                                .foregroundColor(.white.opacity(0.9))
+                        }
+                    }
+                    .padding(4)
                 }
-                .padding(4)
             }
         }
         .frame(width: blockWidth, height: blockHeight)
@@ -872,10 +902,13 @@ extension TimelineView {
         return "\(hour):00"
     }
     
-    /// The upper bound for visible hours — driven by Schedule Until.
+    /// The upper bound for visible hours.
+    /// `dayEndHour` controls visibility when `hideNightHours` is on; we extend it
+    /// up to `scheduleEndHour` so scheduled sessions are never clipped off the
+    /// timeline. When night hours are shown, we expose a full 24h minimum.
     private var effectiveEndHour: Int {
         if schedulingEngine.hideNightHours {
-            return schedulingEngine.scheduleEndHour
+            return max(schedulingEngine.dayEndHour, schedulingEngine.scheduleEndHour)
         } else {
             return max(24, schedulingEngine.scheduleEndHour)
         }
@@ -975,13 +1008,32 @@ extension TimelineView {
                 .fill(Color.red)
                 .frame(width: 10, height: 10)
                 .position(x: 5, y: yPos)
-            
+
             Path { path in
                 path.move(to: CGPoint(x: 10, y: yPos))
                 path.addLine(to: CGPoint(x: width, y: yPos))
             }
             .stroke(Color.red, lineWidth: 2)
         }
+    }
+
+    private func customStartIndicator(startTime: Date, width: CGFloat) -> some View {
+        let yPos = calculateYPosition(for: startTime)
+        let lilac = Color(hex: "C084FC")
+
+        return ZStack(alignment: .topLeading) {
+            Circle()
+                .fill(lilac)
+                .frame(width: 8, height: 8)
+                .position(x: 5, y: yPos)
+
+            Path { path in
+                path.move(to: CGPoint(x: 10, y: yPos))
+                path.addLine(to: CGPoint(x: width, y: yPos))
+            }
+            .stroke(lilac, style: StrokeStyle(lineWidth: 1.5, dash: [5, 4]))
+        }
+        .allowsHitTesting(false)
     }
     
     // ... (rest of file)
@@ -1017,7 +1069,7 @@ extension TimelineView {
             let showsFeedbackBadge = slot.endTime < Date() && sessionAwarenessService.config.enabled && sessionAwarenessService.config.productivityEnabled
 
             VStack(alignment: .leading, spacing: 1) {
-                if height <= 25 {
+                if height <= 30 {
                     HStack(spacing: 3) {
                         Text(slot.title)
                             .font(.system(size: 11, weight: .medium))
@@ -1857,8 +1909,8 @@ extension TimelineView {
             calendarIdentifier: slot.calendarIdentifier,
             calendarName: slot.calendarName
         )
-        eventUndoManager.recordDelete(snapshot)
         if calendarService.deleteEvent(identifier: slot.id) {
+            eventUndoManager.recordDelete(snapshot)
             selectedBusySlot = nil
             selectedSession = nil
             Task { await calendarService.fetchEvents(for: selectedDate) }
@@ -1880,43 +1932,6 @@ extension TimelineView {
             }
     }
 
-    /// Floating overlay for event creation, rendered outside the scroll view so it never clips.
-    private func eventCreationFloatingOverlay(startTime: Date, geoSize: CGSize) -> some View {
-        ZStack {
-            // Dimmed background — click to dismiss
-            Color.black.opacity(0.3)
-                .ignoresSafeArea()
-                .onTapGesture {
-                    withAnimation(.easeOut(duration: 0.15)) {
-                        showingEventCreation = false
-                        eventCreationTime = nil
-                    }
-                }
-
-            VStack {
-                Spacer()
-                    .frame(height: geoSize.height * 0.22)
-                EventCreationPopover(
-                    startTime: startTime,
-                    defaultDurationMinutes: 30,
-                    onCommit: { title, start, end, calendar in
-                        createEventFromTimeline(title: title, startDate: start, endDate: end, calendar: calendar)
-                    },
-                    onCancel: {
-                        withAnimation(.easeOut(duration: 0.15)) {
-                            showingEventCreation = false
-                            eventCreationTime = nil
-                        }
-                    }
-                )
-                Spacer()
-            }
-            .frame(maxWidth: .infinity)
-        }
-        .transition(.opacity)
-        .animation(.easeOut(duration: 0.15), value: showingEventCreation)
-    }
-
     private func beginEventCreation(at time: Date) {
         guard !eventsLocked else {
             onModeToast?("Events locked")
@@ -1927,9 +1942,12 @@ extension TimelineView {
         selectedBusySlot = nil
         resetEditingState()
 
+        eventCreationCoordinator.onCommit = { title, start, end, calendar in
+            createEventFromTimeline(title: title, startDate: start, endDate: end, calendar: calendar)
+        }
+
         withAnimation(.easeOut(duration: 0.15)) {
-            eventCreationTime = time
-            showingEventCreation = true
+            eventCreationCoordinator.startTime = time
         }
     }
 
@@ -1969,8 +1987,7 @@ extension TimelineView {
 
         // Close popover and refresh
         withAnimation(.easeOut(duration: 0.15)) {
-            showingEventCreation = false
-            eventCreationTime = nil
+            eventCreationCoordinator.dismiss()
         }
         onModeToast?("Created \"\(title)\"")
         Task { await calendarService.fetchEvents(for: selectedDate) }
@@ -2371,25 +2388,27 @@ extension TimelineView {
         editingTitle = ""
         originalTitle = ""
         focusedField = nil
-        isCanceling = false
+        // onChange(of: focusedField) fires on the next runloop; clear the guard
+        // after it has had a chance to run.
+        DispatchQueue.main.async { isCanceling = false }
     }
-    
+
     private func cancelNotesEdit() {
         isCanceling = true
         isEditingNotes = false
         editingNotes = ""
         originalNotes = ""
         focusedField = nil
-        isCanceling = false
+        DispatchQueue.main.async { isCanceling = false }
     }
-    
+
     private func cancelURLEdit() {
         isCanceling = true
         isEditingURL = false
         editingURL = ""
         originalURL = ""
         focusedField = nil
-        isCanceling = false
+        DispatchQueue.main.async { isCanceling = false }
     }
 
     // MARK: - Drag Commit
@@ -2611,6 +2630,12 @@ extension TimelineView {
                     Text(session.title)
                         .font(.system(size: 11, weight: .medium))
                         .lineLimit(1)
+                    Spacer(minLength: 2)
+                    Text(startAndDurationString(start: newStart, end: newEnd))
+                        .font(.system(size: 10, weight: .bold))
+                        .foregroundColor(.white.opacity(0.9))
+                        .lineLimit(1)
+                        .layoutPriority(1)
                 }
                 .foregroundColor(.white)
                 .padding(3)
@@ -2674,12 +2699,16 @@ extension TimelineView {
                 Task { await calendarService.fetchEvents(for: selectedDate) }
             }
         case .schedule(let snap):
-            // Undo: delete created events, restore projected sessions
+            // Undo: delete created events, restore projected sessions.
+            // Freeze before the fetch so the subsequent regeneration can't
+            // overwrite the restored snapshot with fresh UUIDs, which would
+            // leave the undo stack pointing at sessions that no longer exist.
             for eventId in snap.eventIds {
                 _ = calendarService.deleteEvent(identifier: eventId)
             }
             schedulingEngine.projectedSessions.append(contentsOf: snap.sessions)
             schedulingEngine.projectedSessions.sort { $0.startTime < $1.startTime }
+            schedulingEngine.sessionsFrozen = true
             Task { await calendarService.fetchEvents(for: selectedDate) }
         case .create(let snap):
             // Undo create = delete the event
