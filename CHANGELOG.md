@@ -5,6 +5,24 @@ All notable changes to SessionFlow will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and SessionFlow marketing versions now follow the release date format `YYYY.M.D`.
 
+## [2026.4.23] - 2026-04-23
+
+### Added
+
+- Default Start hour setting in App Settings — used when scheduling with Set Time mode
+
+### Changed
+
+- Timeline resize preview keeps start time and duration visible on one line for small blocks
+- Now picker is disabled when viewing Tomorrow or past days, with tooltip explanation
+- Set Time picker now shows purple line indicating the start time
+
+### Fixed
+
+- Reviewed the SessionFlow codebase and fixed all P0/P1/P2 findings plus quality cleanups across CalendarService, TimelineView, ContentView, SchedulingEngine, Preset, and SessionAwarenessConfig classes
+- Rapid calendar sync bursts no longer cause concurrent EventKit access
+- Universal binary build now correctly produces both Apple Silicon and Intel slices
+
 ## [2026.4.13] - 2026-04-13
 
 ### Changed
