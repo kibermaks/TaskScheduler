@@ -73,6 +73,7 @@
 		A1B1C1D1E1F10003A2B2C2D1 /* SessionFlowIntents.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B1C1D1E1F10004A2B2C2D1 /* SessionFlowIntents.swift */; };
 		EC01A2B3C4D5E6F7A8B9C0D1 /* RecentEventsStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = EC01A2B3C4D5E6F7A8B9C0D2 /* RecentEventsStore.swift */; };
 		EC02A2B3C4D5E6F7A8B9C0D1 /* EventCreationPopover.swift in Sources */ = {isa = PBXBuildFile; fileRef = EC02A2B3C4D5E6F7A8B9C0D2 /* EventCreationPopover.swift */; };
+		AFA001000000000000000001 /* AVAudioExceptionCatcher.m in Sources */ = {isa = PBXBuildFile; fileRef = AFA001000000000000000002 /* AVAudioExceptionCatcher.m */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -144,6 +145,9 @@
 		FF01CHANGELOG001 /* CHANGELOG.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; name = CHANGELOG.md; path = CHANGELOG.md; sourceTree = SOURCE_ROOT; };
 		EC01A2B3C4D5E6F7A8B9C0D2 /* RecentEventsStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecentEventsStore.swift; sourceTree = "<group>"; };
 		EC02A2B3C4D5E6F7A8B9C0D2 /* EventCreationPopover.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EventCreationPopover.swift; sourceTree = "<group>"; };
+		AFA001000000000000000002 /* AVAudioExceptionCatcher.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = AVAudioExceptionCatcher.m; sourceTree = "<group>"; };
+		AFA001000000000000000003 /* AVAudioExceptionCatcher.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = AVAudioExceptionCatcher.h; sourceTree = "<group>"; };
+		AFA001000000000000000004 /* SessionFlow-Bridging-Header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "SessionFlow-Bridging-Header.h"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -185,6 +189,7 @@
 				C8C8050EED40EF171CC2784D /* Resources */,
 				2DEBECAA2EF4136C002A9D7C /* Icon.icon */,
 				202 /* SessionFlow.entitlements */,
+				AFA001000000000000000004 /* SessionFlow-Bridging-Header.h */,
 				2DC4CFE92EFA8E8700F7A35D /* Assets.xcassets */,
 			);
 			path = SessionFlow;
@@ -259,6 +264,8 @@
 				E2F3A4B5C6D7E8F9A0B1C2D3 /* MenuBarController.swift */,
 				A1B1C1D1E1F10002A2B2C2D1 /* ShortcutService.swift */,
 				EC01A2B3C4D5E6F7A8B9C0D2 /* RecentEventsStore.swift */,
+				AFA001000000000000000003 /* AVAudioExceptionCatcher.h */,
+				AFA001000000000000000002 /* AVAudioExceptionCatcher.m */,
 			);
 			path = Services;
 			sourceTree = "<group>";
@@ -429,6 +436,7 @@
 				A1B1C1D1E1F10003A2B2C2D1 /* SessionFlowIntents.swift in Sources */,
 				EC01A2B3C4D5E6F7A8B9C0D1 /* RecentEventsStore.swift in Sources */,
 				EC02A2B3C4D5E6F7A8B9C0D1 /* EventCreationPopover.swift in Sources */,
+				AFA001000000000000000001 /* AVAudioExceptionCatcher.m in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -567,7 +575,7 @@
 				CODE_SIGN_ENTITLEMENTS = SessionFlow/SessionFlow.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 855;
+				CURRENT_PROJECT_VERSION = 856;
 				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_ASSET_PATHS = "";
 				ENABLE_APP_SANDBOX = NO;
@@ -589,6 +597,7 @@
 				MARKETING_VERSION = 2026.5.13;
 				PRODUCT_BUNDLE_IDENTIFIER = com.kibermaks.SessionFlow;
 				PRODUCT_NAME = SessionFlow;
+				SWIFT_OBJC_BRIDGING_HEADER = "SessionFlow/SessionFlow-Bridging-Header.h";
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
 				VERSIONING_SYSTEM = "apple-generic";
@@ -604,7 +613,7 @@
 				CODE_SIGN_ENTITLEMENTS = SessionFlow/SessionFlow.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 855;
+				CURRENT_PROJECT_VERSION = 856;
 				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_ASSET_PATHS = "";
 				ENABLE_APP_SANDBOX = NO;
@@ -626,6 +635,7 @@
 				MARKETING_VERSION = 2026.5.13;
 				PRODUCT_BUNDLE_IDENTIFIER = com.kibermaks.SessionFlow;
 				PRODUCT_NAME = SessionFlow;
+				SWIFT_OBJC_BRIDGING_HEADER = "SessionFlow/SessionFlow-Bridging-Header.h";
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
 				VERSIONING_SYSTEM = "apple-generic";

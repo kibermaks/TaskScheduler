@@ -1,5 +1,6 @@
 import Foundation
 import AVFoundation
+import AppKit
 import CoreAudio
 import SwiftUI
 import Combine
@@ -33,7 +34,12 @@ class SessionAudioService: ObservableObject {
     private var currentAmbientBuffer: AVAudioPCMBuffer?
     private var currentAmbientConfig: SessionSoundConfig?
     private var shouldBePlayingAmbient = false
+    private var ambientPlaybackGeneration = 0
+    private var audioRouteIsRecovering = false
+    private var userSessionIsInactive = false
+    private var selectedOutputDeviceUID: String?
     private(set) var masterVolume: Float = 1.0
+    private let ambientRestartDelays: [TimeInterval] = [0.5, 1.0, 2.0, 4.0]
 
     // Preview pause/resume state
     private var previewPausedConfig: SessionSoundConfig?
@@ -82,6 +88,7 @@ class SessionAudioService: ObservableObject {
         refreshOutputDevices()
         observeDeviceChanges()
         observeEngineConfigChanges()
+        observeWorkspaceAudioRecoveryNotifications()
 
         micCancellable = micMonitor.$isMicActive
             .receive(on: DispatchQueue.main)
@@ -109,6 +116,7 @@ class SessionAudioService: ObservableObject {
     deinit {
         removeDeviceListener()
         NotificationCenter.default.removeObserver(self)
+        NSWorkspace.shared.notificationCenter.removeObserver(self)
     }
 
     // MARK: - Ambient Engine Setup
@@ -124,6 +132,8 @@ class SessionAudioService: ObservableObject {
 
     /// Full audio reset: stops everything, tears down engine, rebuilds from scratch
     func resetAudioEngine() {
+        ambientPlaybackGeneration += 1
+
         // Stop all playback
         ambientPlayerNode.stop()
         transitionPlayer?.stop()
@@ -138,16 +148,12 @@ class SessionAudioService: ObservableObject {
         currentAmbientBuffer = nil
         currentAmbientConfig = nil
         shouldBePlayingAmbient = false
+        audioRouteIsRecovering = false
         previewPausedConfig = nil
         previewPausedShouldPlay = false
         varispeedNode.rate = 1.0
 
-        // Detach and rebuild nodes
-        ambientEngine.detach(ambientPlayerNode)
-        ambientEngine.detach(varispeedNode)
-        ambientPlayerNode = AVAudioPlayerNode()
-        varispeedNode = AVAudioUnitVarispeed()
-        setupAmbientEngine()
+        rebuildAmbientEngine()
 
         DispatchQueue.main.async {
             self.isPlaying = false
@@ -165,17 +171,58 @@ class SessionAudioService: ObservableObject {
     // MARK: - Ambient Playback
 
     func playAmbient(config: SessionSoundConfig, ignoreMute: Bool = false) {
+        ambientPlaybackGeneration += 1
+        playAmbient(config: config, ignoreMute: ignoreMute, attempt: 0, generation: ambientPlaybackGeneration)
+    }
+
+    private func playAmbient(
+        config: SessionSoundConfig,
+        ignoreMute: Bool,
+        attempt: Int,
+        generation: Int
+    ) {
+        guard generation == ambientPlaybackGeneration else { return }
+
         guard (!isMuted || ignoreMute), config.isPlayable else {
             shouldBePlayingAmbient = config.isPlayable
             currentAmbientConfig = config
             return
         }
 
-        stopAmbientInternal()
         currentAmbientConfig = config
         shouldBePlayingAmbient = true
 
+        guard !userSessionIsInactive else {
+            stopAmbientInternal()
+            return
+        }
+
+        guard !audioRouteIsRecovering else {
+            scheduleAmbientRestart(
+                config: config,
+                ignoreMute: ignoreMute,
+                nextAttempt: attempt + 1,
+                generation: generation,
+                reason: "audio route is recovering"
+            )
+            return
+        }
+
+        stopAmbientInternal()
+
         guard let buffer = loadAmbientBuffer(for: config) else { return }
+        guard buffer.frameLength > 0,
+              buffer.format.sampleRate > 0,
+              buffer.format.channelCount > 0 else {
+            handleAmbientStartFailure(
+                config: config,
+                ignoreMute: ignoreMute,
+                attempt: attempt,
+                generation: generation,
+                reason: "invalid ambient buffer format"
+            )
+            return
+        }
         currentAmbientBuffer = buffer
 
         // Reconnect with the buffer's exact format to prevent format mismatch crash
@@ -186,12 +233,40 @@ class SessionAudioService: ObservableObject {
         varispeedNode.rate = 1.0
 
         do {
+            ambientEngine.prepare()
             try ambientEngine.start()
+            guard ambientEngine.isRunning else {
+                handleAmbientStartFailure(
+                    config: config,
+                    ignoreMute: ignoreMute,
+                    attempt: attempt,
+                    generation: generation,
+                    reason: "ambient engine did not remain running"
+                )
+                return
+            }
+
             ambientPlayerNode.scheduleBuffer(buffer, at: nil, options: .loops)
-            ambientPlayerNode.play()
+            if let exceptionReason = AVAudioExceptionCatcher.playPlayerNodeAndReturnExceptionReason(ambientPlayerNode) {
+                handleAmbientStartFailure(
+                    config: config,
+                    ignoreMute: ignoreMute,
+                    attempt: attempt,
+                    generation: generation,
+                    reason: exceptionReason
+                )
+                return
+            }
+
             DispatchQueue.main.async { self.isPlaying = true }
         } catch {
-            print("SessionAudioService: Failed to start ambient engine: \(error)")
+            handleAmbientStartFailure(
+                config: config,
+                ignoreMute: ignoreMute,
+                attempt: attempt,
+                generation: generation,
+                reason: "\(error)"
+            )
         }
     }
 
@@ -238,6 +313,7 @@ class SessionAudioService: ObservableObject {
     }
 
     func stopAmbient() {
+        ambientPlaybackGeneration += 1
         stopAmbientInternal()
         shouldBePlayingAmbient = false
         currentAmbientConfig = nil
@@ -262,6 +338,60 @@ class SessionAudioService: ObservableObject {
     private func resumeAmbient() {
         guard let config = currentAmbientConfig, config.isPlayable else { return }
         playAmbient(config: config)
+    }
+
+    private func handleAmbientStartFailure(
+        config: SessionSoundConfig,
+        ignoreMute: Bool,
+        attempt: Int,
+        generation: Int,
+        reason: String
+    ) {
+        guard generation == ambientPlaybackGeneration else { return }
+
+        print("SessionAudioService: Failed to start ambient playback: \(reason)")
+        stopAmbientInternal()
+        rebuildAmbientEngine()
+        scheduleAmbientRestart(
+            config: config,
+            ignoreMute: ignoreMute,
+            nextAttempt: attempt + 1,
+            generation: generation,
+            reason: reason
+        )
+    }
+
+    private func scheduleAmbientRestart(
+        config: SessionSoundConfig,
+        ignoreMute: Bool,
+        nextAttempt: Int,
+        generation: Int,
+        reason: String
+    ) {
+        guard generation == ambientPlaybackGeneration,
+              shouldBePlayingAmbient,
+              currentAmbientConfig == config else { return }
+
+        guard nextAttempt <= ambientRestartDelays.count else {
+            print("SessionAudioService: Ambient playback deferred after repeated failures: \(reason)")
+            DispatchQueue.main.async { self.isPlaying = false }
+            return
+        }
+
+        let delay = ambientRestartDelays[nextAttempt - 1]
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
+            guard let self = self,
+                  generation == self.ambientPlaybackGeneration,
+                  self.shouldBePlayingAmbient,
+                  self.currentAmbientConfig == config else { return }
+
+            self.playAmbient(
+                config: config,
+                ignoreMute: ignoreMute,
+                attempt: nextAttempt,
+                generation: generation
+            )
+        }
     }
 
     // MARK: - Transition Playback
@@ -382,6 +512,11 @@ class SessionAudioService: ObservableObject {
     // MARK: - Output Device Management
 
     func setOutputDevice(uid: String?) {
+        selectedOutputDeviceUID = uid
+        applyOutputDevice(uid: uid, restartIfNeeded: true)
+    }
+
+    private func applyOutputDevice(uid: String?, restartIfNeeded: Bool) {
         let outputNode = ambientEngine.outputNode
         guard let audioUnit = outputNode.audioUnit else { return }
 
@@ -403,7 +538,7 @@ class SessionAudioService: ObservableObject {
             )
         }
 
-        if wasRunning, shouldBePlayingAmbient {
+        if restartIfNeeded, wasRunning, shouldBePlayingAmbient {
             resumeAmbient()
         }
     }
@@ -562,7 +697,41 @@ class SessionAudioService: ObservableObject {
 
     // MARK: - Audio engine recovery
 
+    private func rebuildAmbientEngine() {
+        NotificationCenter.default.removeObserver(
+            self,
+            name: .AVAudioEngineConfigurationChange,
+            object: nil
+        )
+
+        ambientPlayerNode.stop()
+        if ambientEngine.isRunning {
+            ambientEngine.stop()
+        }
+        ambientEngine.reset()
+
+        if ambientPlayerNode.engine === ambientEngine {
+            ambientEngine.detach(ambientPlayerNode)
+        }
+        if varispeedNode.engine === ambientEngine {
+            ambientEngine.detach(varispeedNode)
+        }
+
+        ambientEngine = AVAudioEngine()
+        ambientPlayerNode = AVAudioPlayerNode()
+        varispeedNode = AVAudioUnitVarispeed()
+        setupAmbientEngine()
+        ambientEngine.mainMixerNode.outputVolume = masterVolume
+        applyOutputDevice(uid: selectedOutputDeviceUID, restartIfNeeded: false)
+        observeEngineConfigChanges()
+    }
+
     private func observeEngineConfigChanges() {
+        NotificationCenter.default.removeObserver(
+            self,
+            name: .AVAudioEngineConfigurationChange,
+            object: nil
+        )
         NotificationCenter.default.addObserver(
             self,
             selector: #selector(handleEngineConfigChange),
@@ -572,10 +741,86 @@ class SessionAudioService: ObservableObject {
     }
 
     @objc private func handleEngineConfigChange(_ notification: Notification) {
-        // Engine was stopped by system (device change, other app took audio, etc.)
-        // Restart if we should be playing
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
-            guard let self = self, self.shouldBePlayingAmbient, !self.isMuted else { return }
+        audioRouteIsRecovering = true
+        stopAmbientInternal()
+        rebuildAmbientEngine()
+        resumeAmbientAfterAudioRouteSettles(delay: 0.75)
+    }
+
+    private func observeWorkspaceAudioRecoveryNotifications() {
+        let center = NSWorkspace.shared.notificationCenter
+        center.addObserver(
+            self,
+            selector: #selector(handleWorkspaceAudioWillSuspend),
+            name: NSWorkspace.willSleepNotification,
+            object: nil
+        )
+        center.addObserver(
+            self,
+            selector: #selector(handleWorkspaceAudioWillSuspend),
+            name: NSWorkspace.screensDidSleepNotification,
+            object: nil
+        )
+        center.addObserver(
+            self,
+            selector: #selector(handleUserSessionDidResignActive),
+            name: NSWorkspace.sessionDidResignActiveNotification,
+            object: nil
+        )
+        center.addObserver(
+            self,
+            selector: #selector(handleWorkspaceAudioDidResume),
+            name: NSWorkspace.didWakeNotification,
+            object: nil
+        )
+        center.addObserver(
+            self,
+            selector: #selector(handleWorkspaceAudioDidResume),
+            name: NSWorkspace.screensDidWakeNotification,
+            object: nil
+        )
+        center.addObserver(
+            self,
+            selector: #selector(handleUserSessionDidBecomeActive),
+            name: NSWorkspace.sessionDidBecomeActiveNotification,
+            object: nil
+        )
+    }
+
+    @objc private func handleWorkspaceAudioWillSuspend(_ notification: Notification) {
+        audioRouteIsRecovering = true
+        stopAmbientInternal()
+    }
+
+    @objc private func handleWorkspaceAudioDidResume(_ notification: Notification) {
+        audioRouteIsRecovering = true
+        refreshOutputDevices()
+        guard !userSessionIsInactive else { return }
+        resumeAmbientAfterAudioRouteSettles(delay: 2.0)
+    }
+
+    @objc private func handleUserSessionDidResignActive(_ notification: Notification) {
+        userSessionIsInactive = true
+        audioRouteIsRecovering = true
+        stopAmbientInternal()
+    }
+
+    @objc private func handleUserSessionDidBecomeActive(_ notification: Notification) {
+        userSessionIsInactive = false
+        audioRouteIsRecovering = true
+        refreshOutputDevices()
+        resumeAmbientAfterAudioRouteSettles(delay: 1.0)
+    }
+
+    private func resumeAmbientAfterAudioRouteSettles(delay: TimeInterval) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
+            guard let self = self else { return }
+            self.audioRouteIsRecovering = false
+
+            guard self.shouldBePlayingAmbient,
+                  !self.isMuted,
+                  !self.userSessionIsInactive else { return }
+
             self.resumeAmbient()
         }
     }
