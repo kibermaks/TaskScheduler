@@ -35,12 +35,19 @@ struct DiagonalStripesPattern: View {
 @MainActor
 final class EventCreationCoordinator: ObservableObject {
     @Published var startTime: Date? = nil
+    @Published var durationMinutes: Int = 30
+    @Published var draftTitle: String = ""
+    @Published var calendarColor: Color = .blue
     var onCommit: ((String, Date, Date, CalendarDescriptor) -> Void)?
 
     var isActive: Bool { startTime != nil }
 
     func dismiss() {
         startTime = nil
+        durationMinutes = 30
+        draftTitle = ""
+        calendarColor = .blue
+        onCommit = nil
     }
 }
 
@@ -474,6 +481,17 @@ struct TimelineView: View {
                     eventBlock(for: positionedSlot, containerWidth: geometry.size.width)
                 }
 
+                if let creationStart = eventCreationCoordinator.startTime,
+                   Calendar.current.isDate(creationStart, inSameDayAs: selectedDate) {
+                    eventCreationGhostBlock(
+                        startTime: creationStart,
+                        durationMinutes: eventCreationCoordinator.durationMinutes,
+                        title: eventCreationCoordinator.draftTitle,
+                        color: eventCreationCoordinator.calendarColor,
+                        containerWidth: geometry.size.width
+                    )
+                }
+
                 // Projected sessions - right half
                 ForEach(filteredProjectedSessions) { session in
                     projectedSessionBlock(for: session, containerWidth: geometry.size.width)
@@ -585,6 +603,52 @@ struct TimelineView: View {
                     .padding(4)
                 }
             }
+        }
+        .frame(width: blockWidth, height: blockHeight)
+        .clipped()
+        .position(x: centerX, y: centerY)
+        .allowsHitTesting(false)
+    }
+
+    private func eventCreationGhostBlock(
+        startTime: Date,
+        durationMinutes: Int,
+        title: String,
+        color: Color,
+        containerWidth: CGFloat
+    ) -> some View {
+        let endTime = startTime.addingTimeInterval(Double(max(5, durationMinutes)) * 60)
+        let yPos = calculateYPosition(for: startTime)
+        let height = calculateHeight(from: startTime, to: endTime)
+        let blockHeight = max(height, 20)
+        let blockWidth = max((containerWidth / 2) - 16, 10)
+        let centerX = 8 + blockWidth / 2
+        let centerY = yPos + blockHeight / 2
+        let displayTitle = title.isEmpty ? "New Event" : title
+
+        return ZStack(alignment: .topLeading) {
+            RoundedRectangle(cornerRadius: 4)
+                .fill(color.opacity(0.18))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 4)
+                        .stroke(color.opacity(0.9), style: StrokeStyle(lineWidth: 1.5, dash: [6, 4]))
+                )
+
+            DiagonalStripesPattern(color: color.opacity(0.12), stripeWidth: 4, gapWidth: 6)
+                .clipShape(RoundedRectangle(cornerRadius: 4))
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(displayTitle)
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundColor(.white.opacity(0.9))
+                    .lineLimit(1)
+
+                Text(startAndDurationString(start: startTime, end: endTime))
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundColor(.white.opacity(0.65))
+                    .lineLimit(1)
+            }
+            .padding(4)
         }
         .frame(width: blockWidth, height: blockHeight)
         .clipped()
@@ -1945,6 +2009,9 @@ extension TimelineView {
         eventCreationCoordinator.onCommit = { title, start, end, calendar in
             createEventFromTimeline(title: title, startDate: start, endDate: end, calendar: calendar)
         }
+        eventCreationCoordinator.durationMinutes = 30
+        eventCreationCoordinator.draftTitle = ""
+        eventCreationCoordinator.calendarColor = .blue
 
         withAnimation(.easeOut(duration: 0.15)) {
             eventCreationCoordinator.startTime = time

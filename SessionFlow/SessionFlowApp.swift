@@ -64,9 +64,8 @@ struct SessionFlowApp: App {
                     miniPlayerController.setup(awarenessService: sessionAwarenessService, audioService: sessionAudioService)
                     dockProgressController.setup(awarenessService: sessionAwarenessService)
 
-                    // Persist main window frame across launches
                     if let mainWindow = NSApp.windows.first(where: { !($0 is NSPanel) }) {
-                        mainWindow.setFrameAutosaveName("SessionFlowMainWindow")
+                        appDelegate.configureMainWindow(mainWindow)
                     }
                     appDelegate.awarenessService = sessionAwarenessService
                 }
@@ -140,6 +139,11 @@ struct SessionFlowApp: App {
 }
 
 class AppDelegate: NSObject, NSApplicationDelegate {
+    private static let mainWindowIdentifier = NSUserInterfaceItemIdentifier("SessionFlow.mainWindow")
+    private weak var monitoredMainWindow: NSWindow?
+    private var titlebarDoubleClickMonitor: Any?
+    private var windowActivationObserver: Any?
+
     func applicationDidFinishLaunching(_ notification: Notification) {
         let bundleID = Bundle.main.bundleIdentifier ?? ""
         let running = NSRunningApplication.runningApplications(withBundleIdentifier: bundleID)
@@ -152,8 +156,26 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         FocusRingController.shared.install()
+        windowActivationObserver = NotificationCenter.default.addObserver(
+            forName: NSWindow.didBecomeKeyNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] notification in
+            guard let self,
+                  let window = notification.object as? NSWindow,
+                  self.isConfiguredMainWindow(window)
+            else { return }
+
+            self.configureMainWindow(window)
+        }
     }
     weak var awarenessService: SessionAwarenessService?
+
+    func configureMainWindow(_ window: NSWindow) {
+        window.identifier = Self.mainWindowIdentifier
+        window.setFrameAutosaveName("SessionFlowMainWindow")
+        installTitlebarDoubleClickMonitor(for: window)
+    }
 
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
         // If mini player is active, bring it to front instead of opening the main window
@@ -172,8 +194,66 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationWillTerminate(_ notification: Notification) {
+        if let titlebarDoubleClickMonitor {
+            NSEvent.removeMonitor(titlebarDoubleClickMonitor)
+            self.titlebarDoubleClickMonitor = nil
+        }
+        if let windowActivationObserver {
+            NotificationCenter.default.removeObserver(windowActivationObserver)
+            self.windowActivationObserver = nil
+        }
         // Flush pending session/rest shortcuts before quitting
         awarenessService?.flushOnTermination()
+    }
+
+    private func installTitlebarDoubleClickMonitor(for window: NSWindow) {
+        if monitoredMainWindow === window, titlebarDoubleClickMonitor != nil { return }
+
+        if let titlebarDoubleClickMonitor {
+            NSEvent.removeMonitor(titlebarDoubleClickMonitor)
+            self.titlebarDoubleClickMonitor = nil
+        }
+
+        monitoredMainWindow = window
+        titlebarDoubleClickMonitor = NSEvent.addLocalMonitorForEvents(matching: .leftMouseDown) { [weak self, weak window] event in
+            guard let self,
+                  let window,
+                  event.window === window,
+                  event.clickCount == 2,
+                  self.isClickInNativeTitlebar(event.locationInWindow, of: window),
+                  !self.isClickOnStandardWindowButton(event.locationInWindow, of: window)
+            else {
+                return event
+            }
+
+            WindowTitleBarDoubleClick.perform(on: window)
+            return nil
+        }
+    }
+
+    private func isConfiguredMainWindow(_ window: NSWindow) -> Bool {
+        window.identifier == Self.mainWindowIdentifier
+    }
+
+    private func isClickInNativeTitlebar(_ location: NSPoint, of window: NSWindow) -> Bool {
+        let topY = window.frame.height
+        let contentInsetHeight = max(0, topY - (window.contentView?.frame.height ?? topY))
+        let titlebarHitHeight = max(contentInsetHeight, 44)
+
+        return location.y >= topY - titlebarHitHeight && location.y <= topY
+    }
+
+    private func isClickOnStandardWindowButton(_ location: NSPoint, of window: NSWindow) -> Bool {
+        let buttons: [NSWindow.ButtonType] = [.closeButton, .miniaturizeButton, .zoomButton]
+
+        return buttons.contains { buttonType in
+            guard let button = window.standardWindowButton(buttonType),
+                  let superview = button.superview
+            else { return false }
+
+            let point = superview.convert(location, from: nil)
+            return button.frame.contains(point)
+        }
     }
 }
 

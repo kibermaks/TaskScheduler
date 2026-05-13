@@ -5,6 +5,19 @@ All notable changes to SessionFlow will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and SessionFlow marketing versions now follow the release date format `YYYY.M.D`.
 
+## [2026.5.13] - 2026-05-13
+
+### Added
+
+- Menu bar details menu with current session, rest, next session, feedback, mute, and open-app actions
+- Timeline draft preview while creating events inline, including live title, calendar color, duration, and start-time updates
+- Draggable start time control in the inline event creation popover
+
+### Fixed
+
+- What's New now shows the newest unseen changelog entry instead of only matching the running app version
+- Main window title-bar double-click now follows the macOS system preference
+
 ## [2026.4.23] - 2026-04-23
 
 ### Added

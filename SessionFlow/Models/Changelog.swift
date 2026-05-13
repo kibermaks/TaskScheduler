@@ -72,6 +72,19 @@ final class ChangelogService: ObservableObject {
         }
     }
 
+    func latestEntryVersion(upTo currentVersion: String) -> String? {
+        entries.first { entry in
+            Self.compareVersion(lhs: entry.version, rhs: currentVersion) != .orderedDescending
+        }?.version
+    }
+
+    func newestUnseenVersion(currentVersion: String, lastSeenVersion: String) -> String? {
+        entries.first { entry in
+            Self.compareVersion(lhs: entry.version, rhs: currentVersion) != .orderedDescending &&
+            Self.compareVersion(lhs: entry.version, rhs: lastSeenVersion) == .orderedDescending
+        }?.version
+    }
+
     // MARK: - Parser
 
     static func parse(_ markdown: String) -> [ChangelogEntry] {
@@ -149,5 +162,24 @@ final class ChangelogService: ObservableObject {
 
     static var currentVersion: String {
         Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "1.0"
+    }
+
+    static func compareVersion(lhs: String, rhs: String) -> ComparisonResult {
+        let lhsComponents = versionComponents(lhs)
+        let rhsComponents = versionComponents(rhs)
+        let maxCount = max(lhsComponents.count, rhsComponents.count)
+
+        for index in 0..<maxCount {
+            let left = index < lhsComponents.count ? lhsComponents[index] : 0
+            let right = index < rhsComponents.count ? rhsComponents[index] : 0
+            if left < right { return .orderedAscending }
+            if left > right { return .orderedDescending }
+        }
+
+        return .orderedSame
+    }
+
+    private static func versionComponents(_ version: String) -> [Int] {
+        version.split { !$0.isNumber }.compactMap { Int($0) }
     }
 }

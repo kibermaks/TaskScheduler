@@ -1,32 +1,34 @@
 import SwiftUI
 import EventKit
+import AppKit
 
 /// Inline popover for creating calendar events directly from the timeline.
 /// Features Spotlight-like autocomplete from recently created events.
 struct EventCreationPopover: View {
-    let startTime: Date
-    let defaultDurationMinutes: Int
+    @Binding var startTime: Date
+    @Binding var durationMinutes: Int
     let onCommit: (String, Date, Date, CalendarDescriptor) -> Void
     let onCancel: () -> Void
 
     @EnvironmentObject var calendarService: CalendarService
     @EnvironmentObject var schedulingEngine: SchedulingEngine
     @EnvironmentObject var recentEventsStore: RecentEventsStore
+    @EnvironmentObject var eventCreationCoordinator: EventCreationCoordinator
 
     @State private var eventTitle: String = ""
-    @State private var durationMinutes: Int
     @AppStorage("SessionFlow.EventCreationLastCalendar") private var selectedCalendarName: String = ""
     @State private var selectedSuggestionIndex: Int = -1
+    @State private var startTimeDragAnchor: Date? = nil
     @FocusState private var titleFieldFocused: Bool
 
-    init(startTime: Date, defaultDurationMinutes: Int = 30,
+    init(startTime: Binding<Date>,
+         durationMinutes: Binding<Int>,
          onCommit: @escaping (String, Date, Date, CalendarDescriptor) -> Void,
          onCancel: @escaping () -> Void) {
-        self.startTime = startTime
-        self.defaultDurationMinutes = defaultDurationMinutes
+        self._startTime = startTime
+        self._durationMinutes = durationMinutes
         self.onCommit = onCommit
         self.onCancel = onCancel
-        _durationMinutes = State(initialValue: defaultDurationMinutes)
     }
 
     /// Calendar info list sorted: non-session calendars first (alphabetically), then work/side/deep.
@@ -110,9 +112,7 @@ struct EventCreationPopover: View {
                     .font(.system(size: 14, weight: .semibold))
                     .foregroundColor(.white)
                 Spacer()
-                Text(timeFormatter.string(from: startTime))
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundColor(.white.opacity(0.5))
+                draggableStartTimeLabel
             }
 
             Divider().background(Color.white.opacity(0.1))
@@ -131,6 +131,7 @@ struct EventCreationPopover: View {
                         .autocorrectionDisabled()
                         .onSubmit { commitEvent() }
                         .onChange(of: eventTitle) { _, newValue in
+                            eventCreationCoordinator.draftTitle = newValue.trimmingCharacters(in: .whitespaces)
                             selectedSuggestionIndex = -1
                             let trimmed = newValue.trimmingCharacters(in: .whitespaces)
                             guard !trimmed.isEmpty else { return }
@@ -145,6 +146,7 @@ struct EventCreationPopover: View {
                                 if let calId = match.calendarIdentifier,
                                    let info = sortedCalendars.first(where: { $0.identifier == calId }) {
                                     selectedCalendarName = info.name
+                                    eventCreationCoordinator.calendarColor = info.color
                                 }
                             }
                         }
@@ -179,6 +181,7 @@ struct EventCreationPopover: View {
                 accentColor: .blue,
                 onSelection: { info in
                     selectedCalendarName = info.name
+                    eventCreationCoordinator.calendarColor = info.color
                 }
             )
 
@@ -254,6 +257,8 @@ struct EventCreationPopover: View {
             if selectedCalendarName.isEmpty || !cals.contains(where: { $0.name == selectedCalendarName }) {
                 selectedCalendarName = cals.first?.name ?? ""
             }
+            syncDraftCalendarColor()
+            eventCreationCoordinator.draftTitle = eventTitle.trimmingCharacters(in: .whitespaces)
         }
         .task {
             // Wait for the opacity transition (0.15s) to complete before grabbing focus,
@@ -299,6 +304,54 @@ struct EventCreationPopover: View {
             }
             return .ignored
         }
+    }
+
+    private var draggableStartTimeLabel: some View {
+        Text(timeFormatter.string(from: startTime))
+            .font(.system(size: 12, weight: .medium, design: .monospaced))
+            .foregroundColor(.white.opacity(0.65))
+            .padding(.horizontal, 6)
+            .padding(.vertical, 3)
+            .background(Color.white.opacity(0.06))
+            .cornerRadius(4)
+            .contentShape(Rectangle())
+            .onContinuousHover { phase in
+                switch phase {
+                case .active:
+                    NSCursor.resizeLeftRight.set()
+                case .ended:
+                    NSCursor.arrow.set()
+                }
+            }
+            .gesture(
+                DragGesture(minimumDistance: 0)
+                    .onChanged { value in
+                        if startTimeDragAnchor == nil {
+                            startTimeDragAnchor = startTime
+                            titleFieldFocused = false
+                        }
+
+                        guard let anchor = startTimeDragAnchor else { return }
+                        let pointsPerStep: CGFloat = 8
+                        let stepMinutes = 5
+                        let steps = Int((value.translation.width / pointsPerStep).rounded())
+                        let candidate = anchor.addingTimeInterval(Double(steps * stepMinutes) * 60)
+                        startTime = clampedStartTime(candidate)
+                        NSCursor.resizeLeftRight.set()
+                    }
+                    .onEnded { _ in
+                        startTimeDragAnchor = nil
+                        NSCursor.arrow.set()
+                    }
+            )
+            .help("Drag left or right to adjust the start time")
+    }
+
+    private func clampedStartTime(_ candidate: Date) -> Date {
+        let calendar = Calendar.current
+        let dayStart = calendar.startOfDay(for: startTime)
+        let latest = calendar.date(byAdding: .minute, value: 24 * 60 - 5, to: dayStart) ?? candidate
+        return min(max(candidate, dayStart), latest)
     }
 
     private func durationChip(_ minutes: Int) -> some View {
@@ -417,9 +470,11 @@ struct EventCreationPopover: View {
             if let calId = template.calendarIdentifier,
                let info = sortedCalendars.first(where: { $0.identifier == calId }) {
                 selectedCalendarName = info.name
+                eventCreationCoordinator.calendarColor = info.color
             }
         case .calendar(let info):
             selectedCalendarName = info.name
+            eventCreationCoordinator.calendarColor = info.color
         }
     }
 
@@ -450,12 +505,21 @@ struct EventCreationPopover: View {
             if let calId = template.calendarIdentifier,
                let info = sortedCalendars.first(where: { $0.identifier == calId }) {
                 selectedCalendarName = info.name
+                eventCreationCoordinator.calendarColor = info.color
             }
         case .calendar(let info):
             selectedCalendarName = info.name
+            eventCreationCoordinator.calendarColor = info.color
             eventTitle = ""
         }
         selectedSuggestionIndex = -1
+        eventCreationCoordinator.draftTitle = eventTitle.trimmingCharacters(in: .whitespaces)
+    }
+
+    private func syncDraftCalendarColor() {
+        if let info = selectedCalendarInfo {
+            eventCreationCoordinator.calendarColor = info.color
+        }
     }
 
     private func commitEvent() {

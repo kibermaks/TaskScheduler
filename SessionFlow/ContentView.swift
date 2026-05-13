@@ -80,7 +80,8 @@ struct ContentView: View {
     @State private var showingCalendarSetup = false
     @State private var updateAlert: UpdateService.UpdateAlert?
     @State private var showingWhatsNew = false
-    @AppStorage("SessionFlow.LastSeenVersion") private var lastSeenVersion = ""
+    @AppStorage("SessionFlow.LastSeenVersion") private var legacyLastSeenVersion = ""
+    @AppStorage("SessionFlow.LastSeenChangelogVersion") private var lastSeenChangelogVersion = ""
     @State private var pendingWhatsNewVersion: String?
     @State private var copyToast: CopyToastInfo? = nil
     @State private var modeToast: String? = nil
@@ -192,16 +193,25 @@ struct ContentView: View {
 
     private func checkForWhatsNew() {
         let currentVersion = ChangelogService.currentVersion
-        guard lastSeenVersion != currentVersion else { return }
-        pendingWhatsNewVersion = currentVersion
+        migrateLastSeenChangelogVersionIfNeeded(currentVersion: currentVersion)
+
+        guard let unseenVersion = ChangelogService.shared.newestUnseenVersion(
+            currentVersion: currentVersion,
+            lastSeenVersion: lastSeenChangelogVersion
+        ) else {
+            pendingWhatsNewVersion = nil
+            return
+        }
+
+        pendingWhatsNewVersion = unseenVersion
         if updateService.latestReleaseStatus == .current {
-            showWhatsNewIfEligible(for: currentVersion)
+            showWhatsNewIfEligible(for: unseenVersion)
         }
     }
 
     private func handleLatestReleaseStatus(_ status: UpdateService.LatestReleaseStatus) {
         guard let pendingVersion = pendingWhatsNewVersion else { return }
-        guard pendingVersion == ChangelogService.currentVersion else {
+        guard ChangelogService.compareVersion(lhs: pendingVersion, rhs: ChangelogService.currentVersion) != .orderedDescending else {
             pendingWhatsNewVersion = nil
             return
         }
@@ -218,13 +228,28 @@ struct ContentView: View {
 
     private func showWhatsNewIfEligible(for version: String) {
         guard hasCompletedSetup, hasSeenWelcome, updateService.installationStatus == nil else { return }
+        guard ChangelogService.compareVersion(lhs: version, rhs: lastSeenChangelogVersion) == .orderedDescending else {
+            pendingWhatsNewVersion = nil
+            return
+        }
 
         pendingWhatsNewVersion = nil
-        lastSeenVersion = version
+        lastSeenChangelogVersion = version
         ChangelogService.shared.fetchIfNeeded()
 
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
             showingWhatsNew = true
+        }
+    }
+
+    private func migrateLastSeenChangelogVersionIfNeeded(currentVersion: String) {
+        guard lastSeenChangelogVersion.isEmpty, !legacyLastSeenVersion.isEmpty else { return }
+
+        if let latestChangelogVersion = ChangelogService.shared.latestEntryVersion(upTo: currentVersion),
+           ChangelogService.compareVersion(lhs: legacyLastSeenVersion, rhs: latestChangelogVersion) == .orderedDescending {
+            lastSeenChangelogVersion = latestChangelogVersion
+        } else {
+            lastSeenChangelogVersion = legacyLastSeenVersion
         }
     }
 }
@@ -424,6 +449,12 @@ struct ContentViewBody: View {
             // Calendar events changed externally (from Calendar.app)
             if autoPreview { updateProjectedSchedule() }
         }
+        .onChange(of: eventCreationCoordinator.startTime) { _, _ in
+            if autoPreview { updateProjectedSchedule() }
+        }
+        .onChange(of: eventCreationCoordinator.durationMinutes) { _, _ in
+            if autoPreview { updateProjectedSchedule() }
+        }
         .onChange(of: calendarService.availableCalendars) { _, _ in
             schedulingEngine.reconcileCalendars(with: calendarService)
             PresetStorage.shared.populateCalendarIdentifiers(using: calendarService.availableCalendars)
@@ -502,8 +533,11 @@ struct ContentViewBody: View {
                 }
 
             EventCreationPopover(
-                startTime: startTime,
-                defaultDurationMinutes: 30,
+                startTime: Binding(
+                    get: { eventCreationCoordinator.startTime ?? startTime },
+                    set: { eventCreationCoordinator.startTime = $0 }
+                ),
+                durationMinutes: $eventCreationCoordinator.durationMinutes,
                 onCommit: { title, start, end, calendar in
                     eventCreationCoordinator.onCommit?(title, start, end, calendar)
                 },
@@ -676,11 +710,34 @@ struct ContentViewBody: View {
         _ = schedulingEngine.generateSchedule(
             startTime: effectiveStartTime,
             baseDate: selectedDate,
-            busySlots: calendarService.busySlots,
+            busySlots: busySlotsIncludingEventCreationDraft(),
             includePlanning: !planningExists,
             existingSessions: (work: existing.work, side: existing.side, deep: existing.deep),
             existingTitles: existing.titles
         )
+    }
+
+    private func busySlotsIncludingEventCreationDraft() -> [BusyTimeSlot] {
+        guard let draftStart = eventCreationCoordinator.startTime,
+              Calendar.current.isDate(draftStart, inSameDayAs: selectedDate)
+        else {
+            return calendarService.busySlots
+        }
+
+        let durationMinutes = max(5, eventCreationCoordinator.durationMinutes)
+        let draftEnd = draftStart.addingTimeInterval(Double(durationMinutes) * 60)
+        let title = eventCreationCoordinator.draftTitle.isEmpty ? "New Event" : eventCreationCoordinator.draftTitle
+
+        var slots = calendarService.busySlots
+        slots.append(BusyTimeSlot(
+            id: "sessionflow-event-creation-draft",
+            title: title,
+            startTime: draftStart,
+            endTime: draftEnd,
+            calendarName: "Draft Event",
+            calendarColor: eventCreationCoordinator.calendarColor
+        ))
+        return slots
     }
     
     private func requestCalendarAccess() async {
@@ -2003,31 +2060,99 @@ struct WindowDragView: NSViewRepresentable {
 }
 
 class TitleBarDraggableView: NSView {
+    private var localMouseMonitor: Any?
+
     override var mouseDownCanMoveWindow: Bool { true }
-    
+
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        updateLocalMouseMonitor()
+    }
+
+    deinit {
+        removeLocalMouseMonitor()
+    }
+
     override func mouseDown(with event: NSEvent) {
         if event.clickCount == 2 {
-            if let window = window, let screen = window.screen {
-                let currentFrame = window.frame
-                let maxFrame = screen.visibleFrame
-                
-                // Check if we are currently maximized (with a small tolerance)
-                let isMaximized = abs(currentFrame.width - maxFrame.width) < 5 &&
-                                  abs(currentFrame.height - maxFrame.height) < 5
-                
-                if isMaximized {
-                    // Restore is handled by zoom if we were zoomed, but since we are manually setting frame,
-                    // zoom behavior might vary. Surprisingly, user usually wants standard zoom behavior 
-                    // which toggles user/standard states. 
-                    // Let's try calling zoom which often knows how to go back to "User" size.
-                    window.zoom(nil)
-                } else {
-                    // Force maximize
-                    window.setFrame(maxFrame, display: true, animate: true)
-                }
+            if let window {
+                WindowTitleBarDoubleClick.perform(on: window)
             }
         } else {
-            super.mouseDown(with: event)
+            window?.performDrag(with: event)
+        }
+    }
+
+    private func updateLocalMouseMonitor() {
+        removeLocalMouseMonitor()
+
+        guard window != nil else { return }
+
+        localMouseMonitor = NSEvent.addLocalMonitorForEvents(matching: .leftMouseDown) { [weak self] event in
+            guard let self,
+                  let window = self.window,
+                  event.window === window,
+                  event.clickCount == 2
+            else {
+                return event
+            }
+
+            let pointInHeader = self.convert(event.locationInWindow, from: nil)
+            guard self.bounds.contains(pointInHeader),
+                  !self.isInteractiveClick(in: window, at: event.locationInWindow)
+            else {
+                return event
+            }
+
+            WindowTitleBarDoubleClick.perform(on: window)
+            return nil
+        }
+    }
+
+    private func removeLocalMouseMonitor() {
+        if let localMouseMonitor {
+            NSEvent.removeMonitor(localMouseMonitor)
+            self.localMouseMonitor = nil
+        }
+    }
+
+    private func isInteractiveClick(in window: NSWindow, at location: NSPoint) -> Bool {
+        guard let contentView = window.contentView else { return false }
+        let pointInContent = contentView.convert(location, from: nil)
+        guard let hitView = contentView.hitTest(pointInContent) else { return false }
+        var current: NSView? = hitView
+
+        while let view = current {
+            if view is NSControl || view is NSTextView || view is NSScrollView {
+                return true
+            }
+            current = view.superview
+        }
+
+        return false
+    }
+}
+
+enum WindowTitleBarDoubleClick {
+    private static weak var lastWindow: NSWindow?
+    private static var lastActionTime: TimeInterval = 0
+
+    static func perform(on window: NSWindow) {
+        let now = ProcessInfo.processInfo.systemUptime
+        if lastWindow === window, now - lastActionTime < 0.25 {
+            return
+        }
+
+        lastWindow = window
+        lastActionTime = now
+
+        switch UserDefaults.standard.string(forKey: "AppleActionOnDoubleClick") {
+        case "Minimize":
+            window.miniaturize(nil)
+        case "None":
+            return
+        default:
+            window.performZoom(nil)
         }
     }
 }
