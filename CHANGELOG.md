@@ -5,6 +5,12 @@ All notable changes to SessionFlow will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and SessionFlow marketing versions now follow the release date format `YYYY.M.D`.
 
+## [Unreleased]
+
+### Fixed
+
+- Ambient session audio no longer crashes when macOS resumes from sleep or lock screen while the audio output route is still restoring
+
 ## [2026.5.13] - 2026-05-13
 
 ### Added
