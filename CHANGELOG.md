@@ -5,7 +5,11 @@ All notable changes to SessionFlow will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and SessionFlow marketing versions now follow the release date format `YYYY.M.D`.
 
-## [Unreleased]
+## [2026.5.15] - 2026-05-15
+
+### Added
+
+- Multi-select calendar events on the timeline (click to select, ⌘-click to toggle, click empty area or Esc to clear) and drag any selected event to move the whole group together — undo restores them all at once
 
 ### Fixed
 
