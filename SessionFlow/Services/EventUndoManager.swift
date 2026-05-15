@@ -27,6 +27,7 @@ class EventUndoManager: ObservableObject {
 
     enum UndoableChange: Equatable {
         case time(EventTimeChange)
+        case timeBatch([EventTimeChange])  // atomic multi-event move (e.g. group drag)
         case delete(EventDeleteSnapshot)
         case schedule(ScheduleSnapshot)
         case create(EventDeleteSnapshot)  // undo = delete, redo = restore
@@ -94,6 +95,22 @@ class EventUndoManager: ObservableObject {
         updateState()
     }
 
+    /// Record a batch of simultaneous time changes (group drag of multiple events).
+    /// Atomically undone/redone as a single user action.
+    func recordBatch(_ changes: [EventTimeChange]) {
+        guard !changes.isEmpty else { return }
+        if changes.count == 1 {
+            record(changes[0])
+            return
+        }
+        undoStack.append(.timeBatch(changes))
+        if undoStack.count > maxStackSize {
+            undoStack.removeFirst()
+        }
+        redoStack.removeAll()
+        updateState()
+    }
+
     func recordDelete(_ snapshot: EventDeleteSnapshot) {
         undoStack.append(.delete(snapshot))
         if undoStack.count > maxStackSize {
@@ -127,6 +144,8 @@ class EventUndoManager: ObservableObject {
         switch change {
         case .time:
             redoStack.append(change)
+        case .timeBatch:
+            redoStack.append(change)
         case .delete:
             break  // Caller will push redo after restore (needs new eventId)
         case .schedule:
@@ -157,6 +176,18 @@ class EventUndoManager: ObservableObject {
                 newEndTime: tc.oldEndTime,
                 description: "Undo \(tc.description)"
             ))
+        case .timeBatch(let items):
+            let inverted = items.map { tc in
+                EventTimeChange(
+                    eventId: tc.eventId,
+                    oldStartTime: tc.newStartTime,
+                    oldEndTime: tc.newEndTime,
+                    newStartTime: tc.oldStartTime,
+                    newEndTime: tc.oldEndTime,
+                    description: "Undo \(tc.description)"
+                )
+            }
+            return .timeBatch(inverted)
         case .delete(let snap):
             return .delete(snap)
         case .schedule(let snap):
@@ -206,6 +237,8 @@ class EventUndoManager: ObservableObject {
         updateState()
         switch change {
         case .time:
+            return change
+        case .timeBatch:
             return change
         case .delete(let snap):
             return .delete(snap)

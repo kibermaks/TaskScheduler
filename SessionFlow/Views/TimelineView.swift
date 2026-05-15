@@ -105,6 +105,9 @@ struct TimelineView: View {
     @State private var showNod = false
     @State private var currentTime = Date()
 
+    // MARK: - Selection State (busy slots)
+    @State private var selectedBusySlotIds: Set<String> = []
+
     // MARK: - Drag Interaction State
     @State private var dragSlotId: String? = nil
     @State private var dragSessionId: UUID? = nil
@@ -112,7 +115,11 @@ struct TimelineView: View {
     @State private var dragPreviewEndTime: Date? = nil
     @State private var dragMode: DragMode = .none
     @State private var isShiftHeld: Bool = false
+    @State private var isCommandHeld: Bool = false
     @State private var flagsMonitor: Any? = nil
+    // Group drag: original times of every selected slot at drag start, and live preview targets.
+    @State private var groupDragOriginalTimes: [String: (start: Date, end: Date)] = [:]
+    @State private var groupDragPreviewTimes: [String: (start: Date, end: Date)] = [:]
     @State private var keyDownMonitor: Any? = nil
     @State private var mouseDownMonitor: Any? = nil
     @StateObject private var eventUndoManager = EventUndoManager()
@@ -183,6 +190,7 @@ struct TimelineView: View {
                 containerWidth = geo.size.width
                 flagsMonitor = NSEvent.addLocalMonitorForEvents(matching: .flagsChanged) { event in
                     isShiftHeld = event.modifierFlags.contains(.shift)
+                    isCommandHeld = event.modifierFlags.contains(.command)
                     return event
                 }
                 // Use keyDown monitor for Esc (cancel drag) and undo/redo.
@@ -205,6 +213,10 @@ struct TimelineView: View {
                                 selectedBusySlot = nil
                                 resetEditingState()
                             }
+                            return nil
+                        }
+                        if !selectedBusySlotIds.isEmpty {
+                            selectedBusySlotIds.removeAll()
                             return nil
                         }
                     }
@@ -260,10 +272,19 @@ struct TimelineView: View {
             }
             .onChange(of: selectedDate) { _, _ in
                 eventUndoManager.clear()
+                selectedBusySlotIds.removeAll()
                 if eventCreationCoordinator.isActive {
                     withAnimation(.easeOut(duration: 0.15)) {
                         eventCreationCoordinator.dismiss()
                     }
+                }
+            }
+            .onChange(of: calendarService.busySlots.map { $0.id }) { _, newIds in
+                // Prune selection of slots that no longer exist.
+                let live = Set(newIds)
+                let pruned = selectedBusySlotIds.intersection(live)
+                if pruned.count != selectedBusySlotIds.count {
+                    selectedBusySlotIds = pruned
                 }
             }
             .onAppear {
@@ -504,7 +525,7 @@ struct TimelineView: View {
                    let slotId = dragSlotId,
                    let slot = filteredBusySlots.first(where: { $0.id == slotId }) {
 
-                    // Snap indicator line
+                    // Snap indicator line (anchor slot)
                     let snapY = calculateYPosition(for: newStart)
                     Path { path in
                         path.move(to: CGPoint(x: 0, y: snapY))
@@ -514,13 +535,27 @@ struct TimelineView: View {
                     .foregroundColor(Color.blue.opacity(0.4))
                     .allowsHitTesting(false)
 
-                    // Preview block at new position
+                    // Preview block at new position (anchor)
                     dragPreviewBlock(
                         slot: slot,
                         newStart: newStart,
                         newEnd: newEnd,
                         containerWidth: geometry.size.width
                     )
+
+                    // Group drag: render preview blocks for every other selected slot.
+                    if dragMode == .move {
+                        ForEach(filteredBusySlots.filter { $0.id != slotId && groupDragPreviewTimes[$0.id] != nil }, id: \.id) { otherSlot in
+                            if let target = groupDragPreviewTimes[otherSlot.id] {
+                                dragPreviewBlock(
+                                    slot: otherSlot,
+                                    newStart: target.start,
+                                    newEnd: target.end,
+                                    containerWidth: geometry.size.width
+                                )
+                            }
+                        }
+                    }
                 }
 
                 // Drag preview overlay — projected session
@@ -1106,7 +1141,13 @@ extension TimelineView {
     
     private func eventBlock(for positionedSlot: PositionedBusySlot, containerWidth: CGFloat) -> some View {
         let slot = positionedSlot.slot
-        let isDragging = dragSlotId == slot.id && dragMode != .none
+        let isAnchorDragging = dragSlotId == slot.id && dragMode != .none
+        let isGroupMemberDragging = dragMode == .move
+            && dragSlotId != nil
+            && dragSlotId != slot.id
+            && groupDragOriginalTimes[slot.id] != nil
+        let isDragging = isAnchorDragging || isGroupMemberDragging
+        let isSelected = selectedBusySlotIds.contains(slot.id)
         let yPos = calculateYPosition(for: slot.startTime)
         let height = calculateHeight(from: slot.startTime, to: slot.endTime)
         let columns = max(1, positionedSlot.totalColumns)
@@ -1122,12 +1163,16 @@ extension TimelineView {
         let centerY = yPos + blockHeight / 2
         let edgeZone: CGFloat = min(8, blockHeight / 3)
 
+        let fillOpacity: Double = isSelected ? 0.5 : 0.3
+        let borderOpacity: Double = isSelected ? 1.0 : 0.5
+        let borderWidth: CGFloat = isSelected ? 2 : 1
+
         return ZStack(alignment: .topLeading) {
             RoundedRectangle(cornerRadius: 4)
-                .fill(slot.calendarColor.opacity(0.3))
+                .fill(slot.calendarColor.opacity(fillOpacity))
                 .overlay(
                     RoundedRectangle(cornerRadius: 4)
-                        .strokeBorder(slot.calendarColor.opacity(0.5), lineWidth: 1)
+                        .strokeBorder(slot.calendarColor.opacity(borderOpacity), lineWidth: borderWidth)
                 )
 
             let showsFeedbackBadge = slot.endTime < Date() && sessionAwarenessService.config.enabled && sessionAwarenessService.config.productivityEnabled
@@ -1217,6 +1262,23 @@ extension TimelineView {
                         } else {
                             dragMode = .move
                             NSCursor.closedHand.push()
+                            // If dragged slot isn't part of the selection, reset selection to it.
+                            // Resize stays single-event (no selection change).
+                            if !selectedBusySlotIds.contains(slot.id) {
+                                selectedBusySlotIds = [slot.id]
+                            }
+                            // Snapshot original times for every selected slot (for group drag).
+                            if selectedBusySlotIds.count > 1 {
+                                let slotsById = Dictionary(uniqueKeysWithValues: calendarService.busySlots.map { ($0.id, $0) })
+                                var snapshot: [String: (start: Date, end: Date)] = [:]
+                                for id in selectedBusySlotIds {
+                                    if let s = slotsById[id] {
+                                        snapshot[id] = (s.startTime, s.endTime)
+                                    }
+                                }
+                                groupDragOriginalTimes = snapshot
+                                groupDragPreviewTimes = snapshot
+                            }
                         }
                         dragSlotId = slot.id
                     }
@@ -1230,6 +1292,19 @@ extension TimelineView {
                         let newStart = isShiftHeld ? rawDate : snapToInterval(rawDate)
                         dragPreviewStartTime = newStart
                         dragPreviewEndTime = newStart.addingTimeInterval(duration)
+
+                        // Group drag: translate every other selected event by the same delta.
+                        if !groupDragOriginalTimes.isEmpty {
+                            let translation = newStart.timeIntervalSince(slot.startTime)
+                            var live: [String: (start: Date, end: Date)] = [:]
+                            for (id, orig) in groupDragOriginalTimes {
+                                live[id] = (
+                                    orig.start.addingTimeInterval(translation),
+                                    orig.end.addingTimeInterval(translation)
+                                )
+                            }
+                            groupDragPreviewTimes = live
+                        }
 
                     case .resizeTop:
                         let originalY = calculateYPosition(for: slot.startTime)
@@ -1259,7 +1334,11 @@ extension TimelineView {
                         let now = Date()
                         if now.timeIntervalSince(lastDragRecalcTime) >= dragRecalcInterval {
                             lastDragRecalcTime = now
-                            recalculateWithDraggedSlot(slot, newStart: previewStart, newEnd: previewEnd)
+                            if !groupDragOriginalTimes.isEmpty {
+                                recalculateWithDraggedSlots(groupDragPreviewTimes)
+                            } else {
+                                recalculateWithDraggedSlot(slot, newStart: previewStart, newEnd: previewEnd)
+                            }
                         }
                     }
                     autoScrollDuringDrag()
@@ -1275,6 +1354,21 @@ extension TimelineView {
             selectedSession = nil
             selectedBusySlot = slot
             autoFocusField = nil
+        }
+        .onTapGesture(count: 1) {
+            if isCommandHeld || NSEvent.modifierFlags.contains(.command) {
+                if selectedBusySlotIds.contains(slot.id) {
+                    selectedBusySlotIds.remove(slot.id)
+                } else {
+                    selectedBusySlotIds.insert(slot.id)
+                }
+            } else {
+                if selectedBusySlotIds == [slot.id] {
+                    selectedBusySlotIds.removeAll()
+                } else {
+                    selectedBusySlotIds = [slot.id]
+                }
+            }
         }
         .contextMenu {
             Button("View & Edit Event Details") {
@@ -1994,6 +2088,11 @@ extension TimelineView {
                 let clickedTime = snapToInterval(dateFromYOffset(location.y))
                 beginEventCreation(at: clickedTime)
             }
+            .onTapGesture(count: 1) {
+                if !selectedBusySlotIds.isEmpty {
+                    selectedBusySlotIds.removeAll()
+                }
+            }
     }
 
     private func beginEventCreation(at time: Date) {
@@ -2487,6 +2586,12 @@ extension TimelineView {
             return
         }
 
+        // Group drag commits every selected slot atomically.
+        if dragMode == .move && !groupDragOriginalTimes.isEmpty {
+            commitGroupDrag()
+            return
+        }
+
         // Don't save if nothing changed
         guard newStart != slot.startTime || newEnd != slot.endTime else {
             resetDragState()
@@ -2524,6 +2629,52 @@ extension TimelineView {
         resetDragState()
     }
 
+    /// Commit a group drag — every selected slot moves by the same translation atomically.
+    private func commitGroupDrag() {
+        let slotsById = Dictionary(uniqueKeysWithValues: calendarService.busySlots.map { ($0.id, $0) })
+
+        var changes: [EventUndoManager.EventTimeChange] = []
+        var committed: [(id: String, newStart: Date, newEnd: Date)] = []
+
+        for (id, target) in groupDragPreviewTimes {
+            guard let original = groupDragOriginalTimes[id],
+                  let liveSlot = slotsById[id] else { continue }
+            guard target.start != original.start || target.end != original.end else { continue }
+
+            let success = calendarService.updateEventTime(
+                eventId: id,
+                newStart: target.start,
+                newEnd: target.end
+            )
+            if success {
+                changes.append(EventUndoManager.EventTimeChange(
+                    eventId: id,
+                    oldStartTime: original.start,
+                    oldEndTime: original.end,
+                    newStartTime: target.start,
+                    newEndTime: target.end,
+                    description: "Move \(liveSlot.title)"
+                ))
+                committed.append((id, target.start, target.end))
+            }
+        }
+
+        if !changes.isEmpty {
+            eventUndoManager.recordBatch(changes)
+            for c in committed {
+                optimisticallyUpdateSlot(id: c.id, newStart: c.newStart, newEnd: c.newEnd)
+            }
+            let finalMap = Dictionary(uniqueKeysWithValues: committed.map { ($0.id, (start: $0.newStart, end: $0.newEnd)) })
+            recalculateWithDraggedSlots(finalMap)
+        }
+
+        Task {
+            await calendarService.fetchEvents(for: selectedDate)
+        }
+
+        resetDragState()
+    }
+
     private func resetDragState() {
         if dragMode == .move { NSCursor.pop() }
         dragMode = .none
@@ -2532,6 +2683,8 @@ extension TimelineView {
         dragPreviewStartTime = nil
         dragPreviewEndTime = nil
         preDisplacementSessions = nil
+        groupDragOriginalTimes.removeAll()
+        groupDragPreviewTimes.removeAll()
     }
 
     /// Cancel drag and revert all changes (called on Escape).
@@ -2567,6 +2720,47 @@ extension TimelineView {
             startTime: startTime,
             baseDate: selectedDate,
             busySlots: calendarService.busySlots,
+            includePlanning: !planningExists,
+            existingSessions: (work: existing.work, side: existing.side, deep: existing.deep),
+            existingTitles: existing.titles
+        )
+    }
+
+    /// Recalculates projected schedule using a map of slot id → new (start, end).
+    /// Used for group drag where many busy slots shift simultaneously.
+    private func recalculateWithDraggedSlots(_ updates: [String: (start: Date, end: Date)]) {
+        guard !schedulingEngine.sessionsFrozen else { return }
+
+        var modifiedSlots = calendarService.busySlots
+        for i in modifiedSlots.indices {
+            if let target = updates[modifiedSlots[i].id] {
+                let old = modifiedSlots[i]
+                modifiedSlots[i] = BusyTimeSlot(
+                    id: old.id, title: old.title, startTime: target.start, endTime: target.end,
+                    notes: old.notes, url: old.url, calendarName: old.calendarName,
+                    calendarColor: old.calendarColor, calendarIdentifier: old.calendarIdentifier
+                )
+            }
+        }
+
+        let planningExists = calendarService.hasPlanningSession(for: selectedDate)
+        let existing = calendarService.countExistingSessions(
+            for: selectedDate,
+            workCalendar: CalendarDescriptor(
+                name: schedulingEngine.workCalendarName,
+                identifier: schedulingEngine.workCalendarIdentifier
+            ),
+            sideCalendar: CalendarDescriptor(
+                name: schedulingEngine.sideCalendarName,
+                identifier: schedulingEngine.sideCalendarIdentifier
+            ),
+            deepConfig: schedulingEngine.deepSessionConfig
+        )
+
+        _ = schedulingEngine.generateSchedule(
+            startTime: startTime,
+            baseDate: selectedDate,
+            busySlots: modifiedSlots,
             includePlanning: !planningExists,
             existingSessions: (work: existing.work, side: existing.side, deep: existing.deep),
             existingTitles: existing.titles
@@ -2760,6 +2954,13 @@ extension TimelineView {
                     Task { await calendarService.fetchEvents(for: selectedDate) }
                 }
             }
+        case .timeBatch(let items):
+            for tc in items {
+                if calendarService.updateEventTime(eventId: tc.eventId, newStart: tc.newStartTime, newEnd: tc.newEndTime) {
+                    optimisticallyUpdateSlot(id: tc.eventId, newStart: tc.newStartTime, newEnd: tc.newEndTime)
+                }
+            }
+            Task { await calendarService.fetchEvents(for: selectedDate) }
         case .delete(let snap):
             if let newId = calendarService.restoreEvent(snap) {
                 eventUndoManager.pushRedoForRestoredDelete(original: snap, newEventId: newId)
@@ -2812,6 +3013,13 @@ extension TimelineView {
                     Task { await calendarService.fetchEvents(for: selectedDate) }
                 }
             }
+        case .timeBatch(let items):
+            for tc in items {
+                if calendarService.updateEventTime(eventId: tc.eventId, newStart: tc.newStartTime, newEnd: tc.newEndTime) {
+                    optimisticallyUpdateSlot(id: tc.eventId, newStart: tc.newStartTime, newEnd: tc.newEndTime)
+                }
+            }
+            Task { await calendarService.fetchEvents(for: selectedDate) }
         case .delete(let snap):
             if calendarService.deleteEvent(identifier: snap.eventId) {
                 Task { await calendarService.fetchEvents(for: selectedDate) }
