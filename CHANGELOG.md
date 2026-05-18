@@ -5,6 +5,13 @@ All notable changes to SessionFlow will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and SessionFlow marketing versions now follow the release date format `YYYY.M.D`.
 
+## [2026.5.18] - 2026-05-18
+
+### Fixed
+
+- Session mute now persists through rest periods and immediately silences any queued start sound
+- Awareness controls no longer truncate the elapsed/remaining time labels
+
 ## [2026.5.15] - 2026-05-15
 
 ### Added
