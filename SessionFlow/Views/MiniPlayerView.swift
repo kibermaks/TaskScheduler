@@ -116,9 +116,9 @@ struct MiniPlayerView: View {
             HStack(spacing: 8) {
                 AwarenessClickableTime(awarenessService: awarenessService)
                 AwarenessSkipSessionButton(awarenessService: awarenessService)
-                AwarenessMuteButton(audioService: audioService)
+                AwarenessMuteButton(audioService: audioService, awarenessService: awarenessService)
             }
-            .frame(minWidth: 130, maxWidth: 180, alignment: .trailing)
+            .frame(minWidth: 160, maxWidth: 190, alignment: .trailing)
         }
         .frame(maxWidth: .infinity)
         .animation(.spring(response: 0.35, dampingFraction: 0.8), value: showFullProgress)
@@ -146,7 +146,7 @@ struct MiniPlayerView: View {
     // MARK: - Idle bar
 
     private var miniIdleBar: some View {
-        AwarenessIdleContent(audioService: audioService, toggleButton: expandButton)
+        AwarenessIdleContent(awarenessService: awarenessService, audioService: audioService, toggleButton: expandButton)
             .padding(.horizontal, 20)
             .padding(.vertical, 12)
     }

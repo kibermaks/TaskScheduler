@@ -104,6 +104,7 @@ class SessionAwarenessService: ObservableObject {
     // Skip sounds until next session (mute current session only)
     @Published var isSessionMuted: Bool = false
     private var sessionMutedEventId: String? = nil
+    private var sessionAudioStartGeneration = 0
 
     // MARK: - Config
 
@@ -198,6 +199,7 @@ class SessionAwarenessService: ObservableObject {
     private var savedPresenceReminderTime: Date? = nil
     private var savedEndingSoonPlayed: Bool = false
     private var savedEndingSoonShortcutFired: Bool = false
+    private var savedSessionMuted: Bool = false
 
     // Cached slots — refreshed every 30s or immediately when calendar data changes
     private var cachedNowSlots: [BusyTimeSlot] = []
@@ -328,6 +330,7 @@ class SessionAwarenessService: ObservableObject {
                 savedPresenceReminderTime = lastPresenceReminderTime
                 savedEndingSoonPlayed = hasPlayedEndingSoon
                 savedEndingSoonShortcutFired = hasFiredEndingSoonShortcut
+                savedSessionMuted = isSessionMuted
 
                 // Only play end sound + feedback if the session ended naturally
                 // (Now passed the end time), not if event was moved away
@@ -634,6 +637,10 @@ class SessionAwarenessService: ObservableObject {
                 lastPresenceReminderTime = savedPresenceReminderTime
                 hasPlayedEndingSoon = savedEndingSoonPlayed
                 hasFiredEndingSoonShortcut = savedEndingSoonShortcutFired
+                if savedSessionMuted {
+                    isSessionMuted = true
+                    sessionMutedEventId = slot.id
+                }
             } else {
                 lastPresenceReminderTime = nil
                 hasPlayedEndingSoon = false
@@ -643,6 +650,7 @@ class SessionAwarenessService: ObservableObject {
             savedPresenceReminderTime = nil
             savedEndingSoonPlayed = false
             savedEndingSoonShortcutFired = false
+            savedSessionMuted = false
 
             // If we're joining mid-event (elapsed > 10s), skip start transition — just play ambient
             let isJoiningMidEvent = elapsed > 10
@@ -677,7 +685,9 @@ class SessionAwarenessService: ObservableObject {
                     triggerFlash(.sessionStarted)
                 }
 
-                playSessionStartAudio(sessionType: sessionType, skipTransition: isJoiningMidEvent)
+                if !isSessionMuted {
+                    playSessionStartAudio(sessionType: sessionType, skipTransition: isJoiningMidEvent)
+                }
             }
 
             // Fire "Session Started" shortcut (skip if joining mid-event)
@@ -693,6 +703,7 @@ class SessionAwarenessService: ObservableObject {
     }
 
     private func clearActiveState() {
+        cancelPendingSessionAudioStart()
         if isActive { isActive = false }
         if !currentSessionTitle.isEmpty { currentSessionTitle = "" }
         if currentSessionType != nil { currentSessionType = nil }
@@ -714,6 +725,10 @@ class SessionAwarenessService: ObservableObject {
 
     // MARK: - Session transitions
 
+    private func cancelPendingSessionAudioStart() {
+        sessionAudioStartGeneration += 1
+    }
+
     private func triggerSessionEnd(
         eventId: String,
         sessionTitle: String,
@@ -730,6 +745,8 @@ class SessionAwarenessService: ObservableObject {
             config: config.shortcuts
         )
 
+        cancelPendingSessionAudioStart()
+
         // If we were in rest when session ended (shouldn't normally happen, but safety)
         if isResting { endRestState() }
 
@@ -737,8 +754,11 @@ class SessionAwarenessService: ObservableObject {
         guard isEnabled else { return }
 
         audioService?.stopAmbient()
+        if isSessionMuted {
+            audioService?.stopTransition()
+        }
 
-        if isNaturalEnd && config.endSound.isPlayable {
+        if isNaturalEnd && !isSessionMuted && config.endSound.isPlayable {
             audioService?.playTransition(config: config.endSound)
         }
 
@@ -763,7 +783,10 @@ class SessionAwarenessService: ObservableObject {
     }
 
     private func playSessionStartAudio(sessionType: SessionType?, skipTransition: Bool = false) {
-        guard let audioService = audioService else { return }
+        guard let audioService = audioService, !isSessionMuted else { return }
+        sessionAudioStartGeneration += 1
+        let generation = sessionAudioStartGeneration
+        let targetEventId = currentEventId
 
         // Play start transition sound (skip if joining mid-event)
         let playTransition = !skipTransition && config.startSound.isPlayable
@@ -790,7 +813,15 @@ class SessionAwarenessService: ObservableObject {
         if soundConfig.isPlayable {
             let delay: TimeInterval = playTransition ? 3.0 : 0
             let currentProgress = self.progress
-            DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
+            DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self, weak audioService] in
+                guard let self,
+                      let audioService,
+                      generation == self.sessionAudioStartGeneration,
+                      self.isEnabled,
+                      self.isActive,
+                      !self.isSessionMuted,
+                      self.currentEventId == targetEventId else { return }
+
                 audioService.playAmbient(config: soundConfig)
                 // Apply speed/accelerando immediately so the first sound is already modified
                 audioService.updatePlaybackRate(progress: currentProgress, accelerando: accelConfig)
@@ -833,7 +864,7 @@ class SessionAwarenessService: ObservableObject {
             return
         }
 
-        if soundConfig.isPlayable && !audioService.isMuted {
+        if soundConfig.isPlayable && !audioService.isMuted && !isSessionMuted {
             audioService.playAmbient(config: soundConfig)
             // Re-apply current accelerando/speed
             let accelConfig: AccelerandoConfig
@@ -874,9 +905,11 @@ class SessionAwarenessService: ObservableObject {
                 audioService?.playAmbient(config: config.restSound)
             }
         } else {
+            cancelPendingSessionAudioStart()
             isSessionMuted = true
-            sessionMutedEventId = currentEventId
+            sessionMutedEventId = isActive ? currentEventId : nil
             audioService?.stopAmbient()
+            audioService?.stopTransition()
         }
     }
 

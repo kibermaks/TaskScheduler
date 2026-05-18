@@ -94,7 +94,7 @@ struct AwarenessSkipSessionButton: View {
 
 struct AwarenessMuteButton: View {
     @ObservedObject var audioService: SessionAudioService
-    @EnvironmentObject var awarenessService: SessionAwarenessService
+    @ObservedObject var awarenessService: SessionAwarenessService
 
     var body: some View {
         Button {
@@ -337,12 +337,16 @@ struct AwarenessProgressBar: View {
                 Text(formatSessionDuration(awarenessService.elapsed))
                     .font(.system(size: 11, design: .monospaced))
                     .foregroundColor(.white.opacity(0.5))
+                    .lineLimit(1)
+                    .fixedSize(horizontal: true, vertical: false)
 
                 Spacer()
 
                 Text(formatSessionDuration(awarenessService.remaining))
                     .font(.system(size: 11, design: .monospaced))
                     .foregroundColor(.white.opacity(0.5))
+                    .lineLimit(1)
+                    .fixedSize(horizontal: true, vertical: false)
             }
         }
     }
@@ -374,10 +378,14 @@ struct AwarenessClickableTime: View {
             Text(timeText)
                 .font(.system(size: 16, weight: .medium, design: .monospaced))
                 .foregroundColor(.white.opacity(0.7))
+                .lineLimit(1)
+                .fixedSize(horizontal: true, vertical: false)
             Text(timeLabel)
                 .font(.system(size: 10))
                 .foregroundColor(.white.opacity(0.3))
+                .lineLimit(1)
         }
+        .frame(width: 76)
         .contentShape(Rectangle())
         .onTapGesture {
             awarenessService.cycleTimeDisplay()
@@ -459,7 +467,7 @@ struct AwarenessNextUpContent<ToggleButton: View>: View {
 
             AwarenessCountdown(awarenessService: awarenessService)
 
-            AwarenessMuteButton(audioService: audioService)
+            AwarenessMuteButton(audioService: audioService, awarenessService: awarenessService)
         }
     }
 }
@@ -467,6 +475,7 @@ struct AwarenessNextUpContent<ToggleButton: View>: View {
 // MARK: - Idle Content
 
 struct AwarenessIdleContent<ToggleButton: View>: View {
+    @ObservedObject var awarenessService: SessionAwarenessService
     @ObservedObject var audioService: SessionAudioService
     let toggleButton: ToggleButton
 
@@ -488,7 +497,7 @@ struct AwarenessIdleContent<ToggleButton: View>: View {
                 .font(.system(size: 11))
                 .foregroundColor(.white.opacity(0.2))
 
-            AwarenessMuteButton(audioService: audioService)
+            AwarenessMuteButton(audioService: audioService, awarenessService: awarenessService)
         }
     }
 }
@@ -543,7 +552,7 @@ struct AwarenessFeedbackContent<ToggleButton: View>: View {
                     .hoverEffect(brightness: 0.3)
                     .help("Dismiss")
 
-                    AwarenessMuteButton(audioService: audioService)
+                    AwarenessMuteButton(audioService: audioService, awarenessService: awarenessService)
                 }
             }
         }
@@ -616,7 +625,7 @@ struct AwarenessRestContent<ToggleButton: View>: View {
             }
 
             AwarenessSkipSessionButton(awarenessService: awarenessService)
-            AwarenessMuteButton(audioService: audioService)
+            AwarenessMuteButton(audioService: audioService, awarenessService: awarenessService)
         }
     }
 

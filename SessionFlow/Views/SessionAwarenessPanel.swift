@@ -67,7 +67,7 @@ struct SessionAwarenessPanel: View {
             HStack(spacing: 8) {
                 AwarenessClickableTime(awarenessService: awarenessService)
                 AwarenessSkipSessionButton(awarenessService: awarenessService)
-                AwarenessMuteButton(audioService: audioService)
+                AwarenessMuteButton(audioService: audioService, awarenessService: awarenessService)
             }
             .frame(width: 180, alignment: .trailing)
         }
@@ -128,7 +128,7 @@ struct SessionAwarenessPanel: View {
     // MARK: - Idle
 
     private var idleBar: some View {
-        AwarenessIdleContent(audioService: audioService, toggleButton: collapseButton)
+        AwarenessIdleContent(awarenessService: awarenessService, audioService: audioService, toggleButton: collapseButton)
             .padding(.horizontal, 20)
             .padding(.vertical, 7)
             .background(panelBackground)
