@@ -309,6 +309,18 @@ struct MonthlyStatsView: View {
     @State private var month: Int = Calendar.current.component(.month, from: Date())
     @State private var dayStats: [Int: CalendarService.DayFeedbackStats] = [:]
     @State private var typeCounts: [SessionType: Int] = [:]
+    @State private var viewMode: ViewMode = .month
+    @State private var yearMonthStats: [Int: MonthStat] = [:]
+
+    private enum ViewMode { case month, year }
+
+    private struct MonthStat {
+        var totalEvents: Int
+        var focusMinutes: Int
+        var counts: [SessionRating: Int]
+        var rated: Int { counts.values.reduce(0, +) }
+        var unrated: Int { max(0, totalEvents - rated) }
+    }
 
     private var monthName: String {
         let formatter = DateFormatter()
@@ -323,12 +335,11 @@ struct MonthlyStatsView: View {
         return cal.range(of: .day, in: .month, for: date)!.count
     }
 
-    /// Weekday of 1st day (0=Mon, 6=Sun)
     private var firstWeekday: Int {
         let cal = Calendar.current
         let date = cal.date(from: DateComponents(year: year, month: month, day: 1))!
-        let wd = cal.component(.weekday, from: date) // 1=Sun, 2=Mon...
-        return (wd + 5) % 7 // 0=Mon
+        let wd = cal.component(.weekday, from: date)
+        return (wd + 5) % 7
     }
 
     private var monthTotals: (counts: [SessionRating: Int], totalEvents: Int, focusMinutes: Int) {
@@ -351,138 +362,281 @@ struct MonthlyStatsView: View {
         return year == cal.component(.year, from: now) && month == cal.component(.month, from: now)
     }
 
+    private var currentCalYear: Int { Calendar.current.component(.year, from: Date()) }
+
     private var maxDayFocusMinutes: Double {
         dayStats.values.map(\.focusMinutes).max() ?? 0
     }
 
+    private var yearTotals: (totalEvents: Int, focusMinutes: Int, counts: [SessionRating: Int]) {
+        var totalEvents = 0
+        var focusMinutes = 0
+        var counts: [SessionRating: Int] = [:]
+        for (_, stat) in yearMonthStats {
+            totalEvents += stat.totalEvents
+            focusMinutes += stat.focusMinutes
+            for (rating, count) in stat.counts {
+                counts[rating, default: 0] += count
+            }
+        }
+        return (totalEvents, focusMinutes, counts)
+    }
+
     var body: some View {
         VStack(spacing: 0) {
-            // Title bar with filter
-            HStack {
-                Text("Productivity Calendar")
-                    .font(.system(size: 15, weight: .semibold))
-                    .foregroundColor(.primary)
-
-                Spacer()
-
-                Menu {
-                    Button("All Types") { selectedSessionType = nil }
-                    Divider()
-                    ForEach(SessionType.filterableTypes, id: \.self) { type in
-                        let count = typeCounts[type] ?? 0
-                        Button(action: { selectedSessionType = type }) {
-                            Label("\(type.rawValue) (\(count))", systemImage: type.icon)
-                        }
-                    }
-                } label: {
-                    HStack(spacing: 5) {
-                        Image(systemName: "line.3.horizontal.decrease")
-                            .font(.system(size: 11))
-                        if let type = selectedSessionType {
-                            HStack(spacing: 3) {
-                                Image(systemName: type.icon)
-                                    .font(.system(size: 10))
-                                    .foregroundColor(type.color)
-                                Text(type.rawValue)
-                                    .font(.system(size: 12, weight: .medium))
-                            }
-                        } else {
-                            Text("All Types")
-                                .font(.system(size: 12, weight: .medium))
-                        }
-                        Image(systemName: "chevron.down")
-                            .font(.system(size: 8, weight: .semibold))
-                    }
-                    .foregroundColor(.primary.opacity(0.7))
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 5)
-                    .background(
-                        RoundedRectangle(cornerRadius: 6)
-                            .fill(Color.white.opacity(0.06))
-                    )
-                    .contentShape(Rectangle())
-                }
-                .menuStyle(.borderlessButton)
-                .fixedSize()
-                .focusable(false)
-
-                Button { dismiss() } label: {
-                    Image(systemName: "xmark.circle.fill")
-                        .font(.system(size: 18))
-                        .foregroundColor(.secondary)
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .hoverEffect(brightness: 0.2)
-                .focusable(false)
-            }
-            .padding(.horizontal, 20)
-            .padding(.top, 16)
-            .padding(.bottom, 8)
+            headerRow
 
             Divider()
 
-            // Month navigation
-            HStack {
-                Button { navigateMonth(-1) } label: {
-                    Image(systemName: "chevron.left")
-                        .font(.system(size: 12, weight: .semibold))
-                        .frame(width: 28, height: 28)
-                        .contentShape(Rectangle())
+            if viewMode == .month {
+                monthNavigationRow
+
+                HStack(spacing: 0) {
+                    ForEach(["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"], id: \.self) { day in
+                        Text(day)
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundColor(.secondary)
+                            .frame(maxWidth: .infinity)
+                    }
                 }
-                .buttonStyle(.plain)
-                .hoverEffect(brightness: 0.2)
-                .focusable(false)
-
-                Spacer()
-
-                Text(monthName)
-                    .font(.system(size: 14, weight: .semibold))
-
-                Spacer()
-
-                Button { navigateMonth(1) } label: {
-                    Image(systemName: "chevron.right")
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundColor(isCurrentMonth ? .secondary.opacity(0.3) : .primary)
-                        .frame(width: 28, height: 28)
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .hoverEffect(brightness: isCurrentMonth ? 0 : 0.2)
-                .focusable(false)
-                .disabled(isCurrentMonth)
-            }
-            .padding(.horizontal, 20)
-            .padding(.vertical, 8)
-
-            // Day headers
-            HStack(spacing: 0) {
-                ForEach(["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"], id: \.self) { day in
-                    Text(day)
-                        .font(.system(size: 11, weight: .medium))
-                        .foregroundColor(.secondary)
-                        .frame(maxWidth: .infinity)
-                }
-            }
-            .padding(.horizontal, 12)
-            .padding(.bottom, 4)
-
-            // Calendar grid
-            calendarGrid
                 .padding(.horizontal, 12)
+                .padding(.bottom, 4)
 
-            Divider()
-                .padding(.top, 8)
+                calendarGrid
+                    .padding(.horizontal, 12)
 
-            // Month totals
-            monthTotalsRow
+                Divider()
+                    .padding(.top, 8)
+
+                monthTotalsRow
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 12)
+            } else {
+                yearNavigationRow
+
+                Divider()
+
+                yearOverviewContent
+
+                Divider()
+
+                aggregateTotalsRow(totals: (
+                    counts: yearTotals.counts,
+                    totalEvents: yearTotals.totalEvents,
+                    focusMinutes: yearTotals.focusMinutes
+                ))
                 .padding(.horizontal, 16)
                 .padding(.vertical, 12)
+            }
         }
-        .frame(width: 400, height: 480)
+        .frame(width: 400)
         .onAppear { loadData() }
-        .onChange(of: selectedSessionType) { _, _ in loadData() }
+        .onChange(of: selectedSessionType) { _, _ in
+            loadData()
+            if viewMode == .year { loadYearData() }
+        }
+    }
+
+    // MARK: - Header
+
+    private var headerRow: some View {
+        HStack {
+            Text("Productivity Calendar")
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundColor(.primary)
+
+            Spacer()
+
+            Menu {
+                Button("All Types") { selectedSessionType = nil }
+                Divider()
+                ForEach(SessionType.filterableTypes, id: \.self) { type in
+                    let count = typeCounts[type] ?? 0
+                    Button(action: { selectedSessionType = type }) {
+                        Label("\(type.rawValue) (\(count))", systemImage: type.icon)
+                    }
+                }
+            } label: {
+                HStack(spacing: 5) {
+                    Image(systemName: "line.3.horizontal.decrease")
+                        .font(.system(size: 11))
+                    if let type = selectedSessionType {
+                        HStack(spacing: 3) {
+                            Image(systemName: type.icon)
+                                .font(.system(size: 10))
+                                .foregroundColor(type.color)
+                            Text(type.rawValue)
+                                .font(.system(size: 12, weight: .medium))
+                        }
+                    } else {
+                        Text("All Types")
+                            .font(.system(size: 12, weight: .medium))
+                    }
+                    Image(systemName: "chevron.down")
+                        .font(.system(size: 8, weight: .semibold))
+                }
+                .foregroundColor(.primary.opacity(0.7))
+                .padding(.horizontal, 10)
+                .padding(.vertical, 5)
+                .background(
+                    RoundedRectangle(cornerRadius: 6)
+                        .fill(Color.white.opacity(0.06))
+                )
+                .contentShape(Rectangle())
+            }
+            .menuStyle(.borderlessButton)
+            .fixedSize()
+            .focusable(false)
+
+            Button {
+                withAnimation(.easeInOut(duration: 0.15)) {
+                    viewMode = viewMode == .month ? .year : .month
+                }
+                if viewMode == .year { loadYearData() }
+            } label: {
+                Image(systemName: viewMode == .month ? "list.bullet" : "calendar")
+                    .font(.system(size: 13))
+                    .foregroundColor(.secondary)
+                    .frame(width: 24, height: 24)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .hoverEffect(brightness: 0.2)
+            .focusable(false)
+            .help(viewMode == .month ? "Year overview" : "Month view")
+
+            Button { dismiss() } label: {
+                Image(systemName: "xmark.circle.fill")
+                    .font(.system(size: 18))
+                    .foregroundColor(.secondary)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .hoverEffect(brightness: 0.2)
+            .focusable(false)
+        }
+        .padding(.horizontal, 20)
+        .padding(.top, 16)
+        .padding(.bottom, 8)
+    }
+
+    // MARK: - Navigation rows
+
+    private var monthNavigationRow: some View {
+        HStack {
+            Button { navigateMonth(-1) } label: {
+                Image(systemName: "chevron.left")
+                    .font(.system(size: 12, weight: .semibold))
+                    .frame(width: 28, height: 28)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .hoverEffect(brightness: 0.2)
+            .focusable(false)
+
+            Spacer()
+
+            Menu {
+                ForEach(1...12, id: \.self) { m in
+                    Button(action: { jumpToMonth(m) }) {
+                        Text(fullMonthName(for: m))
+                    }
+                }
+            } label: {
+                HStack(spacing: 5) {
+                    Text(monthName)
+                        .font(.system(size: 14, weight: .semibold))
+                    Image(systemName: "chevron.down")
+                        .font(.system(size: 9, weight: .bold))
+                        .foregroundColor(.secondary)
+                }
+                .contentShape(Rectangle())
+            }
+            .menuStyle(.borderlessButton)
+            .fixedSize()
+            .focusable(false)
+
+            Spacer()
+
+            Button { navigateMonth(1) } label: {
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundColor(isCurrentMonth ? .secondary.opacity(0.3) : .primary)
+                    .frame(width: 28, height: 28)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .hoverEffect(brightness: isCurrentMonth ? 0 : 0.2)
+            .focusable(false)
+            .disabled(isCurrentMonth)
+
+            Button { jumpToToday() } label: {
+                Text("Today")
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundColor(.accentColor)
+                    .padding(.horizontal, 7)
+                    .padding(.vertical, 3)
+                    .background(RoundedRectangle(cornerRadius: 5).fill(Color.accentColor.opacity(0.1)))
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .hoverEffect(brightness: 0.2)
+            .focusable(false)
+            .opacity(isCurrentMonth ? 0 : 1)
+            .disabled(isCurrentMonth)
+        }
+        .padding(.horizontal, 20)
+        .padding(.vertical, 8)
+    }
+
+    private var yearNavigationRow: some View {
+        HStack {
+            Button { navigateYear(-1) } label: {
+                Image(systemName: "chevron.left")
+                    .font(.system(size: 12, weight: .semibold))
+                    .frame(width: 28, height: 28)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .hoverEffect(brightness: 0.2)
+            .focusable(false)
+
+            Spacer()
+
+            Text(String(year))
+                .font(.system(size: 14, weight: .semibold))
+
+            Spacer()
+
+            Button { navigateYear(1) } label: {
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundColor(year >= currentCalYear ? .secondary.opacity(0.3) : .primary)
+                    .frame(width: 28, height: 28)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .hoverEffect(brightness: year >= currentCalYear ? 0 : 0.2)
+            .focusable(false)
+            .disabled(year >= currentCalYear)
+
+            Button { jumpToToday() } label: {
+                Text("Today")
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundColor(.accentColor)
+                    .padding(.horizontal, 7)
+                    .padding(.vertical, 3)
+                    .background(RoundedRectangle(cornerRadius: 5).fill(Color.accentColor.opacity(0.1)))
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .hoverEffect(brightness: 0.2)
+            .focusable(false)
+            .opacity(year >= currentCalYear ? 0 : 1)
+            .disabled(year >= currentCalYear)
+        }
+        .padding(.horizontal, 20)
+        .padding(.vertical, 8)
     }
 
     // MARK: - Calendar grid
@@ -493,17 +647,16 @@ struct MonthlyStatsView: View {
 
         return VStack(spacing: 2) {
             ForEach(0..<rows, id: \.self) { row in
-                HStack(spacing: 0) {
+                HStack(spacing: 2) {
                     ForEach(0..<7, id: \.self) { col in
                         let cellIndex = row * 7 + col
                         let day = cellIndex - firstWeekday + 1
 
                         if day >= 1 && day <= daysInMonth {
                             dayCellView(day: day)
-                                .frame(maxWidth: .infinity)
                         } else {
                             Color.clear
-                                .frame(maxWidth: .infinity, minHeight: 44)
+                                .frame(maxWidth: .infinity, minHeight: 62, maxHeight: 62)
                         }
                     }
                 }
@@ -520,7 +673,7 @@ struct MonthlyStatsView: View {
         let ratedTotal = stats?.counts.values.reduce(0, +) ?? 0
         let focus = stats?.focusMinutes ?? 0
 
-        return VStack(spacing: 1) {
+        return VStack(spacing: 2) {
             Text("\(day)")
                 .font(.system(size: 12, weight: isToday ? .bold : .regular))
                 .foregroundColor(isFuture ? .secondary.opacity(0.3) : (isToday ? .primary : .primary.opacity(0.7)))
@@ -529,15 +682,21 @@ struct MonthlyStatsView: View {
                 feedbackDots(stats: stats!)
 
                 Text(dayFocusLabel(focus))
-                    .font(.system(size: 9, weight: .semibold, design: .monospaced))
+                    .font(.system(size: 11, weight: .semibold, design: .monospaced))
                     .foregroundColor(focusColor(focus))
             } else {
-                Color.clear.frame(height: 18)
+                Color.clear.frame(height: 24)
             }
         }
-        .frame(minHeight: 48)
-        .background(isToday ? Color.accentColor.opacity(0.1) : Color.clear)
-        .cornerRadius(6)
+        .frame(maxWidth: .infinity, minHeight: 62, maxHeight: 62)
+        .background(
+            RoundedRectangle(cornerRadius: 6)
+                .fill(isToday ? Color.accentColor.opacity(0.12) : Color.primary.opacity(0.04))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 6)
+                .stroke(Color.primary.opacity(isToday ? 0.0 : 0.07), lineWidth: 0.5)
+        )
     }
 
     /// Shows one dot per event, colored by rating
@@ -575,10 +734,9 @@ struct MonthlyStatsView: View {
         return "\(m)m"
     }
 
-    /// Interpolate red → yellow → green based on focus time relative to best day
     private func focusColor(_ minutes: Double) -> Color {
         guard maxDayFocusMinutes > 0 else { return .secondary }
-        let ratio = minutes / maxDayFocusMinutes // 0...1
+        let ratio = minutes / maxDayFocusMinutes
         if ratio < 0.5 {
             let t = ratio / 0.5
             return Color(red: 1.0, green: t * 0.85, blue: 0)
@@ -588,10 +746,108 @@ struct MonthlyStatsView: View {
         }
     }
 
-    // MARK: - Month totals
+    // MARK: - Year overview
+
+    private var yearOverviewContent: some View {
+        ScrollView {
+            VStack(spacing: 1) {
+                ForEach(1...12, id: \.self) { m in
+                    yearMonthRow(month: m)
+                }
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 4)
+        }
+    }
+
+    private func yearMonthRow(month m: Int) -> some View {
+        let stat = yearMonthStats[m]
+        let cal = Calendar.current
+        let now = Date()
+        let curMonth = cal.component(.month, from: now)
+        let isThisMonth = year == currentCalYear && m == curMonth
+        let isFuture = year > currentCalYear || (year == currentCalYear && m > curMonth)
+        let hasData = (stat?.totalEvents ?? 0) > 0
+
+        return Button(action: {
+            month = m
+            viewMode = .month
+            loadData()
+        }) {
+            HStack(spacing: 8) {
+                Text(shortMonthName(for: m))
+                    .font(.system(size: 13, weight: isThisMonth ? .bold : .medium))
+                    .foregroundColor(isFuture ? .secondary.opacity(0.3) : .primary.opacity(isThisMonth ? 1.0 : 0.8))
+                    .frame(width: 32, alignment: .leading)
+
+                if hasData {
+                    HStack(spacing: 5) {
+                        ForEach(SessionRating.allCases, id: \.rawValue) { rating in
+                            let count = stat?.counts[rating] ?? 0
+                            HStack(spacing: 2) {
+                                Image(systemName: rating.icon)
+                                    .font(.system(size: 10))
+                                    .foregroundColor(count > 0 ? ratingColor(rating) : .secondary.opacity(0.2))
+                                Text("\(count)")
+                                    .font(.system(size: 11, weight: .medium, design: .monospaced))
+                                    .foregroundColor(count > 0 ? .primary.opacity(0.7) : .secondary.opacity(0.2))
+                            }
+                        }
+                        let unrated = stat?.unrated ?? 0
+                        if unrated > 0 {
+                            HStack(spacing: 2) {
+                                Image(systemName: "questionmark.circle")
+                                    .font(.system(size: 10))
+                                    .foregroundColor(.secondary.opacity(0.4))
+                                Text("\(unrated)")
+                                    .font(.system(size: 11, weight: .medium, design: .monospaced))
+                                    .foregroundColor(.secondary.opacity(0.5))
+                            }
+                        }
+                    }
+
+                    Spacer()
+
+                    if let focusMin = stat?.focusMinutes, focusMin > 0 {
+                        HStack(spacing: 3) {
+                            Image(systemName: "target")
+                                .font(.system(size: 10))
+                                .foregroundColor(.green.opacity(0.8))
+                            Text(formatFocusTime(focusMin))
+                                .font(.system(size: 11, weight: .semibold, design: .monospaced))
+                                .foregroundColor(.green)
+                        }
+                    } else {
+                        Text("\(stat?.totalEvents ?? 0)")
+                            .font(.system(size: 11, design: .monospaced))
+                            .foregroundColor(.secondary.opacity(0.5))
+                    }
+                } else {
+                    Spacer()
+                    if !isFuture {
+                        Text("—")
+                            .font(.system(size: 12))
+                            .foregroundColor(.secondary.opacity(0.3))
+                    }
+                }
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 7)
+            .background(isThisMonth ? Color.accentColor.opacity(0.08) : Color.clear)
+            .cornerRadius(6)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+
+    // MARK: - Totals rows
 
     private var monthTotalsRow: some View {
         let totals = monthTotals
+        return aggregateTotalsRow(totals: (totals.counts, totals.totalEvents, totals.focusMinutes))
+    }
+
+    private func aggregateTotalsRow(totals: (counts: [SessionRating: Int], totalEvents: Int, focusMinutes: Int)) -> some View {
         let rated = totals.counts.values.reduce(0, +)
         let unrated = totals.totalEvents - rated
 
@@ -611,7 +867,6 @@ struct MonthlyStatsView: View {
 
             Spacer()
 
-            // Unrated
             HStack(spacing: 3) {
                 Image(systemName: "questionmark.circle")
                     .font(.system(size: 12))
@@ -656,6 +911,37 @@ struct MonthlyStatsView: View {
         }
     }
 
+    private func navigateYear(_ offset: Int) {
+        year += offset
+        loadYearData()
+    }
+
+    private func jumpToMonth(_ m: Int) {
+        month = m
+        loadData()
+    }
+
+    private func jumpToToday() {
+        let now = Date()
+        year = Calendar.current.component(.year, from: now)
+        month = Calendar.current.component(.month, from: now)
+        if viewMode == .year { loadYearData() } else { loadData() }
+    }
+
+    private func fullMonthName(for m: Int) -> String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "MMMM"
+        let date = Calendar.current.date(from: DateComponents(year: year, month: m))!
+        return formatter.string(from: date)
+    }
+
+    private func shortMonthName(for m: Int) -> String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "MMM"
+        let date = Calendar.current.date(from: DateComponents(year: year, month: m))!
+        return formatter.string(from: date)
+    }
+
     private func loadData() {
         dayStats = calendarService.monthlyFeedbackStats(
             year: year, month: month,
@@ -663,6 +949,29 @@ struct MonthlyStatsView: View {
             sessionType: selectedSessionType
         )
         typeCounts = calendarService.monthlySessionTypeCounts(year: year, month: month)
+    }
+
+    private func loadYearData() {
+        var stats: [Int: MonthStat] = [:]
+        for m in 1...12 {
+            let dayData = calendarService.monthlyFeedbackStats(
+                year: year, month: m,
+                weights: sessionAwarenessService.config.focusWeights,
+                sessionType: selectedSessionType
+            )
+            var totalEvents = 0
+            var focusMinutes: Double = 0
+            var counts: [SessionRating: Int] = [:]
+            for (_, dayStat) in dayData {
+                totalEvents += dayStat.totalEvents
+                focusMinutes += dayStat.focusMinutes
+                for (rating, count) in dayStat.counts {
+                    counts[rating, default: 0] += count
+                }
+            }
+            stats[m] = MonthStat(totalEvents: totalEvents, focusMinutes: Int(focusMinutes), counts: counts)
+        }
+        yearMonthStats = stats
     }
 
     private func formatFocusTime(_ minutes: Int) -> String {
@@ -684,3 +993,4 @@ struct MonthlyStatsView: View {
     }
 
 }
+
