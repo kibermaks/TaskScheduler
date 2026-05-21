@@ -29,6 +29,7 @@ class EventUndoManager: ObservableObject {
         case time(EventTimeChange)
         case timeBatch([EventTimeChange])  // atomic multi-event move (e.g. group drag)
         case delete(EventDeleteSnapshot)
+        case deleteBatch([EventDeleteSnapshot])  // atomic multi-event delete
         case schedule(ScheduleSnapshot)
         case create(EventDeleteSnapshot)  // undo = delete, redo = restore
     }
@@ -120,6 +121,26 @@ class EventUndoManager: ObservableObject {
         updateState()
     }
 
+    func recordDeleteBatch(_ snapshots: [EventDeleteSnapshot]) {
+        guard !snapshots.isEmpty else { return }
+        if snapshots.count == 1 { recordDelete(snapshots[0]); return }
+        undoStack.append(.deleteBatch(snapshots))
+        if undoStack.count > maxStackSize { undoStack.removeFirst() }
+        redoStack.removeAll()
+        updateState()
+    }
+
+    /// Call after undoing a deleteBatch. Pushes redo entry with the new event ids.
+    func pushRedoForRestoredDeleteBatch(originals: [EventDeleteSnapshot], newEventIds: [String]) {
+        let updated = zip(originals, newEventIds).map { orig, newId in
+            EventDeleteSnapshot(eventId: newId, title: orig.title, notes: orig.notes, url: orig.url,
+                                startDate: orig.startDate, endDate: orig.endDate,
+                                calendarIdentifier: orig.calendarIdentifier, calendarName: orig.calendarName)
+        }
+        redoStack.append(.deleteBatch(updated))
+        updateState()
+    }
+
     func recordCreate(_ snapshot: EventDeleteSnapshot) {
         undoStack.append(.create(snapshot))
         if undoStack.count > maxStackSize {
@@ -148,6 +169,8 @@ class EventUndoManager: ObservableObject {
             redoStack.append(change)
         case .delete:
             break  // Caller will push redo after restore (needs new eventId)
+        case .deleteBatch:
+            break  // Caller will push redo after restore (needs new eventIds)
         case .schedule:
             redoStack.append(change)
         case .create:
@@ -190,6 +213,8 @@ class EventUndoManager: ObservableObject {
             return .timeBatch(inverted)
         case .delete(let snap):
             return .delete(snap)
+        case .deleteBatch(let snaps):
+            return .deleteBatch(snaps)
         case .schedule(let snap):
             return .schedule(snap)
         case .create(let snap):
@@ -242,6 +267,8 @@ class EventUndoManager: ObservableObject {
             return change
         case .delete(let snap):
             return .delete(snap)
+        case .deleteBatch(let snaps):
+            return .deleteBatch(snaps)
         case .schedule(let snap):
             return .schedule(snap)
         case .create(let snap):

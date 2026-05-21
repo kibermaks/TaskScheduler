@@ -220,6 +220,18 @@ struct TimelineView: View {
                             return nil
                         }
                     }
+                    // Delete (51) or Forward Delete (117) — remove selected events.
+                    if event.keyCode == 51 || event.keyCode == 117 {
+                        if let responder = NSApp.keyWindow?.firstResponder,
+                           responder is NSTextView {
+                            return event
+                        }
+                        if !selectedBusySlotIds.isEmpty {
+                            let slotsToDelete = calendarService.busySlots.filter { selectedBusySlotIds.contains($0.id) }
+                            deleteSelectedSlots(slotsToDelete)
+                            return nil
+                        }
+                    }
                     // Physical key code 6 = Z key on any layout.
                     guard event.modifierFlags.contains(.command), event.keyCode == 6 else {
                         return event
@@ -496,6 +508,9 @@ struct TimelineView: View {
                 
                 // Background tap target for event creation (left half only)
                 eventCreationBackgroundLayer(containerWidth: geometry.size.width)
+
+                // Background tap target for deselection (right half)
+                rightHalfDeselectLayer(containerWidth: geometry.size.width)
 
                 // Existing events - left half
                 ForEach(busySlotsWithLayout) { positionedSlot in
@@ -2075,6 +2090,28 @@ extension TimelineView {
         }
     }
 
+    /// Atomically deletes multiple slots — one undo step for the whole batch.
+    private func deleteSelectedSlots(_ slots: [BusyTimeSlot]) {
+        guard !slots.isEmpty else { return }
+        var snapshots: [EventDeleteSnapshot] = []
+        for slot in slots {
+            let snapshot = EventDeleteSnapshot(
+                eventId: slot.id, title: slot.title, notes: slot.notes, url: slot.url,
+                startDate: slot.startTime, endDate: slot.endTime,
+                calendarIdentifier: slot.calendarIdentifier, calendarName: slot.calendarName
+            )
+            if calendarService.deleteEvent(identifier: slot.id) {
+                snapshots.append(snapshot)
+            }
+        }
+        guard !snapshots.isEmpty else { return }
+        eventUndoManager.recordDeleteBatch(snapshots)
+        selectedBusySlot = nil
+        selectedSession = nil
+        selectedBusySlotIds.removeAll()
+        Task { await calendarService.fetchEvents(for: selectedDate) }
+    }
+
     // MARK: - Event Creation from Timeline
 
     /// Transparent left-half layer that captures double-click on empty space.
@@ -2093,6 +2130,21 @@ extension TimelineView {
                     selectedBusySlotIds.removeAll()
                 }
             }
+    }
+
+    /// Transparent right-half layer that deselects events on single click.
+    private func rightHalfDeselectLayer(containerWidth: CGFloat) -> some View {
+        let halfWidth = max((containerWidth / 2), 10)
+        return Color.clear
+            .frame(width: halfWidth, height: CGFloat(visibleHours.count) * hourHeight + 40)
+            .contentShape(Rectangle())
+            .position(x: containerWidth - halfWidth / 2, y: (CGFloat(visibleHours.count) * hourHeight + 40) / 2)
+            .onTapGesture {
+                if !selectedBusySlotIds.isEmpty {
+                    selectedBusySlotIds.removeAll()
+                }
+            }
+            .allowsHitTesting(!selectedBusySlotIds.isEmpty)
     }
 
     private func beginEventCreation(at time: Date) {
@@ -2966,6 +3018,18 @@ extension TimelineView {
                 eventUndoManager.pushRedoForRestoredDelete(original: snap, newEventId: newId)
                 Task { await calendarService.fetchEvents(for: selectedDate) }
             }
+        case .deleteBatch(let snaps):
+            var newIds: [String] = []
+            for snap in snaps {
+                if let newId = calendarService.restoreEvent(snap) {
+                    newIds.append(newId)
+                }
+            }
+            if !newIds.isEmpty {
+                let restoredSnaps = Array(snaps.prefix(newIds.count))
+                eventUndoManager.pushRedoForRestoredDeleteBatch(originals: restoredSnaps, newEventIds: newIds)
+                Task { await calendarService.fetchEvents(for: selectedDate) }
+            }
         case .schedule(let snap):
             // Undo: delete created events, restore projected sessions.
             // Freeze before the fetch so the subsequent regeneration can't
@@ -3024,6 +3088,12 @@ extension TimelineView {
             if calendarService.deleteEvent(identifier: snap.eventId) {
                 Task { await calendarService.fetchEvents(for: selectedDate) }
             }
+        case .deleteBatch(let snaps):
+            var anyDeleted = false
+            for snap in snaps {
+                if calendarService.deleteEvent(identifier: snap.eventId) { anyDeleted = true }
+            }
+            if anyDeleted { Task { await calendarService.fetchEvents(for: selectedDate) } }
         case .schedule(let snap):
             // Redo: re-create the sessions and remove them from projected
             let result = calendarService.createSessions(snap.sessions)
