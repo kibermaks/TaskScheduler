@@ -5,6 +5,13 @@ All notable changes to SessionFlow will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and SessionFlow marketing versions now follow the release date format `YYYY.M.D`.
 
+## [2026.5.21] - 2026-05-21
+
+### Added
+
+- Press Delete to remove selected calendar event(s) from the timeline; group deletions undo as a single step
+- Clicking empty space on the right half of the timeline now deselects events
+
 ## [2026.5.18] - 2026-05-18
 
 ### Fixed
